@@ -39,4 +39,14 @@
 	.menu-item {
 		@apply block px-4 py-3 font-bold uppercase transition-colors hover:bg-black hover:text-white;
 	}
+
+	.hazard-stripes {
+		background-image: repeating-linear-gradient(
+			45deg,
+			#000 0,
+			#000 20px,
+			var(--color-lghs-yellow) 20px,
+			var(--color-lghs-yellow) 40px
+		);
+	}
 }

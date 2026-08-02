@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { displayName, type AppUser } from '$lib/types';
+	import { displayName, isAdmin, type AppUser } from '$lib/types';
 
 	let { user, avatarUrl }: { user: AppUser | null; avatarUrl: string | null } = $props();
 
@@ -55,6 +55,13 @@
 							</span>
 						{/if}
 						{displayName(user)}
+						<svg
+							viewBox="0 0 12 8"
+							class="h-2.5 w-2.5 fill-current transition-transform {menuOpen ? 'rotate-180' : ''}"
+							aria-hidden="true"
+						>
+							<path d="M0 0 L12 0 L6 8 Z" />
+						</svg>
 					</button>
 
 					{#if menuOpen}
@@ -70,6 +77,16 @@
 							>
 								Mon profil
 							</a>
+							{#if isAdmin(user)}
+								<a
+									href="/admin"
+									role="menuitem"
+									onclick={() => (menuOpen = false)}
+									class="no-underline-fx menu-item"
+								>
+									Admin
+								</a>
+							{/if}
 							<form method="POST" action="/logout">
 								<!-- No onclick to close the menu here: closing it removes this form from
 								     the DOM synchronously, which cancels the native submit before it fires.

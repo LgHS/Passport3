@@ -1,3 +1,5 @@
+import { env } from '$env/dynamic/public';
+
 export interface AppUser {
 	sub: string;
 	email?: string;
@@ -16,4 +18,22 @@ export function displayName(user: AppUser): string {
 export function authentikPk(user: AppUser): number | null {
 	const pk = Number(user.sub);
 	return Number.isInteger(pk) && pk > 0 ? pk : null;
+}
+
+export function isAdmin(user: AppUser): boolean {
+	const adminGroup = env.PUBLIC_AUTHENTIK_ADMIN_GROUP;
+	return Boolean(adminGroup) && (user.groups?.includes(adminGroup) ?? false);
+}
+
+export interface ProfileAttributeField {
+	key: string;
+	label: string;
+}
+
+export interface UserProfile {
+	username: string;
+	name: string;
+	email: string;
+	avatar: string | null;
+	attributes: Record<string, string>;
 }
