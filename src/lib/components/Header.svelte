@@ -26,7 +26,7 @@
 
 <header class="border-b-4 border-black">
 	<div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-6">
-		<a href="/" title="Passport3" class="no-underline-fx block">
+		<a href="/" title="Passport" class="no-underline-fx block">
 			<img src="/logo.svg" alt="Liège Hackerspace" class="h-16 w-auto" />
 		</a>
 

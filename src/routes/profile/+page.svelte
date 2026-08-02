@@ -13,6 +13,16 @@
 	function fieldValue(key: string): string {
 		return form?.attributes?.[key] ?? data.profile.attributes[key] ?? '';
 	}
+
+	// Authentik only has one `name` field — split it for display, merged back on save.
+	function splitName(fullName: string): { firstName: string; lastName: string } {
+		const [first = '', ...rest] = fullName.trim().split(/\s+/);
+		return { firstName: first, lastName: rest.join(' ') };
+	}
+
+	let nameFallback = $derived(splitName(data.profile.name));
+	let firstNameValue = $derived(form?.firstName ?? nameFallback.firstName);
+	let lastNameValue = $derived(form?.lastName ?? nameFallback.lastName);
 </script>
 
 {#snippet textField(key: string, opts?: { type?: string; pattern?: string; title?: string })}
@@ -24,6 +34,7 @@
 			type={opts?.type ?? 'text'}
 			pattern={opts?.pattern}
 			title={opts?.title}
+			required
 			value={fieldValue(key)}
 			class="w-full border border-black px-3 py-2 text-sm"
 		/>
@@ -31,7 +42,7 @@
 {/snippet}
 
 <svelte:head>
-	<title>Mon profil — Passport3</title>
+	<title>Mon profil — Passport</title>
 </svelte:head>
 
 <section class="max-w-2xl">
@@ -39,7 +50,7 @@
 
 	{#if form?.success}
 		<p class="mb-6 border-4 border-black bg-lghs-yellow px-4 py-3 font-bold">
-			Vos données ont été enregistrées.
+			{form.changed ? 'Vos données ont été enregistrées.' : 'Aucune modification à enregistrer.'}
 		</p>
 	{/if}
 	{#if form?.error}
@@ -78,16 +89,29 @@
 			};
 		}}
 	>
-		<div class="mb-4">
-			<label class="mb-1 block text-sm font-bold uppercase" for="name">Nom</label>
-			<input
-				id="name"
-				name="name"
-				type="text"
-				required
-				value={form?.name ?? data.profile.name}
-				class="w-full border border-black px-3 py-2 text-sm"
-			/>
+		<div class="mb-4 grid grid-cols-2 gap-4">
+			<div>
+				<label class="mb-1 block text-sm font-bold uppercase" for="firstName">Prénom</label>
+				<input
+					id="firstName"
+					name="firstName"
+					type="text"
+					required
+					value={firstNameValue}
+					class="w-full border border-black px-3 py-2 text-sm"
+				/>
+			</div>
+			<div>
+				<label class="mb-1 block text-sm font-bold uppercase" for="lastName">Nom</label>
+				<input
+					id="lastName"
+					name="lastName"
+					type="text"
+					required
+					value={lastNameValue}
+					class="w-full border border-black px-3 py-2 text-sm"
+				/>
+			</div>
 		</div>
 
 		<div class="mb-4">

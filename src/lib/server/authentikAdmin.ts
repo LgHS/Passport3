@@ -1,4 +1,5 @@
 import { requireEnv } from '$lib/server/env';
+import { getCachedProfile, setCachedProfile } from '$lib/server/profileCache';
 
 export interface ProfileAttributeField {
 	key: string;
@@ -70,31 +71,29 @@ function pickAttributes(source: Record<string, unknown>): Record<string, string>
 	return picked;
 }
 
-export async function findUserPkByUsername(username: string): Promise<number> {
-	const res = await authentikApiFetch(`core/users/?username=${encodeURIComponent(username)}`);
-	const data = (await res.json()) as { results: AuthentikUserRecord[] };
-	const user = data.results[0];
-	if (!user) {
-		throw new Error(`No Authentik user found with username "${username}"`);
-	}
-	return user.pk;
-}
-
 export async function getUserProfile(pk: number): Promise<UserProfile> {
+	const cached = getCachedProfile(pk);
+	if (cached) return cached;
+
 	const res = await authentikApiFetch(`core/users/${pk}/`);
 	const user = (await res.json()) as AuthentikUserRecord;
-	return {
+	const profile: UserProfile = {
 		name: user.name,
 		email: user.email,
 		avatar: user.avatar || null,
 		attributes: pickAttributes(user.attributes)
 	};
+
+	setCachedProfile(pk, profile);
+	return profile;
 }
 
+// Returns whether anything actually changed (and was written), so callers can skip telling the
+// user "saved" when they just re-submitted the same values.
 export async function updateUserProfile(
 	pk: number,
 	update: { name: string; attributes: Record<string, string> }
-): Promise<void> {
+): Promise<boolean> {
 	// Read-merge-write: `attributes` is an opaque JSON blob on the Authentik side, and a PATCH
 	// replaces it wholesale — so we must merge into the current value rather than send ours alone,
 	// or we'd silently wipe out attributes this app doesn't know about.
@@ -108,8 +107,29 @@ export async function updateUserProfile(
 		}
 	}
 
+	const nameChanged = update.name !== currentUser.name;
+	const attributesChanged = PROFILE_ATTRIBUTE_FIELDS.some(
+		({ key }) => (currentUser.attributes[key] ?? '') !== (mergedAttributes[key] ?? '')
+	);
+
+	if (!nameChanged && !attributesChanged) {
+		return false;
+	}
+
 	await authentikApiFetch(`core/users/${pk}/`, {
 		method: 'PATCH',
 		body: JSON.stringify({ name: update.name, attributes: mergedAttributes })
 	});
+
+	// We already have everything needed to know the resulting profile — cache it directly
+	// instead of just evicting, so the very next read (e.g. after invalidateAll()) is a hit
+	// with the correct new data rather than a stale one or an avoidable extra round-trip.
+	setCachedProfile(pk, {
+		name: update.name,
+		email: currentUser.email,
+		avatar: currentUser.avatar || null,
+		attributes: pickAttributes(mergedAttributes)
+	});
+
+	return true;
 }

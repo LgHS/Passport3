@@ -16,9 +16,9 @@
 </script>
 
 <section class="mb-12">
-	<h1 class="mb-4 text-3xl font-bold uppercase">Passport3</h1>
+	<h1 class="mb-4 text-3xl font-bold uppercase">Passport</h1>
 	<p class="mb-6 max-w-2xl leading-relaxed">
-		Passport3 est le portail des membres du <a href="https://lghs.be" target="_blank" rel="noopener"
+		Passport est le portail des membres du <a href="https://lghs.be" target="_blank" rel="noopener"
 			>Liège Hackerspace</a
 		>. Un seul endroit pour gérer votre identité, votre adhésion, vos abonnements, vos droits
 		d'accès, et plus encore.
@@ -26,7 +26,7 @@
 
 	{#if !data.user}
 		<a href="/login" class="no-underline-fx btn-primary inline-block px-6 py-3">
-			Se connecter avec Authentik
+			Se connecter avec le SSO
 		</a>
 	{:else}
 		<p class="font-bold">

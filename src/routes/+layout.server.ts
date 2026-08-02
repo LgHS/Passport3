@@ -1,12 +1,13 @@
 import type { LayoutServerLoad } from './$types';
-import { findUserPkByUsername, getUserProfile, type UserProfile } from '$lib/server/authentikAdmin';
+import { getUserProfile, type UserProfile } from '$lib/server/authentikAdmin';
+import { authentikPk } from '$lib/types';
 
 export const load: LayoutServerLoad = async ({ locals }) => {
 	let profile: UserProfile | null = null;
+	const pk = locals.user ? authentikPk(locals.user) : null;
 
-	if (locals.user?.preferred_username) {
+	if (pk) {
 		try {
-			const pk = await findUserPkByUsername(locals.user.preferred_username);
 			profile = await getUserProfile(pk);
 		} catch {
 			// Header falls back to initials and /profile surfaces its own error if this is
