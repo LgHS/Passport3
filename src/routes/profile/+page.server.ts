@@ -1,7 +1,18 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { updateUserProfile, getAuthentikAccountUrl, PROFILE_ATTRIBUTE_FIELDS } from '$lib/server/authentikAdmin';
+import {
+	getUserProfile,
+	updateUserProfile,
+	getAuthentikAccountUrl,
+	getMfaEnrollUrls,
+	PROFILE_ATTRIBUTE_FIELDS,
+	listSessions,
+	revokeSession,
+	listMfaDevices,
+	deleteMfaDevice
+} from '$lib/server/authentikAdmin';
 import { validateProfileSubmission } from '$lib/server/profileValidation';
+import { clearSessionCookie } from '$lib/server/session';
 import { authentikPk } from '$lib/types';
 
 function resolvePk(locals: App.Locals): number {
@@ -16,7 +27,7 @@ function resolvePk(locals: App.Locals): number {
 }
 
 export const load: PageServerLoad = async ({ locals, parent }) => {
-	resolvePk(locals);
+	const pk = resolvePk(locals);
 
 	// Reuse the profile the root layout already fetched (for the header avatar) instead of
 	// hitting the Authentik API again for the same user.
@@ -25,15 +36,24 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		error(500, 'Impossible de récupérer votre profil Authentik.');
 	}
 
+	const [sessions, mfaDevices, mfaEnrollUrls] = await Promise.all([
+		listSessions(profile.username),
+		listMfaDevices(pk),
+		getMfaEnrollUrls()
+	]);
+
 	return {
 		profile,
 		fields: PROFILE_ATTRIBUTE_FIELDS,
-		authentikAccountUrl: getAuthentikAccountUrl()
+		authentikAccountUrl: getAuthentikAccountUrl(),
+		mfaEnrollUrls,
+		sessions,
+		mfaDevices
 	};
 };
 
 export const actions: Actions = {
-	default: async ({ request, locals }) => {
+	updateProfile: async ({ request, locals }) => {
 		const pk = resolvePk(locals);
 		const result = validateProfileSubmission(await request.formData());
 
@@ -55,5 +75,31 @@ export const actions: Actions = {
 			lastName: result.lastName,
 			attributes: result.attributes
 		};
+	},
+
+	revokeSession: async ({ request, locals, cookies }) => {
+		const pk = resolvePk(locals);
+		const profile = await getUserProfile(pk);
+		const formData = await request.formData();
+		const uuid = String(formData.get('uuid') ?? '');
+		await revokeSession(profile.username, uuid);
+
+		// If that was the last Authentik session, bring Passport3's own session in line rather
+		// than leaving the member logged in here with nothing left on Authentik's side.
+		const remaining = await listSessions(profile.username);
+		if (remaining.length === 0) {
+			clearSessionCookie(cookies);
+			redirect(302, '/login');
+		}
+
+		return { success: true };
+	},
+
+	deleteMfaDevice: async ({ request, locals }) => {
+		const pk = resolvePk(locals);
+		const formData = await request.formData();
+		const devicePk = String(formData.get('pk') ?? '');
+		await deleteMfaDevice(pk, devicePk);
+		return { success: true };
 	}
 };

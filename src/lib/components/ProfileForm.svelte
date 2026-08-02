@@ -71,6 +71,7 @@
 
 <form
 	method="POST"
+	action="?/updateProfile"
 	use:enhance={() => {
 		submitting = true;
 		return async ({ update }) => {

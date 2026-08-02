@@ -23,7 +23,7 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, params }) => {
+	updateProfile: async ({ request, params }) => {
 		const pk = resolvePk(params.pk);
 		const result = validateProfileSubmission(await request.formData());
 
