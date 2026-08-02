@@ -71,10 +71,12 @@
 								Mon profil
 							</a>
 							<form method="POST" action="/logout">
+								<!-- No onclick to close the menu here: closing it removes this form from
+								     the DOM synchronously, which cancels the native submit before it fires.
+								     Not needed anyway since a full page navigation follows logout. -->
 								<button
 									type="submit"
 									role="menuitem"
-									onclick={() => (menuOpen = false)}
 									class="menu-item w-full cursor-pointer text-left"
 								>
 									Se déconnecter
