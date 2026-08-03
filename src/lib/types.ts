@@ -25,6 +25,22 @@ export function isAdmin(user: AppUser): boolean {
 	return Boolean(adminGroup) && (user.groups?.includes(adminGroup) ?? false);
 }
 
+export type CotisationStatus = 'a_jour' | 'en_attente' | 'expiree' | 'non_applicable';
+
+export const COTISATION_STATUS_LABEL: Record<CotisationStatus, string> = {
+	a_jour: 'Cotisation à jour',
+	en_attente: 'Cotisation en attente',
+	expiree: 'Cotisation expirée',
+	non_applicable: "Membre d'honneur"
+};
+
+export const COTISATION_STATUS_COLOR: Record<CotisationStatus, string> = {
+	a_jour: '#22c55e',
+	en_attente: '#f97316',
+	expiree: '#ef4444',
+	non_applicable: 'var(--color-lghs-yellow)'
+};
+
 export interface ProfileAttributeField {
 	key: string;
 	label: string;
