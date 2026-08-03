@@ -15,9 +15,9 @@ Passport3 acts as a custom frontend for several internal services, including:
 
 Passport3 aims to provide members with one central place to:
 
-- [ ] View and update their personal information
-- [ ] Check their membership status
-- [ ] View current and previous subscriptions
+- [x] View and update their personal information
+- [x] Check their membership status
+- [x] View current and previous subscriptions
 - [ ] Access payment and accounting information
 - [ ] Manage authentication and security settings
 - [ ] View their physical access permissions
