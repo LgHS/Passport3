@@ -1,0 +1,11 @@
+services:
+  passport3:
+    container_name: passportv3
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '8030:8030'
+    env_file:
+      - .env
+    restart: always
