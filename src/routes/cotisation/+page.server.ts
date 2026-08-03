@@ -20,7 +20,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const member = await getMemberByEmail(email);
 	if (!member) {
-		error(404, 'Aucun adhérent Dolibarr trouvé pour votre adresse email.');
+		// Not a technical failure — a plausible business state (registration not yet synced to
+		// Dolibarr, or a data mismatch) — so the page handles it itself with an explanation
+		// instead of bouncing to the generic error page.
+		return { status: null, datefin: null, subscriptions: [] };
 	}
 
 	const [types, subscriptions] = await Promise.all([
