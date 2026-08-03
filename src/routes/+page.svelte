@@ -6,7 +6,7 @@
 	const goals = [
 		{ label: 'Voir et mettre à jour vos informations personnelles', href: '/profile' },
 		{ label: 'Vérifier le statut de votre adhésion' },
-		{ label: 'Consulter vos cotisations passées et en cours' },
+		{ label: 'Consulter vos cotisations passées et en cours', href: '/cotisation' },
 		{ label: 'Accéder aux informations de paiement et de comptabilité' },
 		{ label: "Gérer l'authentification et la sécurité" },
 		{ label: "Voir vos droits d'accès physiques au hackerspace" },

@@ -1,7 +1,13 @@
 <script lang="ts">
-	import { displayName, isAdmin, type AppUser } from '$lib/types';
+	import { displayName, isAdmin, type AppUser, type CotisationStatus } from '$lib/types';
+	import CotisationTopbar from '$lib/components/CotisationTopbar.svelte';
 
-	let { user, avatarUrl }: { user: AppUser | null; avatarUrl: string | null } = $props();
+	let {
+		user,
+		avatarUrl,
+		cotisationStatus
+	}: { user: AppUser | null; avatarUrl: string | null; cotisationStatus: CotisationStatus | null } =
+		$props();
 
 	let menuOpen = $state(false);
 
@@ -25,7 +31,10 @@
 <svelte:window onclick={handleWindowClick} />
 
 <header class="border-b-4 border-black">
-	<div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-6">
+	<div class="relative mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-6">
+		{#if cotisationStatus}
+			<CotisationTopbar status={cotisationStatus} />
+		{/if}
 		<a href="/" title="Passport" class="no-underline-fx block">
 			<img src="/logo.svg" alt="Liège Hackerspace" class="h-16 w-auto" />
 		</a>
@@ -76,6 +85,14 @@
 								class="no-underline-fx menu-item"
 							>
 								Mon profil
+							</a>
+							<a
+								href="/cotisation"
+								role="menuitem"
+								onclick={() => (menuOpen = false)}
+								class="no-underline-fx menu-item"
+							>
+								Cotisation
 							</a>
 							{#if isAdmin(user)}
 								<a
