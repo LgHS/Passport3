@@ -20,7 +20,7 @@
 					? `Votre cotisation a expiré le ${formatDate(datefin)}. Merci de la renouveler.`
 					: 'Votre adhésion est résiliée.';
 			case 'en_attente':
-				return "Aucune cotisation n'a encore été enregistrée pour votre compte. Si vous venez de payer, comptez quelques jours pour que ce soit traité.";
+				return "Aucune cotisation n'a encore été enregistrée pour votre compte. Si vous venez de payer, comptez quelques jours pour que ce soit traité. Généralement le 1er mercredi du mois si cela ne passe pas automatiquement.";
 			case 'non_applicable':
 				return "En tant que membre d'honneur, vous n'êtes pas soumis·e à cotisation.";
 		}
