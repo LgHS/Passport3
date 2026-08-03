@@ -15,15 +15,15 @@ Passport3 acts as a custom frontend for several internal services, including:
 
 Passport3 aims to provide members with one central place to:
 
-- View and update their personal information
-- Check their membership status
-- View current and previous subscriptions
-- Access payment and accounting information
-- Manage authentication and security settings
-- View their physical access permissions
-- Manage badges or access credentials
-- Access the member directory and phonebook
-- Choose which information is visible to other members
+- [ ] View and update their personal information
+- [ ] Check their membership status
+- [ ] View current and previous subscriptions
+- [ ] Access payment and accounting information
+- [ ] Manage authentication and security settings
+- [ ] View their physical access permissions
+- [ ] Manage badges or access credentials
+- [ ] Access the member directory and phonebook
+- [ ] Choose which information is visible to other members
 - Access future hackerspace services through a unified interface
 
 ## Integrations
