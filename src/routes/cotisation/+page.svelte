@@ -33,43 +33,62 @@
 
 <h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma cotisation</h1>
 
-<div class="mb-6 flex max-w-2xl items-start gap-3 border-2 border-black px-4 py-3">
-	<span
-		class="mt-1 inline-block h-3 w-3 shrink-0 rounded-full"
-		style="background-color: {COTISATION_STATUS_COLOR[data.status]};"
-		aria-hidden="true"
-	></span>
-	<div>
-		<p class="text-sm font-bold uppercase">{COTISATION_STATUS_LABEL[data.status]}</p>
-		<p class="text-sm text-gray-600">{statusExplanation(data.status, data.datefin)}</p>
-	</div>
-</div>
+{#if data.status === null}
+	<section class="max-w-3xl">
+		<div class="flex items-start gap-3 border border-black bg-gray-100 px-4 py-3">
+			<span class="mt-1 inline-block h-3 w-3 shrink-0 rounded-full bg-gray-400" aria-hidden="true"
+			></span>
+			<div>
+				<p class="text-sm font-bold uppercase">Compte introuvable</p>
+				<p class="text-sm text-gray-600">
+					Nous n'avons pas trouvé de compte correspondant à votre adresse email dans l'outil de
+					gestion des membres. Cela peut simplement vouloir dire que votre inscription n'a pas
+					encore été synchronisée, ou provenir d'une erreur. Si ça persiste, contactez une personne
+					en charge de la trésorerie ou du registre des membres. Via le canal #support du chat ou
+					par mail <a href="mailto:ping@lghs.be">ping@lghs.be</a>.
+				</p>
+			</div>
+		</div>
+	</section>
+{:else}
+	<section class="max-w-3xl">
+		<div class="mb-6 flex items-start gap-3 border border-black bg-gray-100 px-4 py-3">
+			<span
+				class="mt-1 inline-block h-3 w-3 shrink-0 rounded-full"
+				style="background-color: {COTISATION_STATUS_COLOR[data.status]};"
+				aria-hidden="true"
+			></span>
+			<div>
+				<p class="text-sm font-bold uppercase">{COTISATION_STATUS_LABEL[data.status]}</p>
+				<p class="text-sm text-gray-600">{statusExplanation(data.status, data.datefin)}</p>
+			</div>
+		</div>
 
-<section class="max-w-3xl">
-	<div class="overflow-x-auto">
-		<table class="w-full border-collapse text-sm">
-			<thead>
-				<tr class="bg-black text-white uppercase">
-					<th class="border border-black px-3 py-2 text-left">Début</th>
-					<th class="border border-black px-3 py-2 text-left">Fin</th>
-					<th class="border border-black px-3 py-2 text-left">Montant</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each data.subscriptions as subscription (subscription.id)}
-					<tr>
-						<td class="border border-black px-3 py-2">{formatDate(subscription.start)}</td>
-						<td class="border border-black px-3 py-2">{formatDate(subscription.end)}</td>
-						<td class="border border-black px-3 py-2">{amountFormat.format(subscription.amount)}</td>
+		<div class="overflow-x-auto">
+			<table class="w-full border-collapse text-sm">
+				<thead>
+					<tr class="bg-black text-white uppercase">
+						<th class="border border-black px-3 py-2 text-left">Début</th>
+						<th class="border border-black px-3 py-2 text-left">Fin</th>
+						<th class="border border-black px-3 py-2 text-left">Montant</th>
 					</tr>
-				{:else}
-					<tr>
-						<td colspan="3" class="border border-black px-3 py-4 text-center text-gray-500">
-							Aucune cotisation enregistrée.
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
-</section>
+				</thead>
+				<tbody>
+					{#each data.subscriptions as subscription (subscription.id)}
+						<tr>
+							<td class="border border-black px-3 py-2">{formatDate(subscription.start)}</td>
+							<td class="border border-black px-3 py-2">{formatDate(subscription.end)}</td>
+							<td class="border border-black px-3 py-2">{amountFormat.format(subscription.amount)}</td>
+						</tr>
+					{:else}
+						<tr>
+							<td colspan="3" class="border border-black px-3 py-4 text-center text-gray-500">
+								Aucune cotisation enregistrée.
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	</section>
+{/if}
