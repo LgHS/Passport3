@@ -128,7 +128,13 @@
 					{/if}
 				</div>
 			{:else}
-				<a href="/login" class="no-underline-fx btn-primary inline-block px-3 py-2"> Connexion </a>
+				<a
+					href="/login"
+					data-sveltekit-preload-data="off"
+					class="no-underline-fx btn-primary inline-block px-3 py-2"
+				>
+					Connexion
+				</a>
 			{/if}
 		</nav>
 	</div>

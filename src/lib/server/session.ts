@@ -21,8 +21,8 @@ export function clearSessionCookie(cookies: Cookies) {
 }
 
 export function setOAuthCookies(cookies: Cookies, state: string, codeVerifier: string) {
-	cookies.set(OAUTH_STATE_COOKIE, state, { ...baseCookieOptions, maxAge: 60 * 5 });
-	cookies.set(OAUTH_VERIFIER_COOKIE, codeVerifier, { ...baseCookieOptions, maxAge: 60 * 5 });
+	cookies.set(OAUTH_STATE_COOKIE, state, { ...baseCookieOptions, maxAge: 60 * 10 });
+	cookies.set(OAUTH_VERIFIER_COOKIE, codeVerifier, { ...baseCookieOptions, maxAge: 60 * 10 });
 }
 
 export function clearOAuthCookies(cookies: Cookies) {
