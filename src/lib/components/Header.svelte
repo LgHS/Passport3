@@ -94,6 +94,14 @@
 							>
 								Cotisation
 							</a>
+							<a
+								href="/badge"
+								role="menuitem"
+								onclick={() => (menuOpen = false)}
+								class="no-underline-fx menu-item"
+							>
+								Badge
+							</a>
 							{#if isAdmin(user)}
 								<a
 									href="/admin"
