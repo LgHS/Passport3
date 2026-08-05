@@ -348,6 +348,52 @@ export async function listMfaDevices(pk: number): Promise<MfaDevice[]> {
 	}));
 }
 
+export interface UserApplication {
+	name: string;
+	slug: string;
+	launchUrl: string;
+	iconUrl: string | null;
+	description: string;
+	group: string | null;
+	openInNewTab: boolean;
+}
+
+interface ApplicationRecord {
+	name: string;
+	slug: string;
+	// `launch_url` is the serializer's computed field — falls back to the provider's own launch
+	// URL when the application has no explicit override (`meta_launch_url`, which is commonly
+	// blank). Use this one, not meta_launch_url, or apps without an override go missing.
+	launch_url: string | null;
+	meta_icon_url: string | null;
+	meta_description: string;
+	group: string;
+	open_in_new_tab: boolean;
+}
+
+// `for_user` makes Authentik run its own policy engine as that user rather than as our (fully
+// privileged) service account — so this only ever returns what they'd actually see in Authentik's
+// own application library, not every app that exists. That same endpoint already excludes
+// meta_hide apps server-side, so there's no need to filter those out again here.
+export async function listUserApplications(pk: number): Promise<UserApplication[]> {
+	const res = await authentikApiFetch(`core/applications/?for_user=${pk}&page_size=200`);
+	const data = (await res.json()) as { results: ApplicationRecord[] };
+	return data.results
+		// No launch_url means there's nothing for a link to point to.
+		.filter((a) => a.launch_url)
+		.map((a) => ({
+			name: a.name,
+			slug: a.slug,
+			launchUrl: a.launch_url as string,
+			// Authentik returns icon paths relative to its own origin, not ours.
+			iconUrl: a.meta_icon_url ? new URL(a.meta_icon_url, authentikOrigin()).toString() : null,
+			description: a.meta_description,
+			group: a.group || null,
+			openInNewTab: a.open_in_new_tab
+		}))
+		.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function deleteMfaDevice(userPk: number, devicePk: string): Promise<void> {
 	// Re-fetch the raw (untranslated) records ourselves rather than trusting a client-supplied
 	// type — this also doubles as the ownership check (device must belong to userPk).
