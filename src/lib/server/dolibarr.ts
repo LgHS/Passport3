@@ -24,9 +24,13 @@ async function dolibarrApiFetch(path: string, init?: RequestInit): Promise<Respo
 
 export interface DolibarrMember {
 	id: number;
-	statut: number; // 1 = validé, 0 = brouillon, -1 = résilié
+	// Vraie convention Dolibarr (adherent.class.php) : -1 = brouillon, 0 = résilié, 1 = validé —
+	// confirmé empiriquement (une adhésion neuve et jamais validée est à -1, pas 0).
+	statut: number;
 	datefin: string | number | null; // épochs Unix OU date ISO selon l'instance — voir parseDolibarrDate()
 	typeid: number | null;
+	fkSoc: number | null; // tiers de facturation lié — non null = adhérent "pro"
+	ibanPerso: string | null;
 }
 
 // Le champ `datefin` (et pareil pour dateadh/datef sur les souscriptions) revient tantôt en
@@ -54,6 +58,8 @@ interface RawMemberRecord {
 	typeid?: string | number;
 	fk_adherent_type?: string | number;
 	type_id?: string | number;
+	fk_soc?: string | number | null;
+	array_options?: { options_iban_perso?: string | null };
 }
 
 // `fk_adherent_type` est le nom de colonne réel en base ; `typeid`/`type_id` sont des alias vus
@@ -61,6 +67,17 @@ interface RawMemberRecord {
 // LgHS (voir loic-local-dev/test_coti.sh) : fk_adherent_type d'abord.
 function resolveTypeId(record: RawMemberRecord): number | null {
 	const raw = record.fk_adherent_type ?? record.typeid ?? record.type_id;
+	const id = Number(raw);
+	return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+// Same defensive parsing as resolveTypeId(): this Dolibarr instance is already known to send
+// "0" (a truthy JS string!) as a "no value" sentinel on other fields (see parseDolibarrDate) —
+// a naive `record.fk_soc ? … : null` would turn that into fkSoc = 0 instead of null, making
+// isPro wrongly true while the `if (member.fkSoc)` checks elsewhere (falsy on 0) silently skip
+// the actual thirdparty call.
+function resolveFkSoc(raw: string | number | null | undefined): number | null {
+	if (raw === null || raw === undefined || raw === '' || raw === 0 || raw === '0') return null;
 	const id = Number(raw);
 	return Number.isInteger(id) && id > 0 ? id : null;
 }
@@ -76,8 +93,51 @@ export async function getMemberByEmail(email: string): Promise<DolibarrMember | 
 		id: Number(record.id),
 		statut: Number(record.statut),
 		datefin: record.datefin ?? null,
-		typeid: resolveTypeId(record)
+		typeid: resolveTypeId(record),
+		fkSoc: resolveFkSoc(record.fk_soc),
+		ibanPerso: record.array_options?.options_iban_perso || null
 	};
+}
+
+interface RawThirdPartyRecord {
+	array_options?: { options_iban_pro?: string | null };
+}
+
+// Le tiers de facturation lié (fkSoc) porte l'IBAN "pro" — distinct de l'IBAN perso sur la fiche
+// adhérent — utilisé pour payer la cotisation quand elle passe par la société plutôt que le
+// membre lui-même.
+export async function getThirdPartyIbanPro(thirdPartyId: number): Promise<string | null> {
+	const res = await dolibarrApiFetch(`thirdparties/${thirdPartyId}`);
+	const record = (await res.json()) as RawThirdPartyRecord;
+	return record.array_options?.options_iban_pro || null;
+}
+
+interface RawExtrafieldsRecord {
+	array_options?: Record<string, unknown>;
+}
+
+// Dolibarr's REST API uses PUT for updates (its Restler-based CRUD convention — GET/POST/PUT/
+// DELETE — unlike Authentik's PATCH). Read-merge-write on array_options for the same reason as
+// updateUserProfile() in authentikAdmin.ts: sending only the changed key risks clobbering
+// sibling extrafields (e.g. options_peppol on a thirdparty) depending on how this Dolibarr
+// version handles a partial array_options in the request body.
+async function updateArrayOption(path: string, optionKey: string, value: string): Promise<void> {
+	const current = await dolibarrApiFetch(path);
+	const record = (await current.json()) as RawExtrafieldsRecord;
+	const mergedOptions = { ...record.array_options, [optionKey]: value };
+
+	await dolibarrApiFetch(path, {
+		method: 'PUT',
+		body: JSON.stringify({ array_options: mergedOptions })
+	});
+}
+
+export async function updateMemberIbanPerso(memberId: number, iban: string): Promise<void> {
+	await updateArrayOption(`members/${memberId}`, 'options_iban_perso', iban);
+}
+
+export async function updateThirdPartyIbanPro(thirdPartyId: number, iban: string): Promise<void> {
+	await updateArrayOption(`thirdparties/${thirdPartyId}`, 'options_iban_pro', iban);
 }
 
 export interface DolibarrSubscription {
@@ -154,8 +214,8 @@ export function deriveCotisationStatus(
 		return 'non_applicable';
 	}
 
-	if (member.statut === 0) return 'en_attente'; // brouillon, pas encore validé
-	if (member.statut === -1) return 'expiree'; // résilié
+	if (member.statut === -1) return 'en_attente'; // brouillon, pas encore validé
+	if (member.statut === 0) return 'expiree'; // résilié
 
 	const datefin = parseDolibarrDate(member.datefin);
 	if (!datefin) return 'en_attente'; // validé, aucune cotisation reçue encore
