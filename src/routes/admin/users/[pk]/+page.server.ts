@@ -2,6 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { getUserProfile, updateUserProfile, PROFILE_ATTRIBUTE_FIELDS } from '$lib/server/authentikAdmin';
 import { validateProfileSubmission } from '$lib/server/profileValidation';
+import { requireAdmin } from '$lib/server/auth';
 
 function resolvePk(paramPk: string): number {
 	const pk = Number(paramPk);
@@ -23,7 +24,9 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
-	updateProfile: async ({ request, params }) => {
+	updateProfile: async ({ request, params, locals }) => {
+		requireAdmin(locals);
+
 		const pk = resolvePk(params.pk);
 		const result = validateProfileSubmission(await request.formData());
 

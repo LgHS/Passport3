@@ -1,11 +1,14 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions } from './$types';
 import { createInvitation } from '$lib/server/authentikAdmin';
+import { requireAdmin } from '$lib/server/auth';
 
 const DEFAULT_EXPIRY_MS = 48 * 60 * 60 * 1000;
 
 export const actions: Actions = {
-	default: async ({ request }) => {
+	default: async ({ request, locals }) => {
+		requireAdmin(locals);
+
 		const formData = await request.formData();
 		const email = String(formData.get('email') ?? '').trim();
 		const singleUse = formData.get('single_use') === 'on';
