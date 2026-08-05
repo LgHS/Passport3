@@ -17,9 +17,5 @@ services:
     container_name: watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # Watchtower checks the registry directly (not through the Docker daemon), so it needs its
-      # own copy of the host's registry credentials — see README for the `docker login ghcr.io`
-      # step that populates this file.
-      - ${HOME}/.docker/config.json:/config.json:ro
     command: --interval 300 --label-enable --cleanup
     restart: always

@@ -106,12 +106,14 @@ Private member information must never be exposed through the directory or APIs w
 the image built by CI (`.github/workflows/docker-release.yml`) from GHCR and runs Watchtower
 alongside it to auto-update whenever a new version is released.
 
-One-time setup on the preprod host:
+The `ghcr.io/lghs/passport3` package is **public**, so no registry login is needed anywhere —
+neither on the preprod host nor for Watchtower. After the very first release (the package doesn't
+exist in GHCR until then), set its visibility to public once under the repo's Packages tab
+(Package settings → Change visibility).
+
+Setup on the preprod host:
 
 ```bash
-# PAT needs the read:packages scope; a machine/bot GitHub account is preferable to a personal one.
-echo "$GHCR_PAT" | docker login ghcr.io -u <github-username> --password-stdin
-
 docker compose -f docker-compose.preprod.yml up -d
 ```
 
