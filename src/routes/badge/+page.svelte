@@ -1,35 +1,23 @@
 <script lang="ts">
-	import type { PageData } from './$types';
+	import { enhance } from '$app/forms';
+	import type { ActionData, PageData } from './$types';
 
-	let { data }: { data: PageData } = $props();
+	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	// Seeded once from the load — deliberately not kept in sync with `data.uuid` afterwards,
-	// since regenerating below updates this local copy directly (front-end shell, no backend yet).
-	// svelte-ignore state_referenced_locally
-	let uuid = $state(data.uuid);
+	let uuid = $derived(form?.uuid ?? data.uuid);
 	let showUuid = $state(false);
 	let showConfirm = $state(false);
 	let understood = $state(false);
-	let regenSuccess = $state(false);
+	let submitting = $state(false);
 
 	function startRegen() {
 		showConfirm = true;
 		understood = false;
-		regenSuccess = false;
 	}
 
 	function cancelRegen() {
 		showConfirm = false;
 		understood = false;
-	}
-
-	function confirmRegen() {
-		// TODO: call the backend that actually reissues the badge once it exists — this only
-		// simulates it client-side for now (front-end shell, per plan).
-		uuid = crypto.randomUUID();
-		showConfirm = false;
-		understood = false;
-		regenSuccess = true;
 	}
 </script>
 
@@ -86,7 +74,7 @@
 		</div>
 	</div>
 
-	{#if regenSuccess}
+	{#if form?.success}
 		<p class="mb-6 border-4 border-black bg-lghs-yellow px-4 py-3 font-bold">
 			Votre (vos) badge(s) a (ont) été régénéré(s).
 		</p>
@@ -110,23 +98,36 @@
 					<input type="checkbox" bind:checked={understood} class="mt-1" />
 					J'ai compris que mon (mes) badge(s) actuel(s) ne fonctionnera(ont) plus.
 				</label>
-				<div class="flex gap-3 pb-1">
-					<button
-						type="button"
-						onclick={confirmRegen}
-						disabled={!understood}
-						class="btn-primary px-4 py-2 disabled:cursor-not-allowed disabled:opacity-40"
-					>
-						Confirmer la régénération
-					</button>
-					<button
-						type="button"
-						onclick={cancelRegen}
-						class="px-4 py-2 text-sm font-bold uppercase transition-colors hover:bg-black hover:text-white"
-					>
-						Annuler
-					</button>
-				</div>
+				<form
+					method="POST"
+					action="?/regenerate"
+					use:enhance={() => {
+						submitting = true;
+						return async ({ update }) => {
+							await update();
+							submitting = false;
+							showConfirm = false;
+							understood = false;
+						};
+					}}
+				>
+					<div class="flex gap-3 pb-1">
+						<button
+							type="submit"
+							disabled={!understood || submitting}
+							class="btn-primary px-4 py-2 disabled:cursor-not-allowed disabled:opacity-40"
+						>
+							{submitting ? 'Régénération…' : 'Confirmer la régénération'}
+						</button>
+						<button
+							type="button"
+							onclick={cancelRegen}
+							class="px-4 py-2 text-sm font-bold uppercase transition-colors hover:bg-black hover:text-white"
+						>
+							Annuler
+						</button>
+					</div>
+				</form>
 			</div>
 			<div class="hazard-stripes h-2"></div>
 		</div>
