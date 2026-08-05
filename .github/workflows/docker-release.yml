@@ -8,7 +8,7 @@ on:
       - 'v*.*.*'
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -20,6 +20,14 @@ jobs:
       - name: Derive version from tag
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # Keeps package.json (baked into the image at build time, e.g. the footer's
+      # version link) in sync with the release tag, since `gh release create` doesn't
+      # touch it on its own.
+      - name: Sync package.json version with release tag
+        run: |
+          jq --arg v "${{ steps.version.outputs.version }}" '.version = $v' package.json > package.json.tmp
+          mv package.json.tmp package.json
 
       - uses: docker/setup-buildx-action@v3
 
@@ -42,3 +50,14 @@ jobs:
             ghcr.io/lghs/passport3:preprod
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # The tag itself (checked out above) still points at the pre-bump commit — this
+      # lands the bumped version on main so it's the baseline for the next release.
+      - name: Commit version bump to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: bump version to ${{ steps.version.outputs.version }}"
+          git push origin HEAD:main
