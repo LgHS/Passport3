@@ -64,15 +64,20 @@ export const actions: Actions = {
 			error(404, 'Aucun adhérent Dolibarr trouvé pour votre adresse email.');
 		}
 
-		const result = validateBankInfoSubmission(await request.formData());
+		const formData = await request.formData();
+		// The pro IBAN only exists for members linked to a billing third-party — strip it before
+		// validation (rather than after) so a non-pro member can never have their legitimate
+		// ibanPerso update rejected by a stray/malformed ibanPro that isn't even theirs to set.
+		if (!member.fkSoc) {
+			formData.delete('ibanPro');
+		}
+
+		const result = validateBankInfoSubmission(formData);
 		if (!result.ok) {
 			return fail(400, { error: result.error, ibanPerso: result.ibanPerso, ibanPro: result.ibanPro });
 		}
 
 		const updates: Promise<void>[] = [updateMemberIbanPerso(member.id, result.ibanPerso)];
-		// The pro IBAN only exists on the linked billing third-party — re-derived server-side
-		// from the session (never trusted from the client), so a non-pro member submitting an
-		// ibanPro value simply has it ignored rather than needing a separate 403.
 		if (member.fkSoc) {
 			updates.push(updateThirdPartyIbanPro(member.fkSoc, result.ibanPro));
 		}

@@ -55,14 +55,17 @@
 </script>
 
 {#snippet infoTooltip(text: string)}
-	<span class="group relative inline-flex cursor-help align-middle" aria-hidden="true">
-		<span
-			class="flex h-4 w-4 items-center justify-center rounded-full border border-gray-400 text-[10px] leading-none font-normal text-gray-400"
+	<span class="group relative inline-flex align-middle">
+		<button
+			type="button"
+			aria-label={text}
+			class="flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-gray-400 text-[10px] leading-none font-normal text-gray-400"
 		>
 			i
-		</span>
+		</button>
 		<span
-			class="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-56 -translate-x-1/2 border-2 border-black bg-white px-3 py-2 text-xs leading-relaxed font-normal normal-case text-black opacity-0 shadow-[4px_4px_0_0_#000] transition-opacity duration-150 group-hover:opacity-100"
+			aria-hidden="true"
+			class="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-56 -translate-x-1/2 border-2 border-black bg-white px-3 py-2 text-xs leading-relaxed font-normal normal-case text-black opacity-0 shadow-[4px_4px_0_0_#000] transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
 		>
 			{text}
 		</span>
@@ -166,8 +169,11 @@
 				use:enhance={() => {
 					submittingBankInfo = true;
 					return async ({ update }) => {
-						await update({ reset: false });
-						submittingBankInfo = false;
+						try {
+							await update({ reset: false });
+						} finally {
+							submittingBankInfo = false;
+						}
 					};
 				}}
 			>

@@ -71,6 +71,17 @@ function resolveTypeId(record: RawMemberRecord): number | null {
 	return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+// Same defensive parsing as resolveTypeId(): this Dolibarr instance is already known to send
+// "0" (a truthy JS string!) as a "no value" sentinel on other fields (see parseDolibarrDate) —
+// a naive `record.fk_soc ? … : null` would turn that into fkSoc = 0 instead of null, making
+// isPro wrongly true while the `if (member.fkSoc)` checks elsewhere (falsy on 0) silently skip
+// the actual thirdparty call.
+function resolveFkSoc(raw: string | number | null | undefined): number | null {
+	if (raw === null || raw === undefined || raw === '' || raw === 0 || raw === '0') return null;
+	const id = Number(raw);
+	return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 export async function getMemberByEmail(email: string): Promise<DolibarrMember | null> {
 	const filter = `(t.email:=:'${email.replace(/'/g, "\\'")}')`;
 	const res = await dolibarrApiFetch(`members?sqlfilters=${encodeURIComponent(filter)}`);
@@ -83,7 +94,7 @@ export async function getMemberByEmail(email: string): Promise<DolibarrMember | 
 		statut: Number(record.statut),
 		datefin: record.datefin ?? null,
 		typeid: resolveTypeId(record),
-		fkSoc: record.fk_soc ? Number(record.fk_soc) : null,
+		fkSoc: resolveFkSoc(record.fk_soc),
 		ibanPerso: record.array_options?.options_iban_perso || null
 	};
 }
