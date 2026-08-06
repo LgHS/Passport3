@@ -140,6 +140,47 @@ export async function updateThirdPartyIbanPro(thirdPartyId: number, iban: string
 	await updateArrayOption(`thirdparties/${thirdPartyId}`, 'options_iban_pro', iban);
 }
 
+interface RawMemberIbanRecord {
+	id: string | number;
+	array_options?: { options_iban_perso?: string | null };
+}
+
+interface RawThirdPartyIbanRecord {
+	id: string | number;
+	array_options?: { options_iban_pro?: string | null };
+}
+
+// Dolibarr's sqlfilters can't query on extrafields (confirmed empirically — "Unknown column
+// 'options_iban_perso' in 'WHERE'"), so there's no way to ask it directly "who owns this IBAN".
+// Fetching the full members/thirdparties lists and comparing here is the only option — fine at
+// this org's scale (a hackerspace, not thousands of members).
+//
+// Stops a member from registering an IBAN that's already tied to someone else's account (by
+// mistake or on purpose). The one legitimate case where the same IBAN appears twice is an
+// "indépendant" member whose personal and company accounts are the same — allowed only because
+// both slots belong to the same person (their own member id / their own linked third-party id).
+export async function findIbanOwnerConflict(
+	iban: string,
+	own: { memberId: number; fkSoc: number | null }
+): Promise<boolean> {
+	const [membersRes, thirdPartiesRes] = await Promise.all([
+		dolibarrApiFetch('members?limit=1000'),
+		dolibarrApiFetch('thirdparties?limit=1000')
+	]);
+
+	const members = (await membersRes.json()) as RawMemberIbanRecord[];
+	const thirdParties = (await thirdPartiesRes.json()) as RawThirdPartyIbanRecord[];
+
+	const usedByOtherMember = members.some(
+		(m) => Number(m.id) !== own.memberId && m.array_options?.options_iban_perso === iban
+	);
+	const usedByOtherThirdParty = thirdParties.some(
+		(t) => Number(t.id) !== own.fkSoc && t.array_options?.options_iban_pro === iban
+	);
+
+	return usedByOtherMember || usedByOtherThirdParty;
+}
+
 export interface DolibarrSubscription {
 	id: number;
 	start: Date | null; // dateadh

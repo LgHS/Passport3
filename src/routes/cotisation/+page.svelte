@@ -54,24 +54,6 @@
 	}
 </script>
 
-{#snippet infoTooltip(text: string)}
-	<span class="group relative inline-flex align-middle">
-		<button
-			type="button"
-			aria-label={text}
-			class="flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-gray-400 text-[10px] leading-none font-normal text-gray-400"
-		>
-			i
-		</button>
-		<span
-			aria-hidden="true"
-			class="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-56 -translate-x-1/2 border-2 border-black bg-white px-3 py-2 text-xs leading-relaxed font-normal normal-case text-black opacity-0 shadow-[4px_4px_0_0_#000] transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
-		>
-			{text}
-		</span>
-	</span>
-{/snippet}
-
 <svelte:head>
 	<title>Ma cotisation — Passport</title>
 </svelte:head>
@@ -158,9 +140,16 @@
 				</p>
 			{/if}
 			{#if form?.error}
-				<p class="mb-4 border-4 border-black bg-white px-4 py-3 text-sm font-bold">
-					{form.error}
-				</p>
+				<div class="mb-4 border-4 border-black bg-red-600 px-4 py-3 text-white">
+					<p class="text-sm font-bold">{form.error}</p>
+					{#if form.error === 'Cet IBAN est déjà utilisé.'}
+						<p class="mt-1 text-sm">
+							Contactez <a href="mailto:compta@lghs.be" class="no-underline-fx underline"
+								>compta@lghs.be</a
+							>.
+						</p>
+					{/if}
+				</div>
 			{/if}
 
 			<form
@@ -178,10 +167,10 @@
 				}}
 			>
 				<div class="mb-4">
-					<label class="mb-1 flex items-center gap-1.5 text-sm font-bold uppercase" for="ibanPerso">
+					<label class="mb-1 block text-sm font-bold uppercase" for="ibanPerso">
 						IBAN personnel
-						{@render infoTooltip(ibanPersoTooltip(data.bankInfo.isPro))}
 					</label>
+					<p class="mb-1 text-xs text-gray-500">{ibanPersoTooltip(data.bankInfo.isPro)}</p>
 					<input
 						id="ibanPerso"
 						name="ibanPerso"
@@ -195,10 +184,10 @@
 
 				{#if data.bankInfo.isPro}
 					<div class="mb-4">
-						<label class="mb-1 flex items-center gap-1.5 text-sm font-bold uppercase" for="ibanPro">
+						<label class="mb-1 block text-sm font-bold uppercase" for="ibanPro">
 							IBAN professionnel
-							{@render infoTooltip(IBAN_PRO_TOOLTIP)}
 						</label>
+						<p class="mb-1 text-xs text-gray-500">{IBAN_PRO_TOOLTIP}</p>
 						<input
 							id="ibanPro"
 							name="ibanPro"
