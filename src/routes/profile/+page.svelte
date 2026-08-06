@@ -65,41 +65,48 @@
 </div>
 
 {#if activeTab === 'info'}
-	<section class="max-w-2xl">
-		<div class="mb-6 flex items-center gap-4">
-			{#if data.profile.avatar}
-				<img src={data.profile.avatar} alt="" class="h-16 w-16 object-cover" />
-			{/if}
-			<p class="text-sm">
-				Votre photo est associée à votre adresse email via <a
-					href="https://gravatar.com"
-					target="_blank"
-					rel="noopener">Gravatar</a
-				>. Pour la changer, mettez à jour votre Gravatar avec la même adresse email.
-			</p>
+	<section class="w-full">
+		<div class="mx-auto max-w-2xl">
+			<div class="mb-6 flex items-center gap-4">
+				{#if data.profile.avatar}
+					<img src={data.profile.avatar} alt="" class="h-16 w-16 object-cover" />
+				{/if}
+				<p class="text-sm">
+					Votre photo est associée à votre adresse email via <a
+						href="https://gravatar.com"
+						target="_blank"
+						rel="noopener">Gravatar</a
+					>. Pour la changer, mettez à jour votre Gravatar avec la même adresse email.
+				</p>
+			</div>
+
+			<div class="mb-4">
+				<span class="mb-1 block text-sm font-bold uppercase">Email</span>
+				<p class="border border-black bg-gray-100 px-3 py-2 text-sm">{data.profile.email}</p>
+			</div>
+
+			<ProfileForm profile={data.profile} fields={data.fields} {form} />
+
+			<a
+				href={data.authentikAccountUrl}
+				target="_blank"
+				rel="noopener"
+				class="mt-4 inline-block text-sm"
+			>
+				Changer mon mot de passe / gérer mon compte
+			</a>
 		</div>
-
-		<div class="mb-4">
-			<span class="mb-1 block text-sm font-bold uppercase">Email</span>
-			<p class="border border-black bg-gray-100 px-3 py-2 text-sm">{data.profile.email}</p>
-		</div>
-
-		<ProfileForm profile={data.profile} fields={data.fields} {form} />
-
-		<a href={data.authentikAccountUrl} target="_blank" rel="noopener" class="mt-4 inline-block text-sm">
-			Changer mon mot de passe / gérer mon compte
-		</a>
 	</section>
 {:else if activeTab === 'sessions'}
-	<section class="max-w-3xl">
+	<section class="w-full">
 		<div class="overflow-x-auto">
 			<table class="w-full border-collapse text-sm">
 				<thead>
 					<tr class="bg-black text-white uppercase">
 						<th class="border border-black px-3 py-2 text-left">Navigateur / OS</th>
 						<th class="border border-black px-3 py-2 text-left">Localisation</th>
-						<th class="border border-black px-3 py-2 text-left">Dernière activité</th>
-						<th class="border border-black px-3 py-2 text-left">Expire le</th>
+						<th class="border border-black px-3 py-2 text-left whitespace-nowrap">Dernière activité</th>
+						<th class="border border-black px-3 py-2 text-left whitespace-nowrap">Expire le</th>
 						<th class="border border-black px-3 py-2 text-left">Action</th>
 					</tr>
 				</thead>
@@ -108,8 +115,8 @@
 						<tr>
 							<td class="border border-black px-3 py-2">{session.os} — {session.browser}</td>
 							<td class="border border-black px-3 py-2">{session.location ?? session.lastIp}</td>
-							<td class="border border-black px-3 py-2">{formatDate(session.lastUsed)}</td>
-							<td class="border border-black px-3 py-2">{formatDate(session.expires)}</td>
+							<td class="border border-black px-3 py-2 whitespace-nowrap">{formatDate(session.lastUsed)}</td>
+							<td class="border border-black px-3 py-2 whitespace-nowrap">{formatDate(session.expires)}</td>
 							<td class="border border-black px-3 py-2">
 								{#if session.current}
 									<span class="text-xs font-bold uppercase">Session actuelle</span>
@@ -135,7 +142,7 @@
 		</div>
 	</section>
 {:else if activeTab === 'mfa'}
-	<section class="max-w-3xl">
+	<section class="w-full">
 		<div class="relative mb-4 inline-block" data-add-mfa-menu>
 			<button
 				type="button"
