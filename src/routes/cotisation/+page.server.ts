@@ -5,6 +5,7 @@ import {
 	getMemberSubscriptions,
 	getMemberTypes,
 	deriveCotisationStatus,
+	detectCotisationGaps,
 	parseDolibarrDate,
 	getThirdPartyIbanPro,
 	updateMemberIbanPerso,
@@ -33,7 +34,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// Not a technical failure — a plausible business state (registration not yet synced to
 		// Dolibarr, or a data mismatch) — so the page handles it itself with an explanation
 		// instead of bouncing to the generic error page.
-		return { status: null, datefin: null, subscriptions: [], bankInfo: null };
+		return { status: null, datefin: null, subscriptions: [], gaps: [], bankInfo: null };
 	}
 
 	const [types, subscriptions, ibanPro] = await Promise.all([
@@ -46,6 +47,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		status: deriveCotisationStatus(member, types),
 		datefin: parseDolibarrDate(member.datefin),
 		subscriptions,
+		gaps: detectCotisationGaps(subscriptions),
 		bankInfo: {
 			perso: member.ibanPerso,
 			// `pro` is only meaningful when the member is linked to a billing third-party — the

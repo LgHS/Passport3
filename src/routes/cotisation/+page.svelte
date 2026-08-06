@@ -38,6 +38,22 @@
 
 	const amountFormat = new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' });
 
+	// Merges the real subscriptions with the detected gaps into one chronological list so the
+	// table can render "missing cotisation" rows interleaved at their correct position.
+	type CotisationRow =
+		| { kind: 'subscription'; date: number; subscription: PageData['subscriptions'][number] }
+		| { kind: 'gap'; date: number; gap: PageData['gaps'][number] };
+	const cotisationRows = $derived<CotisationRow[]>(
+		[
+			...data.subscriptions.map((subscription) => ({
+				kind: 'subscription' as const,
+				date: subscription.start?.getTime() ?? 0,
+				subscription
+			})),
+			...data.gaps.map((gap) => ({ kind: 'gap' as const, date: gap.start.getTime(), gap }))
+		].sort((a, b) => b.date - a.date)
+	);
+
 	function statusExplanation(status: CotisationStatus, datefin: Date | null): string {
 		switch (status) {
 			case 'a_jour':
@@ -120,14 +136,22 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each data.subscriptions as subscription (subscription.id)}
-							<tr>
-								<td class="border border-black px-3 py-2">{formatDate(subscription.start)}</td>
-								<td class="border border-black px-3 py-2">{formatDate(subscription.end)}</td>
-								<td class="border border-black px-3 py-2"
-									>{amountFormat.format(subscription.amount)}</td
-								>
-							</tr>
+						{#each cotisationRows as row (row.kind === 'subscription' ? `sub-${row.subscription.id}` : `gap-${row.gap.start.getTime()}`)}
+							{#if row.kind === 'subscription'}
+								<tr>
+									<td class="border border-black px-3 py-2">{formatDate(row.subscription.start)}</td>
+									<td class="border border-black px-3 py-2">{formatDate(row.subscription.end)}</td>
+									<td class="border border-black px-3 py-2"
+										>{amountFormat.format(row.subscription.amount)}</td
+									>
+								</tr>
+							{:else}
+								<tr class="bg-red-50 text-red-700">
+									<td class="border border-black px-3 py-2">{formatDate(row.gap.start)}</td>
+									<td class="border border-black px-3 py-2">{formatDate(row.gap.end)}</td>
+									<td class="border border-black px-3 py-2">Non perçu</td>
+								</tr>
+							{/if}
 						{:else}
 							<tr>
 								<td colspan="3" class="border border-black px-3 py-4 text-center text-gray-500">

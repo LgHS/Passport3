@@ -168,6 +168,48 @@ export async function getMemberSubscriptions(memberId: number): Promise<Dolibarr
 		.sort((a, b) => (b.start?.getTime() ?? 0) - (a.start?.getTime() ?? 0));
 }
 
+export interface CotisationGap {
+	start: Date;
+	end: Date;
+}
+
+// Les cotisations LgHS s'enchaînent mois par mois — la fin de l'une tombe systématiquement la
+// veille (ou le jour même) du début de la suivante (ex: fin 30/01 -> début 31/01). Un écart de
+// plus d'un jour entre deux souscriptions consécutives ne peut donc être qu'une cotisation
+// manquante, jamais un simple artefact de bornes. Seuls les trous internes à l'historique comptent
+// (entre deux souscriptions) — le retard depuis la dernière cotisation reste couvert par le statut
+// "expirée" existant, pas par cette détection.
+const ADJACENCY_TOLERANCE_MS = 24 * 60 * 60 * 1000;
+
+export function detectCotisationGaps(subscriptions: DolibarrSubscription[]): CotisationGap[] {
+	const covered = subscriptions
+		.filter((s): s is DolibarrSubscription & { start: Date; end: Date } => s.start !== null && s.end !== null)
+		.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+	const merged: { start: Date; end: Date }[] = [];
+	for (const sub of covered) {
+		const last = merged[merged.length - 1];
+		if (last && sub.start.getTime() <= last.end.getTime() + ADJACENCY_TOLERANCE_MS) {
+			if (sub.end.getTime() > last.end.getTime()) last.end = sub.end;
+		} else {
+			merged.push({ start: sub.start, end: sub.end });
+		}
+	}
+
+	const gaps: CotisationGap[] = [];
+	for (let i = 1; i < merged.length; i++) {
+		const prevEnd = merged[i - 1].end;
+		const nextStart = merged[i].start;
+		if (nextStart.getTime() - prevEnd.getTime() > ADJACENCY_TOLERANCE_MS) {
+			gaps.push({
+				start: new Date(prevEnd.getTime() + ADJACENCY_TOLERANCE_MS),
+				end: new Date(nextStart.getTime() - ADJACENCY_TOLERANCE_MS)
+			});
+		}
+	}
+	return gaps;
+}
+
 export interface DolibarrMemberType {
 	id: number;
 	label: string;
