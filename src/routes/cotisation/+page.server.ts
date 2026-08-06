@@ -8,7 +8,8 @@ import {
 	parseDolibarrDate,
 	getThirdPartyIbanPro,
 	updateMemberIbanPerso,
-	updateThirdPartyIbanPro
+	updateThirdPartyIbanPro,
+	findIbanOwnerConflict
 } from '$lib/server/dolibarr';
 import { validateBankInfoSubmission } from '$lib/server/bankValidation';
 
@@ -75,6 +76,21 @@ export const actions: Actions = {
 		const result = validateBankInfoSubmission(formData);
 		if (!result.ok) {
 			return fail(400, { error: result.error, ibanPerso: result.ibanPerso, ibanPro: result.ibanPro });
+		}
+
+		// Stop a member from entering someone else's IBAN — a same-person perso/pro match (the
+		// "indépendant" case) is fine, anything else isn't.
+		const own = { memberId: member.id, fkSoc: member.fkSoc };
+		const conflictChecks = [
+			result.ibanPerso ? findIbanOwnerConflict(result.ibanPerso, own) : Promise.resolve(false),
+			result.ibanPro ? findIbanOwnerConflict(result.ibanPro, own) : Promise.resolve(false)
+		];
+		if ((await Promise.all(conflictChecks)).some(Boolean)) {
+			return fail(400, {
+				error: 'Cet IBAN est déjà utilisé.',
+				ibanPerso: result.ibanPerso,
+				ibanPro: result.ibanPro
+			});
 		}
 
 		const updates: Promise<void>[] = [updateMemberIbanPerso(member.id, result.ibanPerso)];

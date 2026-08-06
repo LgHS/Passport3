@@ -158,9 +158,16 @@
 				</p>
 			{/if}
 			{#if form?.error}
-				<p class="mb-4 border-4 border-black bg-white px-4 py-3 text-sm font-bold">
-					{form.error}
-				</p>
+				<div class="mb-4 border-4 border-black bg-red-600 px-4 py-3 text-white">
+					<p class="text-sm font-bold">{form.error}</p>
+					{#if form.error === 'Cet IBAN est déjà utilisé.'}
+						<p class="mt-1 text-sm">
+							Contactez <a href="mailto:compta@lghs.be" class="no-underline-fx underline"
+								>compta@lghs.be</a
+							>.
+						</p>
+					{/if}
+				</div>
 			{/if}
 
 			<form
