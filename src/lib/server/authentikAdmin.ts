@@ -167,6 +167,32 @@ export async function updateUserProfile(
 	return true;
 }
 
+// Not part of PROFILE_ATTRIBUTE_FIELDS: that whitelist is specifically the merge boundary for
+// the member-editable profile form, whereas rfid_uid is provisioned by us and never user-entered.
+const RFID_UID_ATTRIBUTE = 'rfid_uid';
+
+export async function getRfidUid(pk: number): Promise<string | null> {
+	const res = await authentikApiFetch(`core/users/${pk}/`);
+	const user = (await res.json()) as AuthentikUserRecord;
+	const value = user.attributes[RFID_UID_ATTRIBUTE];
+	return typeof value === 'string' && value ? value : null;
+}
+
+// Read-merge-write, same reasoning as updateUserProfile: `attributes` is replaced wholesale by a
+// PATCH, so the rest of the blob must be preserved rather than overwritten.
+export async function regenerateRfidUid(pk: number): Promise<string> {
+	const current = await authentikApiFetch(`core/users/${pk}/`);
+	const currentUser = (await current.json()) as AuthentikUserRecord;
+
+	const uuid = crypto.randomUUID();
+	await authentikApiFetch(`core/users/${pk}/`, {
+		method: 'PATCH',
+		body: JSON.stringify({ attributes: { ...currentUser.attributes, [RFID_UID_ATTRIBUTE]: uuid } })
+	});
+
+	return uuid;
+}
+
 export interface AdminUserSummary {
 	pk: number;
 	username: string;
