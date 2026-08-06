@@ -15,6 +15,10 @@
 	];
 </script>
 
+<svelte:head>
+	<title>Passport</title>
+</svelte:head>
+
 <section class="mb-12">
 	<h1 class="mb-4 text-3xl font-bold uppercase">Passport</h1>
 	<p class="mb-6 max-w-2xl leading-relaxed">

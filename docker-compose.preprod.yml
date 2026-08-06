@@ -1,0 +1,21 @@
+services:
+  passport3:
+    image: ghcr.io/lghs/passport3:preprod
+    container_name: passportv3
+    ports:
+      - '8030:8030'
+    env_file:
+      - .env
+    restart: always
+    labels:
+      # Scopes Watchtower to only this container (see --label-enable below) — avoids it touching
+      # unrelated containers on a shared preprod host.
+      - com.centurylinklabs.watchtower.enable=true
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 300 --label-enable --cleanup
+    restart: always

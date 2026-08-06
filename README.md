@@ -100,6 +100,27 @@ The project follows the principles of:
 
 Private member information must never be exposed through the directory or APIs without an explicit authorization rule.
 
+## Preprod deployment
+
+`docker-compose.yml` builds from source (local dev). `docker-compose.preprod.yml` instead pulls
+the image built by CI (`.github/workflows/docker-release.yml`) from GHCR and runs Watchtower
+alongside it to auto-update whenever a new version is released.
+
+The `ghcr.io/lghs/passport3` package is **public**, so no registry login is needed anywhere —
+neither on the preprod host nor for Watchtower. After the very first release (the package doesn't
+exist in GHCR until then), set its visibility to public once under the repo's Packages tab
+(Package settings → Change visibility).
+
+Setup on the preprod host:
+
+```bash
+docker compose -f docker-compose.preprod.yml up -d
+```
+
+Releasing a new version (`git tag vX.Y.Z && git push --tags`, or `gh release create vX.Y.Z`)
+builds and pushes `ghcr.io/lghs/passport3:X.Y.Z` and `ghcr.io/lghs/passport3:preprod` — Watchtower
+picks up the `preprod` tag update within 5 minutes and redeploys automatically.
+
 ## Contributing
 
 Contributions are welcome.
