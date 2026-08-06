@@ -175,13 +175,52 @@ export interface CotisationGap {
 
 // Les cotisations LgHS s'enchaînent mois par mois — la fin de l'une tombe systématiquement la
 // veille (ou le jour même) du début de la suivante (ex: fin 30/01 -> début 31/01). Un écart de
-// plus d'un jour entre deux souscriptions consécutives ne peut donc être qu'une cotisation
-// manquante, jamais un simple artefact de bornes. Seuls les trous internes à l'historique comptent
-// (entre deux souscriptions) — le retard depuis la dernière cotisation reste couvert par le statut
-// "expirée" existant, pas par cette détection.
+// plus d'un jour entre deux souscriptions consécutives ne peut donc être qu'une (ou plusieurs)
+// cotisation(s) manquante(s), jamais un simple artefact de bornes.
 const ADJACENCY_TOLERANCE_MS = 24 * 60 * 60 * 1000;
 
-export function detectCotisationGaps(subscriptions: DolibarrSubscription[]): CotisationGap[] {
+// Passé ce nombre de mois sans renouvellement, le membre est considéré comme parti plutôt que
+// simplement en retard — on arrête d'ajouter des lignes "Non perçu" au-delà et on laisse le statut
+// "Cotisation expirée" existant porter le message, plutôt que d'accumuler des lignes indéfiniment.
+const TRAILING_GAP_MONTHS = 3;
+
+// Un trou peut s'étaler sur plusieurs mois (ex: 4 mois sans cotisation) — on le découpe en un
+// CotisationGap par mois calendaire manquant plutôt que de renvoyer une seule ligne fusionnée, sinon
+// des mois entiers restent invisibles dans le tableau alors qu'ils n'ont bien reçu aucune cotisation.
+// Un mois est considéré manquant si son 15 tombe dans l'intervalle non couvert (prevEnd, nextStart).
+function missingMonthsInGap(prevEnd: Date, nextStart: Date): CotisationGap[] {
+	const months: CotisationGap[] = [];
+	let cursor = new Date(Date.UTC(prevEnd.getUTCFullYear(), prevEnd.getUTCMonth(), 1));
+	const lastMonth = new Date(Date.UTC(nextStart.getUTCFullYear(), nextStart.getUTCMonth(), 1));
+
+	while (cursor.getTime() <= lastMonth.getTime()) {
+		const year = cursor.getUTCFullYear();
+		const month = cursor.getUTCMonth();
+		const midpoint = new Date(Date.UTC(year, month, 15));
+		if (midpoint.getTime() > prevEnd.getTime() && midpoint.getTime() < nextStart.getTime()) {
+			months.push({
+				start: new Date(Date.UTC(year, month, 1)),
+				end: new Date(Date.UTC(year, month + 1, 0))
+			});
+		}
+		cursor = new Date(Date.UTC(year, month + 1, 1));
+	}
+
+	return months;
+}
+
+export interface CotisationGapResult {
+	gaps: CotisationGap[];
+	// True once the ongoing trailing lapse (no renewal yet) has reached TRAILING_GAP_MONTHS as of
+	// `now` — distinct from just having any gap row, since interior gaps (already resolved by a
+	// later renewal) never make someone "inactive" today.
+	isInactive: boolean;
+}
+
+export function detectCotisationGaps(
+	subscriptions: DolibarrSubscription[],
+	now: Date = new Date()
+): CotisationGapResult {
 	const covered = subscriptions
 		.filter((s): s is DolibarrSubscription & { start: Date; end: Date } => s.start !== null && s.end !== null)
 		.sort((a, b) => a.start.getTime() - b.start.getTime());
@@ -201,13 +240,22 @@ export function detectCotisationGaps(subscriptions: DolibarrSubscription[]): Cot
 		const prevEnd = merged[i - 1].end;
 		const nextStart = merged[i].start;
 		if (nextStart.getTime() - prevEnd.getTime() > ADJACENCY_TOLERANCE_MS) {
-			gaps.push({
-				start: new Date(prevEnd.getTime() + ADJACENCY_TOLERANCE_MS),
-				end: new Date(nextStart.getTime() - ADJACENCY_TOLERANCE_MS)
-			});
+			gaps.push(...missingMonthsInGap(prevEnd, nextStart));
 		}
 	}
-	return gaps;
+
+	// Trou en cours (pas encore de renouvellement) : contrairement aux trous internes, on le limite
+	// aux TRAILING_GAP_MONTHS premiers mois suivant la dernière cotisation — au-delà, le membre est
+	// considéré abandonné plutôt qu'en retard, et le statut "expirée" suffit sans lignes supplémentaires.
+	let isInactive = false;
+	const lastCovered = merged[merged.length - 1];
+	if (lastCovered && now.getTime() - lastCovered.end.getTime() > ADJACENCY_TOLERANCE_MS) {
+		const trailingMonths = missingMonthsInGap(lastCovered.end, now);
+		isInactive = trailingMonths.length >= TRAILING_GAP_MONTHS;
+		gaps.push(...trailingMonths.slice(0, TRAILING_GAP_MONTHS));
+	}
+
+	return { gaps, isInactive };
 }
 
 export interface DolibarrMemberType {

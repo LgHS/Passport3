@@ -72,6 +72,7 @@
 	const yearRows = $derived(
 		cotisationRows.filter((row) => new Date(row.date).getFullYear() === displayedYear)
 	);
+	const hasGapsOnPage = $derived(yearRows.some((row) => row.kind === 'gap'));
 
 	function statusExplanation(status: CotisationStatus, datefin: Date | null): string {
 		switch (status) {
@@ -142,6 +143,11 @@
 				<div>
 					<p class="text-sm font-bold uppercase">{COTISATION_STATUS_LABEL[data.status]}</p>
 					<p class="text-sm text-gray-600">{statusExplanation(data.status, data.datefin)}</p>
+					{#if data.isInactive}
+						<p class="mt-2 text-sm font-bold">
+							Après 3 mois sans cotisation, votre compte est considéré comme inactif.
+						</p>
+					{/if}
 				</div>
 			</div>
 
@@ -203,6 +209,14 @@
 					</tbody>
 				</table>
 			</div>
+
+			{#if hasGapsOnPage}
+				<p class="mt-3 text-sm text-gray-600">
+					<span class="font-bold text-red-700">Non perçu</span> signale un mois pour lequel nous
+					n'avons trouvé aucune cotisation. Si ça vous semble être une erreur, contactez
+					<a href="mailto:compta@lghs.be">compta@lghs.be</a>.
+				</p>
+			{/if}
 		{/if}
 	</section>
 
