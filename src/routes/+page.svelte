@@ -31,7 +31,11 @@
 			<li>gérer votre badge RFID.</li>
 			<li>…</li>
 		</ul>
-		<a href="/login" class="no-underline-fx btn-primary inline-block px-6 py-3">
+		<a
+			href="/login"
+			data-sveltekit-preload-data="off"
+			class="no-underline-fx btn-primary inline-block px-6 py-3"
+		>
 			Se connecter avec le SSO
 		</a>
 	{:else}

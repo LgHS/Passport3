@@ -34,6 +34,20 @@
 
 <h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Mon profil</h1>
 
+{#if data.mfaDevices.length === 0}
+	<p class="mb-6 border-4 border-black bg-lghs-yellow px-4 py-3 text-sm font-bold">
+		Vous n'avez aucun MFA de configuré.
+		<button
+			type="button"
+			onclick={() => (activeTab = 'mfa')}
+			class="underline underline-offset-2"
+		>
+			Ajoutez-en un
+		</button>
+		 pour sécuriser votre compte.
+	</p>
+{/if}
+
 <div class="mb-6 flex flex-wrap border-b-4 border-black text-sm">
 	<button
 		type="button"
