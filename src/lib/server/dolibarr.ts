@@ -164,8 +164,8 @@ export async function findIbanOwnerConflict(
 	own: { memberId: number; fkSoc: number | null }
 ): Promise<boolean> {
 	const [membersRes, thirdPartiesRes] = await Promise.all([
-		dolibarrApiFetch('members?limit=1000'),
-		dolibarrApiFetch('thirdparties?limit=1000')
+		dolibarrApiFetch('members?limit=0'),
+		dolibarrApiFetch('thirdparties?limit=0')
 	]);
 
 	const members = (await membersRes.json()) as RawMemberIbanRecord[];
