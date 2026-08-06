@@ -54,6 +54,25 @@
 		].sort((a, b) => b.date - a.date)
 	);
 
+	// Years for which there's at least one row (subscription or gap), most recent first — used to
+	// paginate the table one year at a time instead of dumping the whole history at once.
+	const availableYears = $derived(
+		Array.from(new Set(cotisationRows.map((row) => new Date(row.date).getFullYear()))).sort(
+			(a, b) => b - a
+		)
+	);
+	let selectedYear = $state<number | null>(null);
+	const displayedYear = $derived(selectedYear ?? availableYears[0] ?? new Date().getFullYear());
+	const yearIndex = $derived(availableYears.indexOf(displayedYear));
+	// "Older" = further back in the array (years are sorted newest-first), "newer" = closer to the front.
+	const olderYear = $derived(
+		yearIndex >= 0 && yearIndex + 1 < availableYears.length ? availableYears[yearIndex + 1] : null
+	);
+	const newerYear = $derived(yearIndex > 0 ? availableYears[yearIndex - 1] : null);
+	const yearRows = $derived(
+		cotisationRows.filter((row) => new Date(row.date).getFullYear() === displayedYear)
+	);
+
 	function statusExplanation(status: CotisationStatus, datefin: Date | null): string {
 		switch (status) {
 			case 'a_jour':
@@ -126,6 +145,28 @@
 				</div>
 			</div>
 
+			{#if availableYears.length > 1}
+				<div class="mb-3 flex items-center justify-between border border-black">
+					<button
+						type="button"
+						onclick={() => (selectedYear = olderYear)}
+						disabled={olderYear === null}
+						class="px-3 py-2 text-sm font-bold uppercase hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-black"
+					>
+						‹ {olderYear ?? ''}
+					</button>
+					<span class="text-sm font-bold uppercase">{displayedYear}</span>
+					<button
+						type="button"
+						onclick={() => (selectedYear = newerYear)}
+						disabled={newerYear === null}
+						class="px-3 py-2 text-sm font-bold uppercase hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-black"
+					>
+						{newerYear ?? ''} ›
+					</button>
+				</div>
+			{/if}
+
 			<div class="overflow-x-auto">
 				<table class="w-full border-collapse text-sm">
 					<thead>
@@ -136,7 +177,7 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each cotisationRows as row (row.kind === 'subscription' ? `sub-${row.subscription.id}` : `gap-${row.gap.start.getTime()}`)}
+						{#each yearRows as row (row.kind === 'subscription' ? `sub-${row.subscription.id}` : `gap-${row.gap.start.getTime()}`)}
 							{#if row.kind === 'subscription'}
 								<tr>
 									<td class="border border-black px-3 py-2">{formatDate(row.subscription.start)}</td>
