@@ -7,11 +7,18 @@ export type { ProfileAttributeField, UserProfile };
 // Whitelist that also acts as the merge boundary for updateUserProfile: only these keys are
 // ever read from or written into the user's Authentik `attributes` blob.
 export const PROFILE_ATTRIBUTE_FIELDS: ProfileAttributeField[] = [
-	{ key: 'phoneNumber', label: 'Téléphone (format: 32470000000)' },
-	{ key: 'street', label: 'Rue & Numéro' },
-	{ key: 'postal_code', label: 'Code postal' },
-	{ key: 'locality', label: 'Localité' },
-	{ key: 'country', label: 'Pays' }
+	{ key: 'phoneNumber', label: 'Téléphone (format: 32470000000)', required: true },
+	{ key: 'street', label: 'Rue & Numéro', required: true },
+	{ key: 'postal_code', label: 'Code postal', required: true },
+	{ key: 'locality', label: 'Localité', required: true },
+	{ key: 'country', label: 'Pays', required: true },
+	// Réseaux sociaux — optionnels, affichés dans un panneau replié sur /profile ("Divers
+	// (facultatifs)"). D'autres réseaux pourront suivre ce même schéma (key + label +
+	// required: false, plus un validateur dédié dans profileValidation.ts si le format doit être
+	// vérifié).
+	{ key: 'signal', label: 'Signal', required: false },
+	{ key: 'telegram', label: 'Telegram', required: false },
+	{ key: 'discord', label: 'Discord', required: false }
 ];
 
 interface AuthentikUserRecord {

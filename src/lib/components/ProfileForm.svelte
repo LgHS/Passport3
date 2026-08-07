@@ -22,6 +22,19 @@
 	} = $props();
 
 	let submitting = $state(false);
+	let socialsOpen = $state(false);
+
+	// Every validateSignalUsername()/validateTelegramUsername()/validateDiscordUsername() error
+	// message starts with its network's name — used to route the error into the "Divers
+	// (facultatifs)" panel instead of the generic top banner.
+	let isSocialError = $derived(/^(Signal|Telegram|Discord) :/.test(form?.error ?? ''));
+
+	// The panel is collapsed by default, so a social error would otherwise be invisible — force it
+	// open when one comes back from the server. Only ever sets it to true, never closes it back
+	// down, so a manual toggle by the member elsewhere isn't fought.
+	$effect(() => {
+		if (isSocialError) socialsOpen = true;
+	});
 
 	function fieldLabel(key: string): string {
 		return fields.find((f) => f.key === key)?.label ?? key;
@@ -42,7 +55,10 @@
 	let lastNameValue = $derived(form?.lastName ?? nameFallback.lastName);
 </script>
 
-{#snippet textField(key: string, opts?: { type?: string; pattern?: string; title?: string })}
+{#snippet textField(
+	key: string,
+	opts?: { type?: string; pattern?: string; title?: string; placeholder?: string; required?: boolean }
+)}
 	<div>
 		<label class="mb-1 block text-sm font-bold uppercase" for={key}>{fieldLabel(key)}</label>
 		<input
@@ -51,9 +67,10 @@
 			type={opts?.type ?? 'text'}
 			pattern={opts?.pattern}
 			title={opts?.title}
-			required
+			placeholder={opts?.placeholder}
+			required={opts?.required ?? true}
 			value={fieldValue(key)}
-			class="w-full border border-black px-3 py-2 text-sm"
+			class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-300"
 		/>
 	</div>
 {/snippet}
@@ -63,7 +80,7 @@
 		{form.changed ? 'Les données ont été enregistrées.' : 'Aucune modification à enregistrer.'}
 	</p>
 {/if}
-{#if form?.error}
+{#if form?.error && !isSocialError}
 	<p class="mb-6 border-4 border-black bg-white px-4 py-3 font-bold">
 		{form.error}
 	</p>
@@ -126,6 +143,54 @@
 
 	<div class="mb-4">
 		{@render textField('country')}
+	</div>
+
+	<div class="mb-4 border border-black">
+		<button
+			type="button"
+			onclick={() => (socialsOpen = !socialsOpen)}
+			class="flex w-full items-center justify-between px-4 py-3 text-sm font-bold uppercase"
+			aria-expanded={socialsOpen}
+		>
+			Divers (facultatifs)
+			<svg
+				viewBox="0 0 12 8"
+				class="h-2.5 w-2.5 shrink-0 fill-current transition-transform {socialsOpen
+					? 'rotate-180'
+					: ''}"
+				aria-hidden="true"
+			>
+				<path d="M0 0 L12 0 L6 8 Z" />
+			</svg>
+		</button>
+		{#if socialsOpen}
+			<div class="border-t border-black p-4">
+				{#if isSocialError}
+					<div class="mb-4 border-4 border-black bg-red-600 px-4 py-3 text-white">
+						<p class="text-sm font-bold">{form?.error}</p>
+					</div>
+				{/if}
+				<div class="mb-4">
+					{@render textField('signal', {
+						required: false,
+						placeholder: 'ana.27',
+						title: 'Format attendu : pseudo.chiffres (ex. ana.27)'
+					})}
+				</div>
+				<div class="mb-4">
+					{@render textField('telegram', {
+						required: false,
+						placeholder: 'mon_pseudo',
+						title: 'Pseudo Telegram, 5 à 32 caractères, commence par une lettre'
+					})}
+				</div>
+				{@render textField('discord', {
+					required: false,
+					placeholder: 'mon.pseudo',
+					title: 'Pseudo Discord, 2 à 32 caractères, minuscules'
+				})}
+			</div>
+		{/if}
 	</div>
 
 	<button type="submit" disabled={submitting} class="btn-primary px-6 py-3 disabled:opacity-50">
