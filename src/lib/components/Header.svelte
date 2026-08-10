@@ -102,6 +102,14 @@
 							>
 								Badge
 							</a>
+							<a
+								href="/github"
+								role="menuitem"
+								onclick={() => (menuOpen = false)}
+								class="no-underline-fx menu-item"
+							>
+								GitHub
+							</a>
 							{#if isAdmin(user)}
 								<a
 									href="/admin"
