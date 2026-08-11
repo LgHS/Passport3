@@ -293,6 +293,18 @@ export interface DirectoryMember {
 	tag: string | null;
 	// Hex color without the `#`, validated — null falls back to the default black badge.
 	tagColor: string | null;
+	// Signal/Telegram/Discord/Matrix, set on /profile (optional fields there). No dedicated
+	// trombinoscope opt-in for these: filling them in on an already-optional field *is* the
+	// consent, so presence is the only gate — same as tag/tagColor above, just gated by `visible`.
+	signal: string | null;
+	telegram: string | null;
+	discord: string | null;
+	matrix: string | null;
+}
+
+function stringAttr(attributes: Record<string, unknown>, key: string): string | null {
+	const value = attributes[key];
+	return typeof value === 'string' && value.trim() ? value : null;
 }
 
 const HEX_COLOR_RE = /^[0-9a-fA-F]{6}$/;
@@ -347,7 +359,11 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 					tagColor:
 						typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue)
 							? tagColorValue
-							: null
+							: null,
+					signal: stringAttr(u.attributes, 'signal'),
+					telegram: stringAttr(u.attributes, 'telegram'),
+					discord: stringAttr(u.attributes, 'discord'),
+					matrix: stringAttr(u.attributes, 'matrix')
 				}
 			];
 		});

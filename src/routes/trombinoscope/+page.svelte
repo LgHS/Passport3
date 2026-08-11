@@ -43,6 +43,23 @@
 		return [member.firstName, member.lastName].filter(Boolean).join(' ');
 	}
 
+	// No brand icon per network on purpose — Signal/Telegram/Discord/Matrix logos are colorful and
+	// would clash with the site's black/white brutalist look. Plain "Réseau : valeur" text instead,
+	// only for whichever the member actually filled in on /profile.
+	function socialLinks(member: {
+		signal: string | null;
+		telegram: string | null;
+		discord: string | null;
+		matrix: string | null;
+	}): { label: string; value: string }[] {
+		return [
+			{ label: 'Signal', value: member.signal },
+			{ label: 'Telegram', value: member.telegram },
+			{ label: 'Discord', value: member.discord },
+			{ label: 'Matrix', value: member.matrix }
+		].filter((entry): entry is { label: string; value: string } => !!entry.value);
+	}
+
 	let searchQuery = $state('');
 	let tagFilter = $state<'all' | 'with' | 'without'>('all');
 
@@ -359,10 +376,12 @@
 					</div>
 				{/if}
 				<div class="space-y-1 text-sm">
-					<p class="font-bold uppercase">@{member.username}</p>
-					{#if fullName(member)}
-						<p>{fullName(member)}</p>
-					{/if}
+					<p>
+						<span class="font-bold uppercase">@{member.username}</span>
+						{#if fullName(member)}
+							<span class="text-gray-600">— {fullName(member)}</span>
+						{/if}
+					</p>
 					{#if member.email || member.phone}
 						<p class="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-600">
 							{#if member.email}
@@ -400,6 +419,13 @@
 									{member.phone}
 								</span>
 							{/if}
+						</p>
+					{/if}
+					{#if socialLinks(member).length > 0}
+						<p class="flex flex-wrap gap-x-3 gap-y-1 text-gray-600">
+							{#each socialLinks(member) as link (link.label)}
+								<span>{link.label} : {link.value}</span>
+							{/each}
 						</p>
 					{/if}
 				</div>
