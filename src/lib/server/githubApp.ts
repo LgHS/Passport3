@@ -1,15 +1,20 @@
 import { createSign } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { requireEnv } from '$lib/server/env';
 
 function base64url(input: string): string {
 	return Buffer.from(input).toString('base64url');
 }
 
+// Stored as base64 of the .pem contents directly in the env var (not a file path): simpler and
+// safer to deploy — one secret to inject, no volume/file to mount, and no risk of the key ending
+// up inside the repo working tree where a stale .gitignore on some other branch might not exclude
+// it (a plain file under the repo did exactly that once).
 let cachedPrivateKey: string | null = null;
 function loadPrivateKey(): string {
 	if (!cachedPrivateKey) {
-		cachedPrivateKey = readFileSync(requireEnv('GITHUB_APP_PRIVATE_KEY_PATH'), 'utf-8');
+		cachedPrivateKey = Buffer.from(requireEnv('GITHUB_APP_PRIVATE_KEY_BASE64'), 'base64').toString(
+			'utf-8'
+		);
 	}
 	return cachedPrivateKey;
 }
