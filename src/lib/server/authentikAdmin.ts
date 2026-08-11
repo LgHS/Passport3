@@ -18,7 +18,8 @@ export const PROFILE_ATTRIBUTE_FIELDS: ProfileAttributeField[] = [
 	// vérifié).
 	{ key: 'signal', label: 'Signal', required: false },
 	{ key: 'telegram', label: 'Telegram', required: false },
-	{ key: 'discord', label: 'Discord', required: false }
+	{ key: 'discord', label: 'Discord', required: false },
+	{ key: 'matrix', label: 'Matrix', required: false }
 ];
 
 interface AuthentikUserRecord {

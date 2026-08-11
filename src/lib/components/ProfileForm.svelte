@@ -24,10 +24,10 @@
 	let submitting = $state(false);
 	let socialsOpen = $state(false);
 
-	// Every validateSignalUsername()/validateTelegramUsername()/validateDiscordUsername() error
-	// message starts with its network's name — used to route the error into the "Divers
-	// (facultatifs)" panel instead of the generic top banner.
-	let isSocialError = $derived(/^(Signal|Telegram|Discord) :/.test(form?.error ?? ''));
+	// Every validateSignalUsername()/validateTelegramUsername()/validateDiscordUsername()/
+	// validateMatrixId() error message starts with its network's name — used to route the error
+	// into the "Divers (facultatifs)" panel instead of the generic top banner.
+	let isSocialError = $derived(/^(Signal|Telegram|Discord|Matrix) :/.test(form?.error ?? ''));
 
 	// The panel is collapsed by default, so a social error would otherwise be invisible — force it
 	// open when one comes back from the server. Only ever sets it to true, never closes it back
@@ -53,6 +53,29 @@
 	let nameFallback = $derived(splitName(profile.name));
 	let firstNameValue = $derived(form?.firstName ?? nameFallback.firstName);
 	let lastNameValue = $derived(form?.lastName ?? nameFallback.lastName);
+
+	// Split into the two editable blocks either side of the fixed "@"/":" — the member never has to
+	// type those themselves, so they can't get the format wrong on that part.
+	function splitMatrixId(value: string): { localpart: string; domain: string } {
+		if (!value.startsWith('@')) return { localpart: '', domain: '' };
+		const rest = value.slice(1);
+		const colonIndex = rest.indexOf(':');
+		if (colonIndex === -1) return { localpart: rest, domain: '' };
+		return { localpart: rest.slice(0, colonIndex), domain: rest.slice(colonIndex + 1) };
+	}
+
+	const matrixInitial = splitMatrixId(fieldValue('matrix'));
+	// svelte-ignore state_referenced_locally
+	let matrixLocalpart = $state(matrixInitial.localpart);
+	// svelte-ignore state_referenced_locally
+	let matrixDomain = $state(matrixInitial.domain);
+	// Recombined into the single string validateMatrixId() expects — sent via a hidden input, the
+	// two visible ones never submit directly.
+	let matrixCombined = $derived(
+		matrixLocalpart.trim() || matrixDomain.trim()
+			? `@${matrixLocalpart.trim()}:${matrixDomain.trim()}`
+			: ''
+	);
 </script>
 
 {#snippet textField(
@@ -184,11 +207,46 @@
 						title: 'Pseudo Telegram, 5 à 32 caractères, commence par une lettre'
 					})}
 				</div>
-				{@render textField('discord', {
-					required: false,
-					placeholder: 'mon.pseudo',
-					title: 'Pseudo Discord, 2 à 32 caractères, minuscules'
-				})}
+				<div class="mb-4">
+					{@render textField('discord', {
+						required: false,
+						placeholder: 'mon.pseudo',
+						title: 'Pseudo Discord, 2 à 32 caractères, minuscules'
+					})}
+				</div>
+				<div>
+					<label class="mb-1 block text-sm font-bold uppercase" for="matrixLocalpart">
+						Matrix
+					</label>
+					<div class="flex items-stretch border border-black">
+						<span
+							class="flex items-center border-r border-black bg-gray-100 px-2 text-sm text-gray-500"
+						>
+							@
+						</span>
+						<input
+							id="matrixLocalpart"
+							type="text"
+							placeholder="ana"
+							bind:value={matrixLocalpart}
+							title="Pseudo Matrix (avant le ':')"
+							class="min-w-0 flex-1 px-2 py-2 text-sm placeholder:text-gray-300"
+						/>
+						<span
+							class="flex items-center border-x border-black bg-gray-100 px-2 text-sm text-gray-500"
+						>
+							:
+						</span>
+						<input
+							type="text"
+							placeholder="matrix.org"
+							bind:value={matrixDomain}
+							title="Serveur Matrix (après le ':'), ex. matrix.org"
+							class="min-w-0 flex-1 px-2 py-2 text-sm placeholder:text-gray-300"
+						/>
+					</div>
+					<input type="hidden" name="matrix" value={matrixCombined} />
+				</div>
 			</div>
 		{/if}
 	</div>

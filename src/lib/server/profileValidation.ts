@@ -130,6 +130,64 @@ function validateDiscordUsername(raw: string): { ok: true; value: string } | { o
 	return { ok: true, value };
 }
 
+// Format Matrix : @localpart:domaine — fédéré (contrairement à Signal/Telegram/Discord, qui ont un
+// espace de noms unique), donc deux parties à valider séparément.
+// - localpart : recommandation officielle Matrix = uniquement [a-z0-9._=/-]
+// - domaine : nom d'hôte du homeserver, port optionnel (ex. matrix.org, ou matrix.example.com:8448)
+function validateMatrixId(raw: string): { ok: true; value: string } | { ok: false; error: string } {
+	const trimmed = raw.trim();
+	if (!trimmed) return { ok: true, value: '' };
+
+	const value = trimmed.toLowerCase();
+	if (!value.startsWith('@')) {
+		return {
+			ok: false,
+			error:
+				'Matrix : l\'identifiant doit commencer par "@" (format attendu : @pseudo:serveur, ex. @ana:matrix.org).'
+		};
+	}
+
+	const rest = value.slice(1);
+	const colonIndex = rest.indexOf(':');
+	if (colonIndex === -1) {
+		return {
+			ok: false,
+			error:
+				'Matrix : il manque le ":" séparant le pseudo du serveur (format attendu : @pseudo:serveur, ex. @ana:matrix.org).'
+		};
+	}
+
+	const localpart = rest.slice(0, colonIndex);
+	const domain = rest.slice(colonIndex + 1);
+
+	if (!localpart) {
+		return { ok: false, error: 'Matrix : le pseudo (entre "@" et ":") ne peut pas être vide.' };
+	}
+	if (!/^[a-z0-9._=/-]+$/.test(localpart)) {
+		return {
+			ok: false,
+			error: 'Matrix : le pseudo ne peut contenir que des lettres minuscules, chiffres, et . _ = - /'
+		};
+	}
+
+	if (!domain) {
+		return { ok: false, error: 'Matrix : il manque le nom du serveur après le ":".' };
+	}
+	const [domainHost] = domain.split(':');
+	if (!/^[a-z0-9.-]+(:\d{1,5})?$/.test(domain) || !domainHost.includes('.')) {
+		return {
+			ok: false,
+			error: 'Matrix : le serveur après le ":" doit être un nom de domaine valide (ex. matrix.org).'
+		};
+	}
+
+	if (value.length > 255) {
+		return { ok: false, error: 'Matrix : identifiant trop long (255 caractères maximum).' };
+	}
+
+	return { ok: true, value };
+}
+
 export type ProfileValidationResult =
 	| {
 			ok: true;
@@ -196,6 +254,12 @@ export function validateProfileSubmission(formData: FormData): ProfileValidation
 		return { ok: false, error: discordResult.error, firstName, lastName, attributes };
 	}
 	attributes.discord = discordResult.value;
+
+	const matrixResult = validateMatrixId(attributes.matrix ?? '');
+	if (!matrixResult.ok) {
+		return { ok: false, error: matrixResult.error, firstName, lastName, attributes };
+	}
+	attributes.matrix = matrixResult.value;
 
 	// Authentik only has a single `name` field — merge on write, split back on display.
 	const name = `${firstName} ${lastName}`.trim();
