@@ -1,8 +1,22 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+
+	$effect(() => {
+		if (form?.success) {
+			showToast(
+				'success',
+				form.optin.visible
+					? 'Votre profil est maintenant visible dans le trombinoscope.'
+					: 'Votre profil est maintenant caché du trombinoscope.'
+			);
+		} else if (form?.error) {
+			showToast('error', form.error);
+		}
+	});
 
 	let view = $state<'grid' | 'list'>('grid');
 
@@ -186,12 +200,6 @@
 				{submittingOptin ? 'Enregistrement…' : 'Enregistrer'}
 			</button>
 		</form>
-	{/if}
-	{#if form?.success}
-		<p class="border-t border-black px-4 py-2 text-xs text-gray-500">Préférences enregistrées.</p>
-	{/if}
-	{#if form?.error}
-		<p class="border-t border-black px-4 py-2 text-xs text-red-700">{form.error}</p>
 	{/if}
 </div>
 
