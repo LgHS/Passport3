@@ -97,6 +97,9 @@
 			<div class="mb-4">
 				<span class="mb-1 block text-sm font-bold uppercase">Email</span>
 				<p class="border border-black bg-gray-100 px-3 py-2 text-sm">{data.profile.email}</p>
+				<p class="mt-1 text-xs text-gray-500">
+					Ce mail est non éditable. Il sert de clé pour relier certains services. Un changement peut se faire sur demande.
+				</p>
 			</div>
 
 			<ProfileForm profile={data.profile} fields={data.fields} {form} />
