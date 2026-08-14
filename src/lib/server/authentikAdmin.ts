@@ -201,6 +201,63 @@ export async function regenerateRfidUid(pk: number): Promise<string> {
 	return uuid;
 }
 
+export interface TrombinoscopeOptin {
+	visible: boolean;
+	showAvatar: boolean;
+	showChat: boolean;
+	showFirstname: boolean;
+	showLastname: boolean;
+	showMail: boolean;
+	showPhone: boolean;
+}
+
+const TROMBINOSCOPE_DEFAULTS: TrombinoscopeOptin = {
+	visible: false,
+	showAvatar: false,
+	showChat: false,
+	showFirstname: false,
+	showLastname: false,
+	showMail: false,
+	showPhone: false
+};
+
+// Not part of PROFILE_ATTRIBUTE_FIELDS, same reasoning as rfid_uid: this isn't a plain string
+// field edited through the generic profile form, it's a structured on/off blob with its own form.
+const TROMBINOSCOPE_ATTRIBUTE = 'trombinoscope';
+
+export async function getTrombinoscopeOptin(pk: number): Promise<TrombinoscopeOptin> {
+	const res = await authentikApiFetch(`core/users/${pk}/`);
+	const user = (await res.json()) as AuthentikUserRecord;
+	const value = user.attributes[TROMBINOSCOPE_ATTRIBUTE];
+	return typeof value === 'object' && value !== null
+		? { ...TROMBINOSCOPE_DEFAULTS, ...(value as Partial<TrombinoscopeOptin>) }
+		: TROMBINOSCOPE_DEFAULTS;
+}
+
+// Read-merge-write, same reasoning as updateUserProfile/regenerateRfidUid — but two levels deep
+// here: not just `attributes` as a whole, but also the `trombinoscope` value inside it. Fields
+// like `tag`/`tagc` (admin-assigned role labels) live in that same object outside of what this
+// member-facing form ever submits — replacing it wholesale would silently wipe them out the next
+// time a member just toggles their own visibility.
+export async function updateTrombinoscopeOptin(pk: number, optin: TrombinoscopeOptin): Promise<void> {
+	const current = await authentikApiFetch(`core/users/${pk}/`);
+	const currentUser = (await current.json()) as AuthentikUserRecord;
+	const currentTrombinoscope = currentUser.attributes[TROMBINOSCOPE_ATTRIBUTE];
+	const mergedTrombinoscope = {
+		...(typeof currentTrombinoscope === 'object' && currentTrombinoscope !== null
+			? currentTrombinoscope
+			: {}),
+		...optin
+	};
+
+	await authentikApiFetch(`core/users/${pk}/`, {
+		method: 'PATCH',
+		body: JSON.stringify({
+			attributes: { ...currentUser.attributes, [TROMBINOSCOPE_ATTRIBUTE]: mergedTrombinoscope }
+		})
+	});
+}
+
 export interface AdminUserSummary {
 	pk: number;
 	username: string;
@@ -229,6 +286,95 @@ export async function listUsers(): Promise<AdminUserSummary[]> {
 			email,
 			is_active
 		}));
+}
+
+export interface DirectoryMember {
+	pk: number;
+	username: string;
+	firstName: string | null;
+	lastName: string | null;
+	email: string | null;
+	phone: string | null;
+	avatar: string | null;
+	// Admin-assigned role label (e.g. "Trésorier") — lives in the same `trombinoscope` attribute
+	// but outside TrombinoscopeOptin since it's not something the member-facing form edits.
+	tag: string | null;
+	// Hex color without the `#`, validated — null falls back to the default black badge.
+	tagColor: string | null;
+	// Signal/Telegram/Discord/Matrix, set on /profile (optional fields there). No dedicated
+	// trombinoscope opt-in for these: filling them in on an already-optional field *is* the
+	// consent, so presence is the only gate — same as tag/tagColor above, just gated by `visible`.
+	signal: string | null;
+	telegram: string | null;
+	discord: string | null;
+	matrix: string | null;
+}
+
+function stringAttr(attributes: Record<string, unknown>, key: string): string | null {
+	const value = attributes[key];
+	return typeof value === 'string' && value.trim() ? value : null;
+}
+
+const HEX_COLOR_RE = /^[0-9a-fA-F]{6}$/;
+
+// Authentik only has a single `name` field, no first/last split — heuristic split (first token vs
+// the rest) so the trombinoscope's separate Prénom/Nom opt-in has something to gate independently.
+function splitName(name: string): { firstName: string; lastName: string } {
+	const [first, ...rest] = name.trim().split(/\s+/);
+	return { firstName: first ?? '', lastName: rest.join(' ') };
+}
+
+// The trombinoscope is opt-in and field-granular (see TrombinoscopeOptin): a member who hasn't
+// set `visible` is excluded entirely, and only the fields they've individually consented to show
+// are ever put on the returned object — filtering happens here, server-side, so a field a member
+// chose not to share never reaches the browser in the first place (not just hidden in the UI).
+export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
+	const res = await authentikApiFetch('core/users/?page_size=500');
+	const data = (await res.json()) as {
+		results: (AuthentikUserRecord & { is_active: boolean; type: string })[];
+	};
+
+	return data.results
+		.filter(
+			(u) => u.is_active && !EXCLUDED_USERNAMES.has(u.username) && !EXCLUDED_TYPES.has(u.type)
+		)
+		.flatMap((u) => {
+			const raw = u.attributes[TROMBINOSCOPE_ATTRIBUTE];
+			const optin: TrombinoscopeOptin =
+				typeof raw === 'object' && raw !== null
+					? { ...TROMBINOSCOPE_DEFAULTS, ...(raw as Partial<TrombinoscopeOptin>) }
+					: TROMBINOSCOPE_DEFAULTS;
+			if (!optin.visible) return [];
+
+			const { firstName, lastName } = splitName(u.name);
+			const rawTrombi = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+			const tagValue = rawTrombi.tag;
+			const tagColorValue = rawTrombi.tagc;
+
+			return [
+				{
+					pk: u.pk,
+					username: u.username,
+					firstName: optin.showFirstname ? firstName : null,
+					lastName: optin.showLastname ? lastName : null,
+					email: optin.showMail ? u.email : null,
+					phone:
+						optin.showPhone && typeof u.attributes.phoneNumber === 'string'
+							? u.attributes.phoneNumber
+							: null,
+					avatar: optin.showAvatar ? u.avatar || null : null,
+					tag: typeof tagValue === 'string' && tagValue.trim() ? tagValue : null,
+					tagColor:
+						typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue)
+							? tagColorValue
+							: null,
+					signal: stringAttr(u.attributes, 'signal'),
+					telegram: stringAttr(u.attributes, 'telegram'),
+					discord: stringAttr(u.attributes, 'discord'),
+					matrix: stringAttr(u.attributes, 'matrix')
+				}
+			];
+		});
 }
 
 interface FlowRecord {
