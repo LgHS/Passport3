@@ -15,15 +15,22 @@
 	let {
 		profile,
 		fields,
-		form
+		form,
+		collapsibleSocials = true
 	}: {
 		profile: UserProfile;
 		fields: ProfileAttributeField[];
 		form: FormResult;
+		// The member-facing /profile form tucks Signal/Telegram/Discord/Matrix behind a collapsed
+		// "Divers" panel — optional fields the member may never fill in. The admin edit form shows
+		// them flat instead: an admin editing on someone's behalf (oral/email request) needs to see
+		// everything at a glance, not remember to expand a panel.
+		collapsibleSocials?: boolean;
 	} = $props();
 
 	let submitting = $state(false);
-	let socialsOpen = $state(false);
+	// svelte-ignore state_referenced_locally
+	let socialsOpen = $state(!collapsibleSocials);
 
 	// Every validateSignalUsername()/validateTelegramUsername()/validateDiscordUsername()/
 	// validateMatrixId() error message starts with its network's name — used to route the error
@@ -167,23 +174,27 @@
 	</div>
 
 	<div class="mb-4 border border-black">
-		<button
-			type="button"
-			onclick={() => (socialsOpen = !socialsOpen)}
-			class="flex w-full items-center justify-between px-4 py-3 text-sm font-bold uppercase"
-			aria-expanded={socialsOpen}
-		>
-			Divers (facultatifs)
-			<svg
-				viewBox="0 0 12 8"
-				class="h-2.5 w-2.5 shrink-0 fill-current transition-transform {socialsOpen
-					? 'rotate-180'
-					: ''}"
-				aria-hidden="true"
+		{#if collapsibleSocials}
+			<button
+				type="button"
+				onclick={() => (socialsOpen = !socialsOpen)}
+				class="flex w-full items-center justify-between px-4 py-3 text-sm font-bold uppercase"
+				aria-expanded={socialsOpen}
 			>
-				<path d="M0 0 L12 0 L6 8 Z" />
-			</svg>
-		</button>
+				Divers (facultatifs)
+				<svg
+					viewBox="0 0 12 8"
+					class="h-2.5 w-2.5 shrink-0 fill-current transition-transform {socialsOpen
+						? 'rotate-180'
+						: ''}"
+					aria-hidden="true"
+				>
+					<path d="M0 0 L12 0 L6 8 Z" />
+				</svg>
+			</button>
+		{:else}
+			<p class="border-b border-black px-4 py-3 text-sm font-bold uppercase">Divers (facultatifs)</p>
+		{/if}
 		{#if socialsOpen}
 			<div class="border-t border-black p-4">
 				<div class="mb-4">

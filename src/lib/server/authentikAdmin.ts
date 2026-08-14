@@ -234,6 +234,21 @@ export async function getTrombinoscopeOptin(pk: number): Promise<TrombinoscopeOp
 		: TROMBINOSCOPE_DEFAULTS;
 }
 
+// Unchecked checkboxes simply aren't present in FormData — absence means false, same convention
+// as every other checkbox form in this app. Shared between the member-facing /trombinoscope form
+// and the admin edit form, which submits the same field names on another member's behalf.
+export function optinFromFormData(formData: FormData): TrombinoscopeOptin {
+	return {
+		visible: formData.has('visible'),
+		showAvatar: formData.has('showAvatar'),
+		showChat: formData.has('showChat'),
+		showFirstname: formData.has('showFirstname'),
+		showLastname: formData.has('showLastname'),
+		showMail: formData.has('showMail'),
+		showPhone: formData.has('showPhone')
+	};
+}
+
 // Read-merge-write, same reasoning as updateUserProfile/regenerateRfidUid — but two levels deep
 // here: not just `attributes` as a whole, but also the `trombinoscope` value inside it. Fields
 // like `tag`/`tagc` (admin-assigned role labels) live in that same object outside of what this
@@ -248,6 +263,51 @@ export async function updateTrombinoscopeOptin(pk: number, optin: TrombinoscopeO
 			? currentTrombinoscope
 			: {}),
 		...optin
+	};
+
+	await authentikApiFetch(`core/users/${pk}/`, {
+		method: 'PATCH',
+		body: JSON.stringify({
+			attributes: { ...currentUser.attributes, [TROMBINOSCOPE_ATTRIBUTE]: mergedTrombinoscope }
+		})
+	});
+}
+
+// `tag`/`tagc` — an admin-assigned role label (e.g. "Prés. CA") and its badge color — live in the
+// same `trombinoscope` attribute as TrombinoscopeOptin, but are kept in a separate type: they're
+// admin-only fields, never part of what the member-facing /trombinoscope form reads or submits.
+export interface TrombinoscopeTag {
+	tag: string | null;
+	tagColor: string | null;
+}
+
+export async function getTrombinoscopeTag(pk: number): Promise<TrombinoscopeTag> {
+	const res = await authentikApiFetch(`core/users/${pk}/`);
+	const user = (await res.json()) as AuthentikUserRecord;
+	const raw = user.attributes[TROMBINOSCOPE_ATTRIBUTE];
+	const rawTrombi = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+	const tagValue = rawTrombi.tag;
+	const tagColorValue = rawTrombi.tagc;
+	return {
+		tag: typeof tagValue === 'string' && tagValue.trim() ? tagValue : null,
+		tagColor:
+			typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue) ? tagColorValue : null
+	};
+}
+
+// Same read-merge-write shape as updateTrombinoscopeOptin, kept as its own function rather than
+// folded into it: the two are edited from different forms (this one only exists in the admin UI)
+// and have independent validation (tagColor is a hex string, not a checkbox).
+export async function updateTrombinoscopeTag(pk: number, tag: TrombinoscopeTag): Promise<void> {
+	const current = await authentikApiFetch(`core/users/${pk}/`);
+	const currentUser = (await current.json()) as AuthentikUserRecord;
+	const currentTrombinoscope = currentUser.attributes[TROMBINOSCOPE_ATTRIBUTE];
+	const mergedTrombinoscope = {
+		...(typeof currentTrombinoscope === 'object' && currentTrombinoscope !== null
+			? currentTrombinoscope
+			: {}),
+		tag: tag.tag ?? '',
+		tagc: tag.tagColor ?? ''
 	};
 
 	await authentikApiFetch(`core/users/${pk}/`, {
@@ -315,7 +375,7 @@ function stringAttr(attributes: Record<string, unknown>, key: string): string | 
 	return typeof value === 'string' && value.trim() ? value : null;
 }
 
-const HEX_COLOR_RE = /^[0-9a-fA-F]{6}$/;
+export const HEX_COLOR_RE = /^[0-9a-fA-F]{6}$/;
 
 // Authentik only has a single `name` field, no first/last split — heuristic split (first token vs
 // the rest) so the trombinoscope's separate Prénom/Nom opt-in has something to gate independently.
