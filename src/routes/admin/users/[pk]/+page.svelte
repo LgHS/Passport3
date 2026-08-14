@@ -49,6 +49,14 @@
 	// authentikAdmin.ts's HEX_COLOR_RE comment) when left empty or not yet valid.
 	let tagColorPreview = $derived(/^[0-9a-fA-F]{6}$/.test(tagColorValue) ? `#${tagColorValue}` : '#000000');
 
+	// Quick-pick shortcuts for the colors used most often — just fills the field, still editable
+	// or overridable afterwards like any other value.
+	const tagColorPresets: { label: string; hex: string }[] = [
+		{ label: 'Bureau', hex: 'ffd800' },
+		{ label: 'Effectif', hex: 'ffa200' },
+		{ label: 'Support', hex: '00d5ff' }
+	];
+
 	$effect(() => {
 		if (form?.tagSuccess) {
 			showToast('success', 'Rôle mis à jour.');
@@ -175,6 +183,22 @@
 		</div>
 		<div>
 			<label class="mb-1 block text-sm font-bold uppercase" for="tagColor">Couleur</label>
+			<div class="mb-2 flex flex-wrap gap-2">
+				{#each tagColorPresets as preset (preset.hex)}
+					<button
+						type="button"
+						onclick={() => (tagColorValue = preset.hex)}
+						class="flex items-center gap-1.5 border border-black px-2 py-1 text-xs font-bold uppercase hover:bg-black hover:text-white"
+					>
+						<span
+							class="h-3 w-3 shrink-0 border border-black"
+							style="background-color: #{preset.hex};"
+							aria-hidden="true"
+						></span>
+						{preset.label}
+					</button>
+				{/each}
+			</div>
 			<div class="flex items-center gap-2">
 				<input
 					type="color"
