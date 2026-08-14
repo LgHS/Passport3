@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import type { ProfileAttributeField, UserProfile } from '$lib/types';
 
 	type FormResult = {
@@ -34,6 +35,14 @@
 	// down, so a manual toggle by the member elsewhere isn't fought.
 	$effect(() => {
 		if (isSocialError) socialsOpen = true;
+	});
+
+	$effect(() => {
+		if (form?.success) {
+			showToast('success', form.changed ? 'Les données ont été enregistrées.' : 'Aucune modification à enregistrer.');
+		} else if (form?.error) {
+			showToast('error', form.error);
+		}
 	});
 
 	function fieldLabel(key: string): string {
@@ -97,17 +106,6 @@
 		/>
 	</div>
 {/snippet}
-
-{#if form?.success}
-	<p class="mb-6 border-4 border-black bg-lghs-yellow px-4 py-3 font-bold">
-		{form.changed ? 'Les données ont été enregistrées.' : 'Aucune modification à enregistrer.'}
-	</p>
-{/if}
-{#if form?.error && !isSocialError}
-	<p class="mb-6 border-4 border-black bg-white px-4 py-3 font-bold">
-		{form.error}
-	</p>
-{/if}
 
 <form
 	method="POST"
@@ -188,11 +186,6 @@
 		</button>
 		{#if socialsOpen}
 			<div class="border-t border-black p-4">
-				{#if isSocialError}
-					<div class="mb-4 border-4 border-black bg-red-600 px-4 py-3 text-white">
-						<p class="text-sm font-bold">{form?.error}</p>
-					</div>
-				{/if}
 				<div class="mb-4">
 					{@render textField('signal', {
 						required: false,
