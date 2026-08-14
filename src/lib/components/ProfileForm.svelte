@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import type { ProfileAttributeField, UserProfile } from '$lib/types';
 
 	type FormResult = {
@@ -40,6 +41,14 @@
 	let nameFallback = $derived(splitName(profile.name));
 	let firstNameValue = $derived(form?.firstName ?? nameFallback.firstName);
 	let lastNameValue = $derived(form?.lastName ?? nameFallback.lastName);
+
+	$effect(() => {
+		if (form?.success) {
+			showToast('success', form.changed ? 'Les données ont été enregistrées.' : 'Aucune modification à enregistrer.');
+		} else if (form?.error) {
+			showToast('error', form.error);
+		}
+	});
 </script>
 
 {#snippet textField(key: string, opts?: { type?: string; pattern?: string; title?: string })}
@@ -57,17 +66,6 @@
 		/>
 	</div>
 {/snippet}
-
-{#if form?.success}
-	<p class="mb-6 border-4 border-black bg-lghs-yellow px-4 py-3 font-bold">
-		{form.changed ? 'Les données ont été enregistrées.' : 'Aucune modification à enregistrer.'}
-	</p>
-{/if}
-{#if form?.error}
-	<p class="mb-6 border-4 border-black bg-white px-4 py-3 font-bold">
-		{form.error}
-	</p>
-{/if}
 
 <form
 	method="POST"

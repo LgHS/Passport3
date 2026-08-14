@@ -9,7 +9,7 @@
 	<title>{data.profile.name} — Administration — Passport</title>
 </svelte:head>
 
-<section class="max-w-2xl">
+<section class="mx-auto max-w-2xl">
 	<a href="/admin" class="mb-4 inline-block text-sm">← Retour à la liste</a>
 
 	<h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">
