@@ -1,11 +1,37 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let submitting = $state(false);
 	let disconnecting = $state(false);
+
+	$effect(() => {
+		if (form?.disconnected) {
+			showToast('success', 'Compte GitHub déconnecté. Vous pouvez en connecter un autre.');
+		} else if (form?.success) {
+			showToast('success', "Invitation envoyée ! Vérifiez vos emails (ou vos notifications GitHub) pour l'accepter.");
+		} else if (form?.error) {
+			showToast('error', form.error);
+		}
+	});
+
+	// The OAuth callback is a plain server redirect, not a form action — it has no `form` result to
+	// hang a toast on, so it signals success via a query param instead. Stripped from the URL right
+	// after so a refresh or back-navigation doesn't replay the toast. Uses the native History API
+	// rather than SvelteKit's replaceState(): this effect runs during initial hydration, before
+	// SvelteKit's router finishes initializing, and its replaceState() throws until then.
+	$effect(() => {
+		if (page.url.searchParams.get('connected')) {
+			showToast('success', 'Compte GitHub connecté avec succès.');
+			const url = new URL(page.url);
+			url.searchParams.delete('connected');
+			history.replaceState(history.state, '', url);
+		}
+	});
 </script>
 
 <svelte:head>
@@ -20,22 +46,6 @@
 		ci-dessous — ça confirme que le compte vous appartient vraiment avant d'envoyer une
 		invitation.
 	</p>
-
-	{#if form?.success && !form?.disconnected}
-		<p class="mb-4 border-4 border-black bg-lghs-yellow px-4 py-3 text-sm font-bold">
-			Invitation envoyée ! Vérifiez vos emails (ou vos notifications GitHub) pour l'accepter.
-		</p>
-	{/if}
-	{#if form?.disconnected}
-		<p class="mb-4 border-4 border-black bg-lghs-yellow px-4 py-3 text-sm font-bold">
-			Compte GitHub déconnecté. Vous pouvez en connecter un autre.
-		</p>
-	{/if}
-	{#if form?.error}
-		<div class="mb-4 border-4 border-black bg-red-600 px-4 py-3 text-white">
-			<p class="text-sm font-bold">{form.error}</p>
-		</div>
-	{/if}
 
 	{#if data.githubUsername}
 		<p class="mb-4 border-4 border-black bg-lghs-yellow px-4 py-3 text-sm font-bold">

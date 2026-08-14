@@ -30,5 +30,5 @@ export const GET: RequestHandler = async ({ url, cookies, locals }) => {
 	const githubUser = await getGithubUser(accessToken);
 	await setGithubUsername(pk, githubUser.login);
 
-	redirect(302, '/github');
+	redirect(302, '/github?connected=1');
 };
