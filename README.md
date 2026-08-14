@@ -1,5 +1,7 @@
 # Passport3
 
+*[Lire en français](README.fr.md)*
+
 Passport3 is the member portal of the [Liège Hackerspace](https://lghs.be).
 
 It provides a single, user-friendly interface for members to manage their identity, membership, subscriptions, access rights, and other information related to the hackerspace.
@@ -8,6 +10,7 @@ Passport3 acts as a custom frontend for several internal services, including:
 
 - **Authentik** for authentication and identity management
 - **Dolibarr** for memberships, subscriptions, and payments
+- **GitHub** for requesting access to the hackerspace's organization
 - **Access control systems** for physical access to the hackerspace
 - Additional community and member-management services
 
@@ -17,13 +20,14 @@ Passport3 aims to provide members with one central place to:
 
 - [x] View and update their personal information
 - [x] Check their membership status
-- [x] View current and previous subscriptions
+- [x] View current and previous subscriptions, including missing or irregular payments
 - [ ] Access payment and accounting information
-- [ ] Manage authentication and security settings
+- [x] Manage authentication and security settings (active sessions, MFA devices)
 - [ ] View their physical access permissions
-- [ ] Manage badges or access credentials
+- [x] Manage badges or access credentials (RFID badge UUID)
 - [ ] Access the member directory and phonebook
 - [ ] Choose which information is visible to other members
+- [x] Request access to the hackerspace's GitHub organization
 - Access future hackerspace services through a unified interface
 
 ## Integrations
@@ -52,6 +56,23 @@ Passport3 communicates with Dolibarr to retrieve or manage:
 - Payments
 - Invoices and supporting documents
 - Administrative membership status
+- Personal and professional bank account details (IBAN)
+
+### GitHub
+
+Passport3 lets members request access to the hackerspace's GitHub organization themselves,
+without going through an admin.
+
+The flow is split into two independent, minimally-scoped credentials:
+
+- A **GitHub OAuth App** verifies that a member really owns the GitHub account they want to link
+  (read-only identity check, no organization access).
+- A **GitHub App**, installed on the organization with only the "Members: Read and write"
+  permission, is the one privileged credential that actually sends the invitation once identity is
+  confirmed.
+
+A member can only ever link and invite their own account — never someone else's — and can see
+whether they're already a member, already invited, or neither.
 
 ### Access Control
 
@@ -66,21 +87,23 @@ Depending on the deployed hardware and configuration, it may support:
 - Revoking lost credentials
 - Synchronizing access rights with membership status
 
+### Admin panel
+
+A restricted admin panel (gated behind an Authentik group) lets designated members:
+
+- List and search member accounts
+- Edit a member's profile on their behalf
+- Create onboarding invitations for new members
+
 ## Planned Features
 
-- Member profile management
-- Membership and subscription overview
 - Online subscription renewal
 - Payment history
 - Invoice and document downloads
-- Badge and access management
-- Member directory
-- Phonebook
-- Profile pictures
-- Privacy and visibility settings
+- Physical access management
+- Member directory and phonebook, with per-member, per-field visibility control
 - Emergency contact management
 - Notification preferences
-- Administrative interface
 - Audit history
 - API for other hackerspace services
 
