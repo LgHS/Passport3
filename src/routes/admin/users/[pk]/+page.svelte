@@ -176,11 +176,13 @@
 		<div>
 			<label class="mb-1 block text-sm font-bold uppercase" for="tagColor">Couleur</label>
 			<div class="flex items-center gap-2">
-				<span
-					class="h-9 w-9 shrink-0 border border-black"
-					style="background-color: {tagColorPreview};"
-					aria-hidden="true"
-				></span>
+				<input
+					type="color"
+					aria-label="Choisir la couleur"
+					value={tagColorPreview}
+					oninput={(e) => (tagColorValue = e.currentTarget.value.replace(/^#/, ''))}
+					class="h-9 w-9 shrink-0 cursor-pointer border border-black p-0"
+				/>
 				<div class="flex flex-1 items-stretch border border-black">
 					<span class="flex items-center border-r border-black bg-gray-100 px-2 text-sm text-gray-500">
 						#
