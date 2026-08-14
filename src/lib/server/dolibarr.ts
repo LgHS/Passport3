@@ -209,6 +209,156 @@ export async function getMemberSubscriptions(memberId: number): Promise<Dolibarr
 		.sort((a, b) => (b.start?.getTime() ?? 0) - (a.start?.getTime() ?? 0));
 }
 
+// Un trou est un mois *calendaire*, pas un instant : `start`/`end` sont épinglés à minuit UTC le 1er
+// et le dernier jour du mois. Ils doivent donc être lus et affichés en UTC — interprétés en heure
+// locale, un trou de janvier glisse au 31/12 (et sur la page de l'année précédente) pour tout
+// lecteur à l'ouest de Greenwich.
+export interface CotisationGap {
+	start: Date;
+	end: Date;
+}
+
+// Les cotisations LgHS s'enchaînent mois par mois — la fin de l'une tombe systématiquement la
+// veille (ou le jour même) du début de la suivante (ex: fin 30/01 -> début 31/01). Un écart de
+// plus d'un jour entre deux souscriptions consécutives ne peut donc être qu'une (ou plusieurs)
+// cotisation(s) manquante(s), jamais un simple artefact de bornes.
+//
+// Les deux usages de la constante sont volontairement complémentaires : la fusion accepte
+// `start <= end + tolérance`, la détection exige `start - end > tolérance`. Aucun intervalle ne peut
+// donc échapper aux deux, ni être compté deux fois.
+//
+// Effet de bord bénin : au passage à l'heure d'hiver, un "jour" dure 25 h et franchit la tolérance,
+// donc la branche "trou" se déclenche. Le filtre du 15 (voir missingMonthsInGap) ne trouve alors
+// aucun mois entier manquant et renvoie une liste vide — rien à corriger de ce côté.
+const ADJACENCY_TOLERANCE_MS = 24 * 60 * 60 * 1000;
+
+// Passé ce nombre de mois sans renouvellement, le membre est considéré comme parti plutôt que
+// simplement en retard. La constante sert deux fois : elle plafonne les lignes "Non perçu" ajoutées
+// pour un trou en cours (au-delà, le statut "Cotisation expirée" porte le message tout seul, plutôt
+// que d'accumuler des lignes indéfiniment) et fixe le seuil de bascule de `isInactive`. Les deux
+// doivent rester cohérents avec le texte affiché côté page ("Après 3 mois sans cotisation...").
+const TRAILING_GAP_MONTHS = 3;
+
+// Décale une date de N mois en UTC. `setUTCMonth` normalise les débordements de quantième : 31/01
+// + 3 mois donne 01/05, pas un "31/04" inexistant. Sur une fin de mois — le cas courant ici, les
+// cotisations LgHS s'arrêtant en fin de mois — le seuil tombe donc un jour après l'anniversaire
+// exact. C'est dans le sens généreux (membre marqué inactif plus tard, jamais plus tôt), on s'en
+// accommode plutôt que d'ajouter une logique de clamp.
+function addUTCMonths(date: Date, months: number): Date {
+	const shifted = new Date(date.getTime());
+	shifted.setUTCMonth(shifted.getUTCMonth() + months);
+	return shifted;
+}
+
+// Un trou peut s'étaler sur plusieurs mois (ex: 4 mois sans cotisation) — on le découpe en un
+// CotisationGap par mois calendaire manquant plutôt que de renvoyer une seule ligne fusionnée, sinon
+// des mois entiers restent invisibles dans le tableau alors qu'ils n'ont bien reçu aucune cotisation.
+//
+// Critère : un mois est manquant si son 15 tombe dans l'intervalle non couvert (prevEnd, nextStart).
+// Le choix du 15 n'est pas arbitraire, il encode la convention LgHS "une cotisation [fin de M-1 ->
+// fin de M] paie le mois M". Exemple : cotisations [31/01 -> 28/02] puis [31/03 -> 30/04], donc un
+// trou (28/02, 31/03) — le 15/02 est hors intervalle (février est bien payé par la première), le
+// 15/03 dedans, seul mars est signalé. C'est le résultat attendu.
+//
+// Limite connue : sur des bornes non alignées sur les fins de mois, le critère devient approximatif
+// dans les deux sens. Un renouvellement en retard du 10/03 au 20/03 marque mars entier "Non perçu"
+// alors qu'il est payé aux deux tiers ; à l'inverse un trou du 20/03 au 10/04 (trois semaines) ne
+// produit aucune ligne, aucun 15 n'y tombant. Tant que Dolibarr sort des bornes de fin de mois le
+// cas ne se présente pas — à revoir si ça change.
+//
+// Toutes les dates produites sont en UTC (voir CotisationGap). `Date.UTC(y, m + 1, 0)` désigne le
+// jour 0 du mois suivant, c.-à-d. le dernier jour du mois courant : mois courts et années
+// bissextiles sont gérés par le moteur de dates, sans table de longueurs. Même mécanique pour le
+// curseur, où `m + 1 === 12` bascule proprement sur janvier de l'année suivante.
+function missingMonthsInGap(prevEnd: Date, nextStart: Date): CotisationGap[] {
+	const months: CotisationGap[] = [];
+	let cursor = new Date(Date.UTC(prevEnd.getUTCFullYear(), prevEnd.getUTCMonth(), 1));
+	const lastMonth = new Date(Date.UTC(nextStart.getUTCFullYear(), nextStart.getUTCMonth(), 1));
+
+	while (cursor.getTime() <= lastMonth.getTime()) {
+		const year = cursor.getUTCFullYear();
+		const month = cursor.getUTCMonth();
+		const midpoint = new Date(Date.UTC(year, month, 15));
+		if (midpoint.getTime() > prevEnd.getTime() && midpoint.getTime() < nextStart.getTime()) {
+			months.push({
+				start: new Date(Date.UTC(year, month, 1)),
+				end: new Date(Date.UTC(year, month + 1, 0))
+			});
+		}
+		cursor = new Date(Date.UTC(year, month + 1, 1));
+	}
+
+	return months;
+}
+
+export interface CotisationGapResult {
+	gaps: CotisationGap[];
+	// True once the ongoing lapse has lasted TRAILING_GAP_MONTHS — measured as elapsed time since
+	// coverage ended, not as a count of gap rows (see detectCotisationGaps for why the two differ).
+	// Only the trailing lapse counts: interior gaps were settled by a later renewal, so they say
+	// nothing about where the member stands today.
+	isInactive: boolean;
+}
+
+export function detectCotisationGaps(
+	subscriptions: DolibarrSubscription[],
+	now: Date = new Date()
+): CotisationGapResult {
+	// Une souscription à laquelle il manque une borne ne délimite aucune période de couverture : on
+	// ne peut ni la fusionner ni s'en servir pour situer un trou, donc elle est écartée d'office
+	// (elle reste affichée dans le tableau, la page la traite à part).
+	const covered = subscriptions
+		.filter((s): s is DolibarrSubscription & { start: Date; end: Date } => s.start !== null && s.end !== null)
+		.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+	// Fusionne les souscriptions adjacentes ou qui se chevauchent en plages de couverture continues,
+	// pour que les trous se lisent entre ces plages et non entre deux cotisations mensuelles qui se
+	// suivent normalement. Le tri par date de début ci-dessus est ce qui rend le balayage en une
+	// passe correct. `sub.end > last.end` traite le cas d'une souscription entièrement contenue dans
+	// la précédente (régularisation, doublon) : elle ne doit pas raccourcir la plage.
+	const merged: { start: Date; end: Date }[] = [];
+	for (const sub of covered) {
+		const last = merged[merged.length - 1];
+		if (last && sub.start.getTime() <= last.end.getTime() + ADJACENCY_TOLERANCE_MS) {
+			if (sub.end.getTime() > last.end.getTime()) last.end = sub.end;
+		} else {
+			merged.push({ start: sub.start, end: sub.end });
+		}
+	}
+
+	// Trous internes : déjà refermés par un renouvellement ultérieur, donc listés intégralement (pas
+	// de plafond ici, contrairement au trou en cours plus bas — leur étendue est connue et finie).
+	const gaps: CotisationGap[] = [];
+	for (let i = 1; i < merged.length; i++) {
+		const prevEnd = merged[i - 1].end;
+		const nextStart = merged[i].start;
+		if (nextStart.getTime() - prevEnd.getTime() > ADJACENCY_TOLERANCE_MS) {
+			gaps.push(...missingMonthsInGap(prevEnd, nextStart));
+		}
+	}
+
+	// Trou en cours (aucun renouvellement à ce jour) : son étendue n'est pas bornée par une
+	// souscription suivante mais par `now`, et grandit indéfiniment. On n'en garde donc que les
+	// TRAILING_GAP_MONTHS mois les plus *récents* — au-delà, le membre est considéré abandonné plutôt
+	// qu'en retard, et le statut "expirée" suffit sans lignes supplémentaires. On coupe par la fin et
+	// non par le début : quelqu'un parti depuis huit mois doit voir les mois qui précèdent
+	// aujourd'hui, pas trois mois vieux d'un an suivis d'un silence inexpliqué.
+	let isInactive = false;
+	const lastCovered = merged[merged.length - 1];
+	// La comparaison écarte au passage une cotisation courant dans le futur (différence négative) :
+	// pas de trou en cours, donc rien à signaler ni à faire basculer.
+	if (lastCovered && now.getTime() - lastCovered.end.getTime() > ADJACENCY_TOLERANCE_MS) {
+		gaps.push(...missingMonthsInGap(lastCovered.end, now).slice(-TRAILING_GAP_MONTHS));
+		// Seuil mesuré en temps écoulé, et non sur le nombre de lignes ajoutées juste au-dessus :
+		// celles-ci comptent le mois en cours dès son 15, ce qui faisait basculer en "inactif" après
+		// ~2 mois et 20 jours alors que la page annonce 3 mois. Couverture finie le 31/01 : inactif au
+		// 01/05 (cf. addUTCMonths pour le jour de décalage), plus au 20/04.
+		isInactive = now.getTime() >= addUTCMonths(lastCovered.end, TRAILING_GAP_MONTHS).getTime();
+	}
+
+	return { gaps, isInactive };
+}
+
 export interface DolibarrMemberType {
 	id: number;
 	label: string;

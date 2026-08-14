@@ -36,7 +36,86 @@
 		return date ? dateFormat.format(date) : '—';
 	}
 
+	// A gap's bounds denote a calendar month the server pinned to UTC midnight, not an instant, so
+	// they must be formatted in UTC. Run through the local formatter above, 01/01 00:00 UTC would
+	// read "31 déc." for anyone at a negative offset.
+	const gapDateFormat = new Intl.DateTimeFormat('fr-BE', { dateStyle: 'medium', timeZone: 'UTC' });
+
 	const amountFormat = new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' });
+
+	// Dolibarr may return a subscription with either bound missing (see parseDolibarrDate: "", 0 and
+	// "0" all mean "no date"). One that still has a start or an end can be placed on the timeline;
+	// one with neither carries no chronological information at all and is listed apart. Pinning the
+	// latter to epoch 0 instead would invent a phantom "1970" entry in the year pager — holding a row
+	// nobody would ever page back far enough to reach.
+	const datedSubscriptions = $derived(
+		data.subscriptions.filter((s) => s.start !== null || s.end !== null)
+	);
+	const undatedSubscriptions = $derived(
+		data.subscriptions.filter((s) => s.start === null && s.end === null)
+	);
+
+	// Merges the real subscriptions with the detected gaps into one chronological list so the table
+	// can render "missing cotisation" rows interleaved at their correct position.
+	//
+	// `year` is stored per row rather than re-derived from `date` downstream, because the two kinds
+	// don't live in the same clock: a subscription is an instant (rendered in the reader's timezone),
+	// a gap is a calendar month the server pinned to UTC midnight. Reading a gap's year locally would
+	// file January's gap under the previous year for any reader at a negative offset — the same slip
+	// the UTC formatter above guards against, and the reason both must be handled at the source.
+	type CotisationRow =
+		| {
+				kind: 'subscription';
+				date: number;
+				year: number;
+				subscription: PageData['subscriptions'][number];
+		  }
+		| { kind: 'gap'; date: number; year: number; gap: PageData['gaps'][number] };
+	const cotisationRows = $derived<CotisationRow[]>(
+		[
+			...datedSubscriptions.map((subscription) => {
+				const anchor = (subscription.start ?? subscription.end) as Date;
+				return {
+					kind: 'subscription' as const,
+					date: anchor.getTime(),
+					year: anchor.getFullYear(),
+					subscription
+				};
+			}),
+			...data.gaps.map((gap) => ({
+				kind: 'gap' as const,
+				date: gap.start.getTime(),
+				year: gap.start.getUTCFullYear(),
+				gap
+			}))
+		].sort((a, b) => b.date - a.date)
+	);
+
+	// Years for which there's at least one row (subscription or gap), most recent first — used to
+	// paginate the table one year at a time instead of dumping the whole history at once.
+	const availableYears = $derived(
+		Array.from(new Set(cotisationRows.map((row) => row.year))).sort((a, b) => b - a)
+	);
+	// `null` means "no explicit choice yet", which resolves to the newest year below.
+	let selectedYear = $state<number | null>(null);
+	// A stale selection — the data reloaded and that year lost all its rows — is discarded rather
+	// than honoured. Kept, it would leave `yearIndex` at -1, which nulls out *both* neighbours below
+	// and disables both nav buttons at once, stranding the reader on an empty page with no way back.
+	// Self-healing here rather than in an $effect: this stays a pure derivation, so there's no
+	// intermediate render showing the broken state.
+	const displayedYear = $derived(
+		selectedYear !== null && availableYears.includes(selectedYear)
+			? selectedYear
+			: (availableYears[0] ?? new Date().getFullYear())
+	);
+	const yearIndex = $derived(availableYears.indexOf(displayedYear));
+	// "Older" = further back in the array (years are sorted newest-first), "newer" = closer to the front.
+	const olderYear = $derived(
+		yearIndex >= 0 && yearIndex + 1 < availableYears.length ? availableYears[yearIndex + 1] : null
+	);
+	const newerYear = $derived(yearIndex > 0 ? availableYears[yearIndex - 1] : null);
+	const yearRows = $derived(cotisationRows.filter((row) => row.year === displayedYear));
+	const hasGapsOnPage = $derived(yearRows.some((row) => row.kind === 'gap'));
 
 	function statusExplanation(status: CotisationStatus, datefin: Date | null): string {
 		switch (status) {
@@ -89,8 +168,35 @@
 				<div>
 					<p class="text-sm font-bold uppercase">{COTISATION_STATUS_LABEL[data.status]}</p>
 					<p class="text-sm text-gray-600">{statusExplanation(data.status, data.datefin)}</p>
+					{#if data.isInactive}
+						<p class="mt-2 text-sm font-bold">
+							Après 3 mois sans cotisation, votre compte est considéré comme inactif.
+						</p>
+					{/if}
 				</div>
 			</div>
+
+			{#if availableYears.length > 1}
+				<div class="mb-3 flex items-center justify-between border border-black">
+					<button
+						type="button"
+						onclick={() => (selectedYear = olderYear)}
+						disabled={olderYear === null}
+						class="px-3 py-2 text-sm font-bold uppercase hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-black"
+					>
+						‹ {olderYear ?? ''}
+					</button>
+					<span class="text-sm font-bold uppercase">{displayedYear}</span>
+					<button
+						type="button"
+						onclick={() => (selectedYear = newerYear)}
+						disabled={newerYear === null}
+						class="px-3 py-2 text-sm font-bold uppercase hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-black"
+					>
+						{newerYear ?? ''} ›
+					</button>
+				</div>
+			{/if}
 
 			<div class="overflow-x-auto">
 				<table class="w-full border-collapse text-sm">
@@ -102,7 +208,27 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each data.subscriptions as subscription (subscription.id)}
+						{#each yearRows as row (row.kind === 'subscription' ? `sub-${row.subscription.id}` : `gap-${row.gap.start.getTime()}`)}
+							{#if row.kind === 'subscription'}
+								<tr>
+									<td class="border border-black px-3 py-2">{formatDate(row.subscription.start)}</td>
+									<td class="border border-black px-3 py-2">{formatDate(row.subscription.end)}</td>
+									<td class="border border-black px-3 py-2"
+										>{amountFormat.format(row.subscription.amount)}</td
+									>
+								</tr>
+							{:else}
+								<tr class="bg-red-50 text-red-700">
+									<td class="border border-black px-3 py-2">{gapDateFormat.format(row.gap.start)}</td>
+									<td class="border border-black px-3 py-2">{gapDateFormat.format(row.gap.end)}</td>
+									<td class="border border-black px-3 py-2">Non perçu</td>
+								</tr>
+							{/if}
+						{/each}
+						<!-- Belonging to no year, these repeat on every page rather than becoming
+						     unreachable. Both date cells render as "—", so a duplicate is recognisable
+						     as the same row and not mistaken for a second subscription. -->
+						{#each undatedSubscriptions as subscription (`undated-${subscription.id}`)}
 							<tr>
 								<td class="border border-black px-3 py-2">{formatDate(subscription.start)}</td>
 								<td class="border border-black px-3 py-2">{formatDate(subscription.end)}</td>
@@ -110,16 +236,27 @@
 									>{amountFormat.format(subscription.amount)}</td
 								>
 							</tr>
-						{:else}
+						{/each}
+						<!-- Can't be the `{:else}` of an `{#each}` any more: emptiness now depends on both
+						     loops, not just the paginated one. -->
+						{#if yearRows.length === 0 && undatedSubscriptions.length === 0}
 							<tr>
 								<td colspan="3" class="border border-black px-3 py-4 text-center text-gray-500">
 									Aucune cotisation enregistrée.
 								</td>
 							</tr>
-						{/each}
+						{/if}
 					</tbody>
 				</table>
 			</div>
+
+			{#if hasGapsOnPage}
+				<p class="mt-3 text-sm text-gray-600">
+					<span class="font-bold text-red-700">Non perçu</span> signale un mois pour lequel nous
+					n'avons trouvé aucune cotisation. Si ça vous semble être une erreur, contactez
+					<a href="mailto:compta@lghs.be">compta@lghs.be</a>.
+				</p>
+			{/if}
 		{/if}
 	</section>
 
