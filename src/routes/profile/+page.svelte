@@ -1,10 +1,19 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import type { ActionData, PageData } from './$types';
 	import ProfileForm from '$lib/components/ProfileForm.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+
+	$effect(() => {
+		if (form?.sessionRevoked) {
+			showToast('success', 'Session révoquée.');
+		} else if (form?.mfaDeviceDeleted) {
+			showToast('success', 'Appareil MFA supprimé.');
+		}
+	});
 
 	const dateFormat = new Intl.DateTimeFormat('fr-BE', { dateStyle: 'medium', timeStyle: 'short' });
 	function formatDate(iso: string): string {
