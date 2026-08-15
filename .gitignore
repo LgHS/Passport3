@@ -24,6 +24,3 @@ vite.config.ts.timestamp-*
 
 # IA 
 .claude
-
-# Dossiers perso
-/loic-local-dev
