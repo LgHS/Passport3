@@ -24,7 +24,7 @@
 	<title>Créer une invitation — Passport</title>
 </svelte:head>
 
-<section class="max-w-xl">
+<section class="mx-auto max-w-xl">
 	<h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">
 		Créer une invitation
 	</h1>
