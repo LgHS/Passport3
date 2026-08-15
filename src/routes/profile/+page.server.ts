@@ -92,7 +92,11 @@ export const actions: Actions = {
 			redirect(302, '/login');
 		}
 
-		return { success: true };
+		// Distinct from updateProfile's `success` — /profile has several forms posting to the same
+		// page, so they'd all share one `form` result otherwise: ProfileForm.svelte's toast effect
+		// reacts to `form?.success`, and a bare `{ success: true }` here was triggering *its* success
+		// message ("Aucune modification à enregistrer.") whenever a session was revoked.
+		return { sessionRevoked: true };
 	},
 
 	deleteMfaDevice: async ({ request, locals }) => {
@@ -100,6 +104,7 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const devicePk = String(formData.get('pk') ?? '');
 		await deleteMfaDevice(pk, devicePk);
-		return { success: true };
+		// Same reasoning as revokeSession above — kept distinct from `success` on purpose.
+		return { mfaDeviceDeleted: true };
 	}
 };
