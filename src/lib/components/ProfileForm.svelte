@@ -69,7 +69,6 @@
 	let nameFallback = $derived(splitName(profile.name));
 	let firstNameValue = $derived(form?.firstName ?? nameFallback.firstName);
 	let lastNameValue = $derived(form?.lastName ?? nameFallback.lastName);
-
 	// Split into the two editable blocks either side of the fixed "@"/":" — the member never has to
 	// type those themselves, so they can't get the format wrong on that part.
 	function splitMatrixId(value: string): { localpart: string; domain: string } {

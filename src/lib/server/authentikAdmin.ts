@@ -201,6 +201,30 @@ export async function regenerateRfidUid(pk: number): Promise<string> {
 	return uuid;
 }
 
+// Not part of PROFILE_ATTRIBUTE_FIELDS, same reasoning as rfid_uid: only ever set by the GitHub
+// OAuth callback after verifying the member really owns that account — never hand-typed, so it
+// can't be part of the plain profile form's merge boundary.
+const GITHUB_USERNAME_ATTRIBUTE = 'github_username';
+
+export async function getGithubUsername(pk: number): Promise<string | null> {
+	const res = await authentikApiFetch(`core/users/${pk}/`);
+	const user = (await res.json()) as AuthentikUserRecord;
+	const value = user.attributes[GITHUB_USERNAME_ATTRIBUTE];
+	return typeof value === 'string' && value ? value : null;
+}
+
+// Read-merge-write, same reasoning as updateUserProfile/regenerateRfidUid.
+export async function setGithubUsername(pk: number, username: string): Promise<void> {
+	const current = await authentikApiFetch(`core/users/${pk}/`);
+	const currentUser = (await current.json()) as AuthentikUserRecord;
+	await authentikApiFetch(`core/users/${pk}/`, {
+		method: 'PATCH',
+		body: JSON.stringify({
+			attributes: { ...currentUser.attributes, [GITHUB_USERNAME_ATTRIBUTE]: username }
+		})
+	});
+}
+
 export interface TrombinoscopeOptin {
 	visible: boolean;
 	showAvatar: boolean;
