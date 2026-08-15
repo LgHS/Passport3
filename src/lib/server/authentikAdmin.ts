@@ -543,21 +543,45 @@ interface AuthenticatedSessionRecord {
 	expires: string;
 }
 
+function ipToInt(ip: string): number | null {
+	const bytes = ip.split('.').map(Number);
+	if (bytes.length !== 4 || bytes.some((b) => !Number.isInteger(b) || b < 0 || b > 255)) {
+		return null;
+	}
+	return ((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0;
+}
+
+// The hackerspace's own LAN sits entirely inside this RFC 1918 block. A session's last_ip landing
+// here means it was made on-site — geo-IP lookups never resolve anything useful for a private
+// address (Authentik's geo_ip comes back null), so it's shown by name instead of a bare private IP.
+const LGHS_LOCAL_NETWORK = ipToInt('172.16.0.0') as number;
+const LGHS_LOCAL_MASK = (0xffffffff << (32 - 12)) >>> 0;
+
+function isLghsLocalIp(ip: string): boolean {
+	const ipInt = ipToInt(ip);
+	return ipInt !== null && (ipInt & LGHS_LOCAL_MASK) === (LGHS_LOCAL_NETWORK & LGHS_LOCAL_MASK);
+}
+
 export async function listSessions(username: string): Promise<SessionSummary[]> {
 	const res = await authentikApiFetch(
 		`core/authenticated_sessions/?user__username=${encodeURIComponent(username)}`
 	);
 	const data = (await res.json()) as { results: AuthenticatedSessionRecord[] };
-	return data.results.map((s) => ({
-		uuid: s.uuid,
-		current: s.current,
-		browser: s.user_agent.string,
-		os: s.user_agent.os.family,
-		location: s.geo_ip ? [s.geo_ip.city, s.geo_ip.country].filter(Boolean).join(', ') || null : null,
-		lastIp: s.last_ip,
-		lastUsed: s.last_used,
-		expires: s.expires
-	}));
+	return data.results.map((s) => {
+		const geoLocation = s.geo_ip
+			? [s.geo_ip.city, s.geo_ip.country].filter(Boolean).join(', ') || null
+			: null;
+		return {
+			uuid: s.uuid,
+			current: s.current,
+			browser: s.user_agent.string,
+			os: s.user_agent.os.family,
+			location: geoLocation ?? (isLghsLocalIp(s.last_ip) ? 'Liège Hackerspace' : null),
+			lastIp: s.last_ip,
+			lastUsed: s.last_used,
+			expires: s.expires
+		};
+	});
 }
 
 export async function revokeSession(username: string, uuid: string): Promise<void> {
