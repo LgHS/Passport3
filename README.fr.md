@@ -21,13 +21,13 @@ Passport3 vise à offrir aux membres un endroit central pour :
 - [x] Consulter et mettre à jour leurs informations personnelles
 - [x] Vérifier le statut de leur adhésion
 - [x] Consulter leurs cotisations passées et en cours, y compris les paiements manquants ou irréguliers
-- [ ] Accéder aux informations de paiement et de comptabilité
 - [x] Gérer l'authentification et les paramètres de sécurité (sessions actives, appareils MFA)
-- [ ] Voir leurs droits d'accès physique
 - [x] Gérer leurs badges ou identifiants d'accès (UUID du badge RFID)
+- [x] Demander l'accès à l'organisation GitHub du hackerspace
+- [ ] Accéder aux informations de paiement et de comptabilité
 - [ ] Accéder à l'annuaire des membres et au trombinoscope
 - [ ] Choisir quelles informations sont visibles par les autres membres
-- [x] Demander l'accès à l'organisation GitHub du hackerspace
+- [ ] Voir leurs droits d'accès physique
 - Accéder aux futurs services du hackerspace via une interface unifiée
 
 ## Intégrations
