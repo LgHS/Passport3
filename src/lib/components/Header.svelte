@@ -48,6 +48,13 @@
 			</a>
 
 			{#if user}
+				<a
+					href="/trombinoscope"
+					class="no-underline-fx inline-block px-3 py-2 font-bold uppercase transition-colors hover:bg-black hover:text-white"
+				>
+					Trombinoscope
+				</a>
+
 				<div class="relative" data-user-menu>
 					<button
 						type="button"
@@ -101,6 +108,14 @@
 								class="no-underline-fx menu-item"
 							>
 								Badge
+							</a>
+							<a
+								href="/github"
+								role="menuitem"
+								onclick={() => (menuOpen = false)}
+								class="no-underline-fx menu-item"
+							>
+								GitHub
 							</a>
 							{#if isAdmin(user)}
 								<a

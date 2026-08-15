@@ -44,6 +44,7 @@ export const COTISATION_STATUS_COLOR: Record<CotisationStatus, string> = {
 export interface ProfileAttributeField {
 	key: string;
 	label: string;
+	required: boolean;
 }
 
 export interface UserProfile {
