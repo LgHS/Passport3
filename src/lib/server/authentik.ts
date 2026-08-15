@@ -19,21 +19,39 @@ interface TokenResponse {
 }
 
 let configPromise: Promise<OidcConfig> | null = null;
+let configFailedAt: number | null = null;
 let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+
+// If Authentik is actually down, don't let every single /login attempt during the outage fire its
+// own discovery fetch — fail fast for a short cooldown instead, then let the next request retry.
+const RETRY_COOLDOWN_MS = 10_000;
 
 // Authentik's provider-scoped endpoints (jwks, end-session) can't be reliably guessed from the
 // issuer URL alone, so we fetch the standard OIDC discovery document instead of hardcoding paths.
 async function getOidcConfig(): Promise<OidcConfig> {
 	if (!configPromise) {
+		if (configFailedAt && Date.now() - configFailedAt < RETRY_COOLDOWN_MS) {
+			throw new Error('Authentik OIDC discovery is temporarily unavailable, try again shortly.');
+		}
+
 		const issuer = requireEnv('AUTHENTIK_ISSUER');
 		const base = issuer.endsWith('/') ? issuer : `${issuer}/`;
-		configPromise = fetch(new URL('.well-known/openid-configuration', base)).then(async (res) => {
-			if (!res.ok) {
+		configPromise = fetch(new URL('.well-known/openid-configuration', base))
+			.then(async (res) => {
+				if (!res.ok) {
+					throw new Error(`Failed to fetch Authentik OIDC discovery document (${res.status})`);
+				}
+				configFailedAt = null;
+				return res.json() as Promise<OidcConfig>;
+			})
+			.catch((err) => {
+				// Also reset on a network-level failure (DNS, connection refused, etc.), not just a
+				// non-ok HTTP response — otherwise a single transient blip caches a rejected promise
+				// for the lifetime of the process, wedging /login until the server is restarted.
 				configPromise = null;
-				throw new Error(`Failed to fetch Authentik OIDC discovery document (${res.status})`);
-			}
-			return res.json() as Promise<OidcConfig>;
-		});
+				configFailedAt = Date.now();
+				throw err;
+			});
 	}
 	return configPromise;
 }
