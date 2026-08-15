@@ -4,7 +4,7 @@ import {
 	listDirectoryMembers,
 	getTrombinoscopeOptin,
 	updateTrombinoscopeOptin,
-	type TrombinoscopeOptin
+	optinFromFormData
 } from '$lib/server/authentikAdmin';
 import { authentikPk } from '$lib/types';
 
@@ -28,20 +28,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	return { members, myOptin };
 };
-
-function optinFromFormData(formData: FormData): TrombinoscopeOptin {
-	// Unchecked checkboxes simply aren't present in FormData — absence means false, same convention
-	// as every other checkbox form in this app.
-	return {
-		visible: formData.has('visible'),
-		showAvatar: formData.has('showAvatar'),
-		showChat: formData.has('showChat'),
-		showFirstname: formData.has('showFirstname'),
-		showLastname: formData.has('showLastname'),
-		showMail: formData.has('showMail'),
-		showPhone: formData.has('showPhone')
-	};
-}
 
 export const actions: Actions = {
 	updateOptin: async ({ request, locals }) => {

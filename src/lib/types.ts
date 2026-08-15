@@ -22,7 +22,7 @@ export function authentikPk(user: AppUser): number | null {
 
 export function isAdmin(user: AppUser): boolean {
 	const adminGroup = env.PUBLIC_AUTHENTIK_ADMIN_GROUP;
-	return Boolean(adminGroup) && (user.groups?.includes(adminGroup) ?? false);
+	return adminGroup ? (user.groups?.includes(adminGroup) ?? false) : false;
 }
 
 export type CotisationStatus = 'a_jour' | 'en_attente' | 'expiree' | 'non_applicable';
