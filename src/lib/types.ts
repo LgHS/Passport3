@@ -41,6 +41,18 @@ export const COTISATION_STATUS_COLOR: Record<CotisationStatus, string> = {
 	non_applicable: 'var(--color-lghs-yellow)'
 };
 
+export interface ServiceStatus {
+	healthy: boolean;
+	// Time the check itself took, in ms — kept even on failure/timeout so a slow-then-failing
+	// service can be told apart from an instant connection refusal.
+	latencyMs: number;
+}
+
+export interface SystemStatus {
+	authentik: ServiceStatus;
+	dolibarr: ServiceStatus;
+}
+
 export interface ProfileAttributeField {
 	key: string;
 	label: string;
