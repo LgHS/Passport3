@@ -13,6 +13,7 @@ import {
 	getNotificationPreferences,
 	updateNotificationPreferences
 } from '$lib/server/authentikAdmin';
+import { getMattermostUsername } from '$lib/server/mattermost';
 import { validateProfileSubmission } from '$lib/server/profileValidation';
 import { clearSessionCookie } from '$lib/server/session';
 import { authentikPk } from '$lib/types';
@@ -38,12 +39,17 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		error(500, 'Impossible de récupérer votre profil Authentik.');
 	}
 
-	const [sessions, mfaDevices, mfaEnrollUrls, notificationPreferences] = await Promise.all([
-		listSessions(profile.username),
-		listMfaDevices(pk),
-		getMfaEnrollUrls(),
-		getNotificationPreferences(pk)
-	]);
+	const [sessions, mfaDevices, mfaEnrollUrls, notificationPreferences, mattermostUsername] =
+		await Promise.all([
+			listSessions(profile.username),
+			listMfaDevices(pk),
+			getMfaEnrollUrls(),
+			getNotificationPreferences(pk),
+			// Best-effort: a transient Mattermost hiccup shouldn't break the whole profile page,
+			// same reasoning as the Authentik/Dolibarr .catch()s in +layout.server.ts. Worst case,
+			// the Notifications tab just shows "no linked account" until the next successful check.
+			getMattermostUsername(profile.email).catch(() => null)
+		]);
 
 	return {
 		profile,
@@ -52,7 +58,8 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		mfaEnrollUrls,
 		sessions,
 		mfaDevices,
-		notificationPreferences
+		notificationPreferences,
+		mattermostUsername
 	};
 };
 

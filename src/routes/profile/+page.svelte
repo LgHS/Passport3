@@ -271,44 +271,52 @@
 {:else if activeTab === 'notifications'}
 	<section class="w-full">
 		<div class="mx-auto max-w-2xl">
-			<form
-				method="POST"
-				action="?/updateNotificationPreferences"
-				use:enhance={() => {
-					submittingNotificationPreferences = true;
-					return async ({ update }) => {
-						await update({ reset: false });
-						submittingNotificationPreferences = false;
-					};
-				}}
-			>
-				<label class="flex w-fit cursor-pointer items-center gap-3 text-sm">
-					<span
-						class="relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors {mattermostDm
-							? 'bg-black'
-							: 'bg-gray-300'}"
-					>
-						<input
-							type="checkbox"
-							name="mattermostDm"
-							bind:checked={mattermostDm}
-							disabled={submittingNotificationPreferences}
-							onchange={(e) => e.currentTarget.form?.requestSubmit()}
-							class="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait"
-						/>
+			{#if data.mattermostUsername}
+				<form
+					method="POST"
+					action="?/updateNotificationPreferences"
+					use:enhance={() => {
+						submittingNotificationPreferences = true;
+						return async ({ update }) => {
+							await update({ reset: false });
+							submittingNotificationPreferences = false;
+						};
+					}}
+				>
+					<label class="flex w-fit cursor-pointer items-center gap-3 text-sm">
 						<span
-							class="pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform {mattermostDm
-								? 'translate-x-5'
-								: ''}"
-						></span>
-					</span>
-					Recevoir un message sur Mattermost pour les événements liés à mon compte
-				</label>
-				<p class="mt-2 text-xs text-gray-500">
-					Toutes les modifications majeures apportées à votre compte envoient un message privé
-					sur Mattermost. Activé par défaut, désactivable à tout moment.
+							class="relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors {mattermostDm
+								? 'bg-black'
+								: 'bg-gray-300'}"
+						>
+							<input
+								type="checkbox"
+								name="mattermostDm"
+								bind:checked={mattermostDm}
+								disabled={submittingNotificationPreferences}
+								onchange={(e) => e.currentTarget.form?.requestSubmit()}
+								class="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait"
+							/>
+							<span
+								class="pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform {mattermostDm
+									? 'translate-x-5'
+									: ''}"
+							></span>
+						</span>
+						Recevoir un message sur Mattermost pour les événements liés à mon compte
+					</label>
+					<p class="mt-2 text-xs text-gray-500">
+						Toutes les modifications majeures apportées à votre compte envoient un message privé
+						sur Mattermost. Activé par défaut, désactivable à tout moment. Compte lié :
+						<span class="font-bold">@{data.mattermostUsername}</span>.
+					</p>
+				</form>
+			{:else}
+				<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+					Aucun compte Mattermost lié à votre adresse email — rien à envoyer pour l'instant.
+					Cette option apparaîtra dès qu'un compte sera relié.
 				</p>
-			</form>
+			{/if}
 		</div>
 	</section>
 {/if}
