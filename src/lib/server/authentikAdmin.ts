@@ -239,7 +239,7 @@ export interface TrombinoscopeOptin {
 const TROMBINOSCOPE_DEFAULTS: TrombinoscopeOptin = {
 	visible: false,
 	showAvatar: false,
-	showChat: false,
+	showChat: true,
 	showFirstname: false,
 	showLastname: false,
 	showMail: false,
