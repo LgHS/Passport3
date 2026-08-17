@@ -44,13 +44,21 @@ async function fetchAllMattermostUsers(): Promise<MattermostUserRecord[]> {
 const CACHE_TTL_MS = 60 * 60_000;
 
 let cached: { emailToUsername: Map<string, string>; expiresAt: number } | null = null;
+// Metadata about the last successful fetch, kept separate from `cached` so the footer can report
+// it (see getMattermostCacheStatus()) without ever triggering a fetch itself — unlike Authentik/
+// Dolibarr's footer indicators, this one only reflects whatever the trombinoscope/admin already
+// caused to happen, it never adds its own per-page-load cost.
+let lastFetch: { latencyMs: number; cachedAt: number } | null = null;
 
 async function getEmailToUsernameMap(): Promise<Map<string, string>> {
 	if (cached && cached.expiresAt > Date.now()) {
 		return cached.emailToUsername;
 	}
 
+	const start = Date.now();
 	const users = await fetchAllMattermostUsers();
+	const latencyMs = Date.now() - start;
+
 	const emailToUsername = new Map<string, string>();
 	for (const u of users) {
 		if (u.delete_at === 0 && u.email) {
@@ -58,7 +66,9 @@ async function getEmailToUsernameMap(): Promise<Map<string, string>> {
 		}
 	}
 
-	cached = { emailToUsername, expiresAt: Date.now() + CACHE_TTL_MS };
+	const now = Date.now();
+	cached = { emailToUsername, expiresAt: now + CACHE_TTL_MS };
+	lastFetch = { latencyMs, cachedAt: now };
 	return emailToUsername;
 }
 
@@ -74,4 +84,11 @@ export async function getMattermostUsername(email: string): Promise<string | nul
 // out the hour-long TTL — just drops the cache, the next lookup rebuilds it.
 export function invalidateMattermostCache(): void {
 	cached = null;
+	lastFetch = null;
+}
+
+// Read-only, never triggers a fetch — `null` means no successful fetch has happened yet (fresh
+// deploy, or right after an admin's manual invalidation) rather than an error.
+export function getMattermostCacheStatus(): { latencyMs: number; cachedAt: number } | null {
+	return lastFetch;
 }
