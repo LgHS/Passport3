@@ -443,8 +443,14 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 				const tagValue = rawTrombi.tag;
 				const tagColorValue = rawTrombi.tagc;
 
+				// Same rationale as the .catch() calls around Authentik/Dolibarr in +layout.server.ts:
+				// a transient Mattermost hiccup on a cache-miss shouldn't 500 the entire directory
+				// just because one member has "Pseudo Chat" enabled — that member's chat link is
+				// simply absent this time, everyone else's data still loads.
 				const mattermostUsername =
-					optin.showChat && u.email ? await getMattermostUsername(u.email) : null;
+					optin.showChat && u.email
+						? await getMattermostUsername(u.email).catch(() => null)
+						: null;
 
 				return {
 					pk: u.pk,

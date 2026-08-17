@@ -49,27 +49,44 @@ let cached: { emailToUsername: Map<string, string>; expiresAt: number } | null =
 // Dolibarr's footer indicators, this one only reflects whatever the trombinoscope/admin already
 // caused to happen, it never adds its own per-page-load cost.
 let lastFetch: { latencyMs: number; cachedAt: number } | null = null;
+// The trombinoscope resolves every visible member's Mattermost username concurrently
+// (Promise.all in listDirectoryMembers) — without this, a cold cache means N members with
+// "Pseudo Chat" on all see `cached` as empty at the same instant and each kick off their own full
+// fetch. Memoizing the in-flight promise itself (not just the resolved value) means they all await
+// the same request instead.
+let inFlight: Promise<Map<string, string>> | null = null;
 
 async function getEmailToUsernameMap(): Promise<Map<string, string>> {
 	if (cached && cached.expiresAt > Date.now()) {
 		return cached.emailToUsername;
 	}
-
-	const start = Date.now();
-	const users = await fetchAllMattermostUsers();
-	const latencyMs = Date.now() - start;
-
-	const emailToUsername = new Map<string, string>();
-	for (const u of users) {
-		if (u.delete_at === 0 && u.email) {
-			emailToUsername.set(u.email.toLowerCase().trim(), u.username);
-		}
+	if (inFlight) {
+		return inFlight;
 	}
 
-	const now = Date.now();
-	cached = { emailToUsername, expiresAt: now + CACHE_TTL_MS };
-	lastFetch = { latencyMs, cachedAt: now };
-	return emailToUsername;
+	inFlight = (async () => {
+		const start = Date.now();
+		const users = await fetchAllMattermostUsers();
+		const latencyMs = Date.now() - start;
+
+		const emailToUsername = new Map<string, string>();
+		for (const u of users) {
+			if (u.delete_at === 0 && u.email) {
+				emailToUsername.set(u.email.toLowerCase().trim(), u.username);
+			}
+		}
+
+		const now = Date.now();
+		cached = { emailToUsername, expiresAt: now + CACHE_TTL_MS };
+		lastFetch = { latencyMs, cachedAt: now };
+		return emailToUsername;
+	})();
+
+	try {
+		return await inFlight;
+	} finally {
+		inFlight = null;
+	}
 }
 
 // Matches by email against the member's own Authentik email — same identity key already used to
