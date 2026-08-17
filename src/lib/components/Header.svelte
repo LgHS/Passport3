@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { displayName, isAdmin, type AppUser, type CotisationStatus } from '$lib/types';
+	import { avatarSize } from '$lib/avatar';
 	import CotisationTopbar from '$lib/components/CotisationTopbar.svelte';
 
 	let {
@@ -64,7 +65,7 @@
 						aria-haspopup="menu"
 					>
 						{#if avatarUrl}
-							<img src={avatarUrl} alt="" class="h-8 w-8 object-cover" />
+							<img src={avatarSize(avatarUrl, 64)} alt="" class="h-8 w-8 object-cover" />
 						{:else}
 							<span class="flex h-8 w-8 items-center justify-center bg-black text-sm text-white">
 								{initials(user)}

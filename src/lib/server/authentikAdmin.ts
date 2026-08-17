@@ -1,5 +1,6 @@
 import { requireEnv } from '$lib/server/env';
 import { getCachedProfile, setCachedProfile } from '$lib/server/profileCache';
+import { getMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
 import type { ProfileAttributeField, UserProfile } from '$lib/types';
 
 export type { ProfileAttributeField, UserProfile };
@@ -238,7 +239,7 @@ export interface TrombinoscopeOptin {
 const TROMBINOSCOPE_DEFAULTS: TrombinoscopeOptin = {
 	visible: false,
 	showAvatar: false,
-	showChat: false,
+	showChat: true,
 	showFirstname: false,
 	showLastname: false,
 	showMail: false,
@@ -433,6 +434,12 @@ export interface DirectoryMember {
 	telegram: string | null;
 	discord: string | null;
 	matrix: string | null;
+	// Gated by TrombinoscopeOptin.showChat (unlike signal/telegram/discord/matrix above) — this
+	// isn't member-entered, it's looked up from Mattermost by email, so presence alone can't be the
+	// consent signal the way it is for those. null if showChat is off, or no active Mattermost
+	// account was found under the member's email.
+	mattermostUsername: string | null;
+	mattermostDmUrl: string | null;
 }
 
 function stringAttr(attributes: Record<string, unknown>, key: string): string | null {
@@ -459,25 +466,34 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 		results: (AuthentikUserRecord & { is_active: boolean; type: string })[];
 	};
 
-	return data.results
-		.filter(
-			(u) => u.is_active && !EXCLUDED_USERNAMES.has(u.username) && !EXCLUDED_TYPES.has(u.type)
-		)
-		.flatMap((u) => {
-			const raw = u.attributes[TROMBINOSCOPE_ATTRIBUTE];
-			const optin: TrombinoscopeOptin =
-				typeof raw === 'object' && raw !== null
-					? { ...TROMBINOSCOPE_DEFAULTS, ...(raw as Partial<TrombinoscopeOptin>) }
-					: TROMBINOSCOPE_DEFAULTS;
-			if (!optin.visible) return [];
+	const members = await Promise.all(
+		data.results
+			.filter(
+				(u) => u.is_active && !EXCLUDED_USERNAMES.has(u.username) && !EXCLUDED_TYPES.has(u.type)
+			)
+			.map(async (u): Promise<DirectoryMember | null> => {
+				const raw = u.attributes[TROMBINOSCOPE_ATTRIBUTE];
+				const optin: TrombinoscopeOptin =
+					typeof raw === 'object' && raw !== null
+						? { ...TROMBINOSCOPE_DEFAULTS, ...(raw as Partial<TrombinoscopeOptin>) }
+						: TROMBINOSCOPE_DEFAULTS;
+				if (!optin.visible) return null;
 
-			const { firstName, lastName } = splitName(u.name);
-			const rawTrombi = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
-			const tagValue = rawTrombi.tag;
-			const tagColorValue = rawTrombi.tagc;
+				const { firstName, lastName } = splitName(u.name);
+				const rawTrombi = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+				const tagValue = rawTrombi.tag;
+				const tagColorValue = rawTrombi.tagc;
 
-			return [
-				{
+				// Same rationale as the .catch() calls around Authentik/Dolibarr in +layout.server.ts:
+				// a transient Mattermost hiccup on a cache-miss shouldn't 500 the entire directory
+				// just because one member has "Pseudo Chat" enabled — that member's chat link is
+				// simply absent this time, everyone else's data still loads.
+				const mattermostUsername =
+					optin.showChat && u.email
+						? await getMattermostUsername(u.email).catch(() => null)
+						: null;
+
+				return {
 					pk: u.pk,
 					username: u.username,
 					firstName: optin.showFirstname ? firstName : null,
@@ -496,10 +512,14 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 					signal: stringAttr(u.attributes, 'signal'),
 					telegram: stringAttr(u.attributes, 'telegram'),
 					discord: stringAttr(u.attributes, 'discord'),
-					matrix: stringAttr(u.attributes, 'matrix')
-				}
-			];
-		});
+					matrix: stringAttr(u.attributes, 'matrix'),
+					mattermostUsername,
+					mattermostDmUrl: mattermostUsername ? buildMattermostDmUrl(mattermostUsername) : null
+				};
+			})
+	);
+
+	return members.filter((m): m is DirectoryMember => m !== null);
 }
 
 interface FlowRecord {

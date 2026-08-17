@@ -11,6 +11,7 @@ import {
 	updateTrombinoscopeTag,
 	HEX_COLOR_RE
 } from '$lib/server/authentikAdmin';
+import { getMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
 import { validateProfileSubmission } from '$lib/server/profileValidation';
 import { requireAdmin } from '$lib/server/auth';
 
@@ -25,16 +26,30 @@ function resolvePk(paramPk: string): number {
 export const load: PageServerLoad = async ({ params }) => {
 	const pk = resolvePk(params.pk);
 
-	const [profile, optin, tag] = await Promise.all([
-		getUserProfile(pk).catch(() => null),
-		getTrombinoscopeOptin(pk),
-		getTrombinoscopeTag(pk)
-	]);
+	const profile = await getUserProfile(pk).catch(() => null);
 	if (!profile) {
 		error(404, 'Membre introuvable.');
 	}
 
-	return { pk, profile, fields: PROFILE_ATTRIBUTE_FIELDS, optin, tag };
+	const [optin, tag, mattermostUsername] = await Promise.all([
+		getTrombinoscopeOptin(pk),
+		getTrombinoscopeTag(pk),
+		// Admin-only: shown regardless of the member's own "Pseudo Chat" opt-in on the
+		// trombinoscope — this is an internal tool to reach a member for oral/email requests, not
+		// the public directory, so it isn't gated by the same consent.
+		getMattermostUsername(profile.email).catch(() => null)
+	]);
+	const mattermostDmUrl = mattermostUsername ? buildMattermostDmUrl(mattermostUsername) : null;
+
+	return {
+		pk,
+		profile,
+		fields: PROFILE_ATTRIBUTE_FIELDS,
+		optin,
+		tag,
+		mattermostUsername,
+		mattermostDmUrl
+	};
 };
 
 export const actions: Actions = {

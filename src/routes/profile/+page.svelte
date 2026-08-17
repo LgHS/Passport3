@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { avatarSize } from '$lib/avatar';
 	import type { ActionData, PageData } from './$types';
 	import ProfileForm from '$lib/components/ProfileForm.svelte';
 
@@ -111,7 +112,7 @@
 		<div class="mx-auto max-w-2xl">
 			<div class="mb-6 flex items-center gap-4">
 				{#if data.profile.avatar}
-					<img src={data.profile.avatar} alt="" class="h-16 w-16 object-cover" />
+					<img src={avatarSize(data.profile.avatar, 128)} alt="" class="h-16 w-16 object-cover" />
 				{/if}
 				<p class="text-sm">
 					Votre photo est associée à votre adresse email via <a

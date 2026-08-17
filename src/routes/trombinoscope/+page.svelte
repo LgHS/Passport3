@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { avatarSize } from '$lib/avatar';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -293,7 +294,7 @@
 			<div class="border border-black">
 				<div class="relative">
 					{#if member.avatar}
-						<img src={member.avatar} alt="" class="aspect-square w-full object-cover" />
+						<img src={avatarSize(member.avatar, 320)} alt="" class="aspect-square w-full object-cover" />
 					{:else}
 						<div
 							class="flex aspect-square items-center justify-center bg-black text-2xl font-bold text-white"
@@ -311,7 +312,33 @@
 					{/if}
 				</div>
 				<div class="space-y-1 p-3 text-sm">
-					<p class="font-bold uppercase">@{member.username}</p>
+					<p class="flex items-center justify-between font-bold uppercase">
+						<span>@{member.username}</span>
+						{#if member.mattermostUsername && member.mattermostDmUrl}
+							<a
+								href={member.mattermostDmUrl}
+								target="_blank"
+								rel="noopener"
+								aria-label="Ouvrir la conversation Mattermost"
+								title="Ouvrir la conversation Mattermost"
+							>
+								<svg
+									viewBox="0 0 20 20"
+									class="h-4 w-4 shrink-0"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2.5"
+									aria-hidden="true"
+								>
+									<path
+										d="M3 5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V5z"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+							</a>
+						{/if}
+					</p>
 					{#if fullName(member)}
 						<p>{fullName(member)}</p>
 					{/if}
@@ -367,7 +394,7 @@
 					</span>
 				{/if}
 				{#if member.avatar}
-					<img src={member.avatar} alt="" class="h-16 w-16 shrink-0 object-cover" />
+					<img src={avatarSize(member.avatar, 128)} alt="" class="h-16 w-16 shrink-0 object-cover" />
 				{:else}
 					<div
 						class="flex h-16 w-16 shrink-0 items-center justify-center bg-black text-sm font-bold text-white"
@@ -421,8 +448,16 @@
 							{/if}
 						</p>
 					{/if}
-					{#if socialLinks(member).length > 0}
+					{#if socialLinks(member).length > 0 || member.mattermostUsername}
 						<p class="flex flex-wrap gap-x-3 gap-y-1 text-gray-600">
+							{#if member.mattermostUsername && member.mattermostDmUrl}
+								<span>
+									<span class="font-bold">Chat</span> :
+									<a href={member.mattermostDmUrl} target="_blank" rel="noopener">
+										@{member.mattermostUsername}
+									</a>
+								</span>
+							{/if}
 							{#each socialLinks(member) as link (link.label)}
 								<span>{link.label} : {link.value}</span>
 							{/each}
