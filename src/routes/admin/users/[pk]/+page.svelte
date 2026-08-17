@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { avatarSize } from '$lib/avatar';
 	import type { ActionData, PageData } from './$types';
 	import ProfileForm from '$lib/components/ProfileForm.svelte';
 
@@ -79,7 +80,7 @@
 
 	<div class="mb-6 flex items-center gap-4">
 		{#if data.profile.avatar}
-			<img src={data.profile.avatar} alt="" class="h-16 w-16 object-cover" />
+			<img src={avatarSize(data.profile.avatar, 128)} alt="" class="h-16 w-16 object-cover" />
 		{/if}
 		<div class="text-sm">
 			<p><span class="font-bold uppercase">Identifiant :</span> {data.profile.username}</p>

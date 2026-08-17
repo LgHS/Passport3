@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { avatarSize } from '$lib/avatar';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -293,7 +294,7 @@
 			<div class="border border-black">
 				<div class="relative">
 					{#if member.avatar}
-						<img src={member.avatar} alt="" class="aspect-square w-full object-cover" />
+						<img src={avatarSize(member.avatar, 320)} alt="" class="aspect-square w-full object-cover" />
 					{:else}
 						<div
 							class="flex aspect-square items-center justify-center bg-black text-2xl font-bold text-white"
@@ -393,7 +394,7 @@
 					</span>
 				{/if}
 				{#if member.avatar}
-					<img src={member.avatar} alt="" class="h-16 w-16 shrink-0 object-cover" />
+					<img src={avatarSize(member.avatar, 128)} alt="" class="h-16 w-16 shrink-0 object-cover" />
 				{:else}
 					<div
 						class="flex h-16 w-16 shrink-0 items-center justify-center bg-black text-sm font-bold text-white"
