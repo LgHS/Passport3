@@ -14,6 +14,8 @@
 	$effect(() => {
 		if (form?.mattermostCacheRefreshed) {
 			showToast('success', 'Cache Mattermost régénéré.');
+		} else if (form?.mattermostCacheError) {
+			showToast('error', form.mattermostCacheError);
 		}
 	});
 

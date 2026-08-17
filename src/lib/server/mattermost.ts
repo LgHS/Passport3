@@ -81,14 +81,23 @@ export async function getMattermostUsername(email: string): Promise<string | nul
 }
 
 // Lets an admin force a refresh (new Mattermost signup, account renamed, etc.) rather than wait
-// out the hour-long TTL — just drops the cache, the next lookup rebuilds it.
-export function invalidateMattermostCache(): void {
+// out the hour-long TTL. Rebuilds immediately rather than just dropping the cache — an admin
+// clicking "Régénérer" expects the footer to show a fresh cache right after, not "jamais rempli"
+// until the next unrelated trombinoscope visit happens to trigger one.
+export async function refreshMattermostCache(): Promise<void> {
 	cached = null;
 	lastFetch = null;
+	await getEmailToUsernameMap();
 }
 
 // Read-only, never triggers a fetch — `null` means no successful fetch has happened yet (fresh
 // deploy, or right after an admin's manual invalidation) rather than an error.
 export function getMattermostCacheStatus(): { latencyMs: number; cachedAt: number } | null {
 	return lastFetch;
+}
+
+// Opens Mattermost directly on a DM composer with this member — standard Mattermost URL scheme,
+// no API call needed to build it.
+export function buildMattermostDmUrl(username: string): string {
+	return `${requireEnv('MATTERMOST_URL').replace(/\/+$/, '')}/${requireEnv('MATTERMOST_TEAM_SLUG')}/messages/@${username}`;
 }

@@ -1,6 +1,7 @@
+import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { listUsers } from '$lib/server/authentikAdmin';
-import { invalidateMattermostCache } from '$lib/server/mattermost';
+import { refreshMattermostCache } from '$lib/server/mattermost';
 import { requireAdmin } from '$lib/server/auth';
 
 export const load: PageServerLoad = async () => {
@@ -10,7 +11,13 @@ export const load: PageServerLoad = async () => {
 export const actions: Actions = {
 	refreshMattermostCache: async ({ locals }) => {
 		requireAdmin(locals);
-		invalidateMattermostCache();
+		try {
+			await refreshMattermostCache();
+		} catch {
+			return fail(500, {
+				mattermostCacheError: 'La régénération du cache Mattermost a échoué, réessayez.'
+			});
+		}
 		return { mattermostCacheRefreshed: true };
 	}
 };
