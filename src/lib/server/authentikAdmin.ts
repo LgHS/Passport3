@@ -297,6 +297,47 @@ export async function updateTrombinoscopeOptin(pk: number, optin: TrombinoscopeO
 	});
 }
 
+export interface NotificationPreferences {
+	// Opt-out, not opt-in — the mattermostBot webhook module (see src/lib/server/mattermostBot.ts)
+	// is expected to notify by default, a member has to explicitly turn it off. Confirmed with the
+	// user rather than assumed, since every other opt-in on this app (trombinoscope, sessions,
+	// etc.) defaults the other way.
+	mattermostDm: boolean;
+}
+
+const NOTIFICATION_PREFERENCES_DEFAULTS: NotificationPreferences = {
+	mattermostDm: true
+};
+
+// Own attribute, not folded into `trombinoscope` — unrelated concern (delivery preference, not
+// directory visibility).
+const NOTIFICATION_PREFERENCES_ATTRIBUTE = 'notificationPreferences';
+
+export async function getNotificationPreferences(pk: number): Promise<NotificationPreferences> {
+	const res = await authentikApiFetch(`core/users/${pk}/`);
+	const user = (await res.json()) as AuthentikUserRecord;
+	const value = user.attributes[NOTIFICATION_PREFERENCES_ATTRIBUTE];
+	return typeof value === 'object' && value !== null
+		? { ...NOTIFICATION_PREFERENCES_DEFAULTS, ...(value as Partial<NotificationPreferences>) }
+		: NOTIFICATION_PREFERENCES_DEFAULTS;
+}
+
+// Read-merge-write, same reasoning as updateTrombinoscopeOptin.
+export async function updateNotificationPreferences(
+	pk: number,
+	prefs: NotificationPreferences
+): Promise<void> {
+	const current = await authentikApiFetch(`core/users/${pk}/`);
+	const currentUser = (await current.json()) as AuthentikUserRecord;
+
+	await authentikApiFetch(`core/users/${pk}/`, {
+		method: 'PATCH',
+		body: JSON.stringify({
+			attributes: { ...currentUser.attributes, [NOTIFICATION_PREFERENCES_ATTRIBUTE]: prefs }
+		})
+	});
+}
+
 // `tag`/`tagc` — an admin-assigned role label (e.g. "Prés. CA") and its badge color — live in the
 // same `trombinoscope` attribute as TrombinoscopeOptin, but are kept in a separate type: they're
 // admin-only fields, never part of what the member-facing /trombinoscope form reads or submits.

@@ -9,7 +9,9 @@ import {
 	listSessions,
 	revokeSession,
 	listMfaDevices,
-	deleteMfaDevice
+	deleteMfaDevice,
+	getNotificationPreferences,
+	updateNotificationPreferences
 } from '$lib/server/authentikAdmin';
 import { validateProfileSubmission } from '$lib/server/profileValidation';
 import { clearSessionCookie } from '$lib/server/session';
@@ -36,10 +38,11 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		error(500, 'Impossible de récupérer votre profil Authentik.');
 	}
 
-	const [sessions, mfaDevices, mfaEnrollUrls] = await Promise.all([
+	const [sessions, mfaDevices, mfaEnrollUrls, notificationPreferences] = await Promise.all([
 		listSessions(profile.username),
 		listMfaDevices(pk),
-		getMfaEnrollUrls()
+		getMfaEnrollUrls(),
+		getNotificationPreferences(pk)
 	]);
 
 	return {
@@ -48,7 +51,8 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		authentikAccountUrl: getAuthentikAccountUrl(),
 		mfaEnrollUrls,
 		sessions,
-		mfaDevices
+		mfaDevices,
+		notificationPreferences
 	};
 };
 
@@ -106,5 +110,19 @@ export const actions: Actions = {
 		await deleteMfaDevice(pk, devicePk);
 		// Same reasoning as revokeSession above — kept distinct from `success` on purpose.
 		return { mfaDeviceDeleted: true };
+	},
+
+	updateNotificationPreferences: async ({ request, locals }) => {
+		const pk = resolvePk(locals);
+		const formData = await request.formData();
+		const prefs = { mattermostDm: formData.has('mattermostDm') };
+
+		try {
+			await updateNotificationPreferences(pk, prefs);
+		} catch {
+			return fail(500, { notificationPreferencesError: 'La sauvegarde a échoué, réessayez.' });
+		}
+
+		return { notificationPreferencesSuccess: true, notificationPreferences: prefs };
 	}
 };
