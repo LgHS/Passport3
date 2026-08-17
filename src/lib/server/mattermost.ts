@@ -69,3 +69,9 @@ export async function getMattermostUsername(email: string): Promise<string | nul
 	const map = await getEmailToUsernameMap();
 	return map.get(email.toLowerCase().trim()) ?? null;
 }
+
+// Lets an admin force a refresh (new Mattermost signup, account renamed, etc.) rather than wait
+// out the hour-long TTL — just drops the cache, the next lookup rebuilds it.
+export function invalidateMattermostCache(): void {
+	cached = null;
+}

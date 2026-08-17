@@ -1,12 +1,21 @@
 <script lang="ts">
-	import type { PageData } from './$types';
+	import { enhance } from '$app/forms';
+	import { showToast } from '$lib/stores/toast.svelte';
+	import type { ActionData, PageData } from './$types';
 
 	const PAGE_SIZE = 20;
 
-	let { data }: { data: PageData } = $props();
+	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let query = $state('');
 	let page = $state(1);
+	let refreshingMattermostCache = $state(false);
+
+	$effect(() => {
+		if (form?.mattermostCacheRefreshed) {
+			showToast('success', 'Cache Mattermost régénéré.');
+		}
+	});
 
 	let filteredUsers = $derived(
 		data.users.filter((user) => {
@@ -36,9 +45,30 @@
 <section>
 	<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
 		<h1 class="bg-black px-4 py-3 text-base font-bold text-white uppercase">Membres</h1>
-		<a href="/admin/invite" class="no-underline-fx btn-primary inline-block px-4 py-2">
-			Créer une invitation
-		</a>
+		<div class="flex flex-wrap gap-2">
+			<form
+				method="POST"
+				action="?/refreshMattermostCache"
+				use:enhance={() => {
+					refreshingMattermostCache = true;
+					return async ({ update }) => {
+						await update({ reset: false });
+						refreshingMattermostCache = false;
+					};
+				}}
+			>
+				<button
+					type="submit"
+					disabled={refreshingMattermostCache}
+					class="btn-primary px-4 py-2 disabled:opacity-50"
+				>
+					{refreshingMattermostCache ? 'Régénération…' : 'Régénérer le cache Mattermost'}
+				</button>
+			</form>
+			<a href="/admin/invite" class="no-underline-fx btn-primary inline-block px-4 py-2">
+				Créer une invitation
+			</a>
+		</div>
 	</div>
 
 	<input
