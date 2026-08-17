@@ -84,6 +84,16 @@
 		<div class="text-sm">
 			<p><span class="font-bold uppercase">Identifiant :</span> {data.profile.username}</p>
 			<p><span class="font-bold uppercase">Email :</span> {data.profile.email}</p>
+			<p>
+				<span class="font-bold uppercase">Chat :</span>
+				{#if data.mattermostUsername && data.mattermostDmUrl}
+					<a href={data.mattermostDmUrl} target="_blank" rel="noopener">
+						@{data.mattermostUsername}
+					</a>
+				{:else}
+					<span class="text-gray-500">Pas de compte lié ou actif</span>
+				{/if}
+			</p>
 		</div>
 	</div>
 
