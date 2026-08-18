@@ -32,16 +32,19 @@
 	// svelte-ignore state_referenced_locally
 	let socialsOpen = $state(!collapsibleSocials);
 
-	// Every validateSignalUsername()/validateTelegramUsername()/validateDiscordUsername()/
-	// validateMatrixId() error message starts with its network's name — used to route the error
-	// into the "Divers (facultatifs)" panel instead of the generic top banner.
-	let isSocialError = $derived(/^(Signal|Telegram|Discord|Matrix) :/.test(form?.error ?? ''));
+	// Every validator for a field that lives inside the "Divers (facultatifs)" panel
+	// (validateSignalUsername/validateTelegramUsername/validateDiscordUsername/validateMatrixId/
+	// validateBirthday) starts its error message with the field's own label — used to detect that
+	// the error concerns something inside the panel, not the generic top banner.
+	let isDiversError = $derived(
+		/^(Signal|Telegram|Discord|Matrix|Date de naissance) :/.test(form?.error ?? '')
+	);
 
-	// The panel is collapsed by default, so a social error would otherwise be invisible — force it
-	// open when one comes back from the server. Only ever sets it to true, never closes it back
+	// The panel is collapsed by default, so an error inside it would otherwise be invisible — force
+	// it open when one comes back from the server. Only ever sets it to true, never closes it back
 	// down, so a manual toggle by the member elsewhere isn't fought.
 	$effect(() => {
-		if (isSocialError) socialsOpen = true;
+		if (isDiversError) socialsOpen = true;
 	});
 
 	$effect(() => {
@@ -91,6 +94,48 @@
 			? `@${matrixLocalpart.trim()}:${matrixDomain.trim()}`
 			: ''
 	);
+
+	const MONTHS = [
+		'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+		'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+	];
+
+	// Stored as "YYYY-MM-DD" (year known) or "MM-DD" (year omitted) — see validateBirthday() in
+	// profileValidation.ts. The year is deliberately optional: a member may want to share their
+	// birthday without revealing their age.
+	function splitBirthday(value: string): { day: string; month: string; year: string } {
+		const withYear = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+		if (withYear) return { year: withYear[1], month: String(Number(withYear[2])), day: String(Number(withYear[3])) };
+		const withoutYear = value.match(/^(\d{2})-(\d{2})$/);
+		if (withoutYear) return { year: '', month: String(Number(withoutYear[1])), day: String(Number(withoutYear[2])) };
+		return { day: '', month: '', year: '' };
+	}
+
+	const birthdayInitial = splitBirthday(fieldValue('birthday'));
+	// svelte-ignore state_referenced_locally
+	let birthdayDay = $state(birthdayInitial.day);
+	// svelte-ignore state_referenced_locally
+	let birthdayMonth = $state(birthdayInitial.month);
+	// svelte-ignore state_referenced_locally
+	let birthdayYear = $state(birthdayInitial.year);
+	// Checked by default — unlike the rest of this form's optional fields, this one defaults to on.
+	// Only an explicit "false" (the member unchecked it and saved) turns it off; a never-set value
+	// (empty string) still defaults to checked.
+	// svelte-ignore state_referenced_locally
+	let birthdayAnnounce = $state(fieldValue('birthdayAnnounce') !== 'false');
+	let birthdayCombined = $derived.by(() => {
+		const day = birthdayDay.trim();
+		const month = birthdayMonth.trim();
+		const year = birthdayYear.trim();
+		if (!day && !month) return '';
+		const pad2 = (n: string) => n.padStart(2, '0');
+		// Only one of day/month filled: send through deliberately malformed (e.g. "06-" or "-15")
+		// instead of collapsing to '' — validateBirthday() on the server rejects this with a clear
+		// error ("jour et mois sont obligatoires") rather than the half-filled date being silently
+		// discarded with no feedback.
+		if (!day || !month) return `${month ? pad2(month) : ''}-${day ? pad2(day) : ''}`;
+		return year ? `${year}-${pad2(month)}-${pad2(day)}` : `${pad2(month)}-${pad2(day)}`;
+	});
 </script>
 
 {#snippet textField(
@@ -196,6 +241,71 @@
 		{/if}
 		{#if socialsOpen}
 			<div class="border-t border-black p-4">
+				<div class="mb-4">
+					<label class="mb-1 block text-sm font-bold uppercase" for="birthdayDay">
+						Date de naissance
+					</label>
+					<div class="flex flex-wrap items-center justify-between gap-4">
+						<div class="grid w-full grid-cols-[5rem_1fr_6rem] gap-2 md:w-auto">
+							<input
+								id="birthdayDay"
+								type="text"
+								inputmode="numeric"
+								pattern={'[0-9]{1,2}'}
+								maxlength="2"
+								placeholder="Jour"
+								bind:value={birthdayDay}
+								class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-300"
+							/>
+							<select
+								bind:value={birthdayMonth}
+								class="w-full border border-black bg-white px-3 py-2 text-sm {birthdayMonth
+									? ''
+									: 'text-gray-400'}"
+							>
+								<option value="" selected={!birthdayMonth}>Mois</option>
+								{#each MONTHS as month, i (month)}
+									<option value={String(i + 1)}>{month}</option>
+								{/each}
+							</select>
+							<input
+								type="text"
+								inputmode="numeric"
+								pattern={'[0-9]{4}'}
+								maxlength="4"
+								placeholder="Année"
+								bind:value={birthdayYear}
+								title="Facultatif — laissez vide pour ne partager que le jour et le mois"
+								class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-300"
+							/>
+						</div>
+						<label class="flex w-full cursor-pointer items-center gap-3 text-sm md:w-fit">
+							<span
+								class="relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors {birthdayAnnounce
+									? 'bg-black'
+									: 'bg-gray-300'}"
+							>
+								<input
+									type="checkbox"
+									name="birthdayAnnounce"
+									bind:checked={birthdayAnnounce}
+									class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+								/>
+								<span
+									class="pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform {birthdayAnnounce
+										? 'translate-x-5'
+										: ''}"
+								></span>
+							</span>
+							Souhaitez-moi un bon anniversaire !
+						</label>
+					</div>
+					<p class="mt-1 text-xs text-gray-500">
+						Facultative. L'année est elle-même facultative si vous préférez ne partager que le
+						jour et le mois.
+					</p>
+					<input type="hidden" name="birthday" value={birthdayCombined} />
+				</div>
 				<div class="mb-4">
 					{@render textField('signal', {
 						required: false,
