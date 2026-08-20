@@ -179,6 +179,36 @@ export async function updateUserProfile(
 // the member-editable profile form, whereas rfid_uid is provisioned by us and never user-entered.
 const RFID_UID_ATTRIBUTE = 'rfid_uid';
 
+export interface UserGroup {
+	name: string;
+	isSuperuser: boolean;
+	// From the group's own `attributes.notes`, if set (Directory -> Groups -> [group] -> Edit ->
+	// Attributes, in Authentik's admin UI). Most groups won't have one.
+	note: string | null;
+}
+
+interface AuthentikUserRecordWithGroups extends AuthentikUserRecord {
+	groups_obj: { name: string; is_superuser: boolean; attributes: Record<string, unknown> }[];
+}
+
+// Full group objects (name, is_superuser, attributes) — unlike the plain group name list already
+// carried in the member's own OIDC session (`profile` scope's `groups` claim, group names only),
+// this needs the privileged service token: group attributes are never exposed via the ID token.
+export async function getUserGroups(pk: number): Promise<UserGroup[]> {
+	const res = await authentikApiFetch(`core/users/${pk}/`);
+	const user = (await res.json()) as AuthentikUserRecordWithGroups;
+	// Defensive: this is a cast, not a runtime-validated schema — don't assume the field is always
+	// present in whatever shape a future Authentik version (or a differently-scoped token) returns.
+	return (user.groups_obj ?? []).map((g) => {
+		const note = g.attributes.notes;
+		return {
+			name: g.name,
+			isSuperuser: g.is_superuser,
+			note: typeof note === 'string' && note.trim() ? note : null
+		};
+	});
+}
+
 export async function getRfidUid(pk: number): Promise<string | null> {
 	const res = await authentikApiFetch(`core/users/${pk}/`);
 	const user = (await res.json()) as AuthentikUserRecord;

@@ -94,6 +94,14 @@
 								Mon profil
 							</a>
 							<a
+								href="/permissions"
+								role="menuitem"
+								onclick={() => (menuOpen = false)}
+								class="no-underline-fx menu-item"
+							>
+								Permissions
+							</a>
+							<a
 								href="/cotisation"
 								role="menuitem"
 								onclick={() => (menuOpen = false)}

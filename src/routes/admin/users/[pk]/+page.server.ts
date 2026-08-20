@@ -9,6 +9,7 @@ import {
 	optinFromFormData,
 	getTrombinoscopeTag,
 	updateTrombinoscopeTag,
+	getUserGroups,
 	HEX_COLOR_RE
 } from '$lib/server/authentikAdmin';
 import { validateProfileSubmission } from '$lib/server/profileValidation';
@@ -25,16 +26,22 @@ function resolvePk(paramPk: string): number {
 export const load: PageServerLoad = async ({ params }) => {
 	const pk = resolvePk(params.pk);
 
-	const [profile, optin, tag] = await Promise.all([
+	const [profile, optin, tag, groups] = await Promise.all([
 		getUserProfile(pk).catch(() => null),
 		getTrombinoscopeOptin(pk),
-		getTrombinoscopeTag(pk)
+		getTrombinoscopeTag(pk),
+		// Best-effort, same reasoning as getUserProfile's .catch() above — a transient Authentik
+		// hiccup on this specific call shouldn't 500 the whole edit page (profile, visibility, tag
+		// all fail together via Promise.all) just because the Permissions section couldn't load.
+		// null (not []) on failure — "couldn't check" must stay distinguishable from "genuinely no
+		// groups", the two read very differently to an admin looking at someone's access.
+		getUserGroups(pk).catch(() => null)
 	]);
 	if (!profile) {
 		error(404, 'Membre introuvable.');
 	}
 
-	return { pk, profile, fields: PROFILE_ATTRIBUTE_FIELDS, optin, tag };
+	return { pk, profile, fields: PROFILE_ATTRIBUTE_FIELDS, optin, tag, groups };
 };
 
 export const actions: Actions = {
