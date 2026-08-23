@@ -25,8 +25,8 @@ Passport3 aims to provide members with one central place to:
 - [x] Manage badges or access credentials (RFID badge UUID)
 - [x] Request access to the hackerspace's GitHub organization
 - [x] Choose which information is visible to other members
+- [x] Access the member directory and phonebook
 - [ ] Access payment and accounting information
-- [ ] Access the member directory and phonebook
 - [ ] View their physical access permissions
 - Access future hackerspace services through a unified interface
 
