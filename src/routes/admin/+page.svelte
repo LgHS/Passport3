@@ -49,62 +49,77 @@
 		class="mb-4 w-full border border-black px-3 py-2 text-sm"
 	/>
 
-	<div class="overflow-x-auto">
-		<table class="w-full border-collapse text-sm">
-			<thead>
-				<tr class="bg-black text-white uppercase">
-					<th class="border border-black px-3 py-2 text-left">Nom</th>
-					<th class="border border-black px-3 py-2 text-left">Identifiant</th>
-					<th class="border border-black px-3 py-2 text-left">Email</th>
-					<th class="border border-black px-3 py-2 text-left">Statut</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each pagedUsers as user (user.pk)}
-					<tr class="group">
-						<td class="border border-black p-0">
-							<a
-								href="/admin/users/{user.pk}"
-								class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
-							>
-								{user.name}
-							</a>
-						</td>
-						<td class="border border-black p-0">
-							<a
-								href="/admin/users/{user.pk}"
-								class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
-							>
-								{user.username}
-							</a>
-						</td>
-						<td class="border border-black p-0">
-							<a
-								href="/admin/users/{user.pk}"
-								class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
-							>
-								{user.email}
-							</a>
-						</td>
-						<td class="border border-black p-0">
-							<a
-								href="/admin/users/{user.pk}"
-								class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
-							>
-								{user.is_active ? 'Actif' : 'Inactif'}
-							</a>
-						</td>
+	{#if pagedUsers.length > 0}
+		<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->
+		<div class="space-y-2 sm:hidden">
+			{#each pagedUsers as user (user.pk)}
+				<a
+					href="/admin/users/{user.pk}"
+					class="no-underline-fx block border border-black p-3 text-sm transition-colors hover:bg-black hover:text-white"
+				>
+					<p class="font-bold">{user.name}</p>
+					<p class="mt-1 opacity-70">{user.username}</p>
+					<p class="mt-1 opacity-70">{user.email}</p>
+					<p class="mt-1 text-xs font-bold uppercase">{user.is_active ? 'Actif' : 'Inactif'}</p>
+				</a>
+			{/each}
+		</div>
+
+		<div class="hidden overflow-x-auto sm:block">
+			<table class="w-full border-collapse text-sm">
+				<thead>
+					<tr class="bg-black text-white uppercase">
+						<th class="border border-black px-3 py-2 text-left">Nom</th>
+						<th class="border border-black px-3 py-2 text-left">Identifiant</th>
+						<th class="border border-black px-3 py-2 text-left">Email</th>
+						<th class="border border-black px-3 py-2 text-left">Statut</th>
 					</tr>
-				{:else}
-					<tr>
-						<td colspan="4" class="border border-black px-3 py-4 text-center text-gray-500">
-							Aucun résultat.
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
+				</thead>
+				<tbody>
+					{#each pagedUsers as user (user.pk)}
+						<tr class="group">
+							<td class="border border-black p-0">
+								<a
+									href="/admin/users/{user.pk}"
+									class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
+								>
+									{user.name}
+								</a>
+							</td>
+							<td class="border border-black p-0">
+								<a
+									href="/admin/users/{user.pk}"
+									class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
+								>
+									{user.username}
+								</a>
+							</td>
+							<td class="border border-black p-0">
+								<a
+									href="/admin/users/{user.pk}"
+									class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
+								>
+									{user.email}
+								</a>
+							</td>
+							<td class="border border-black p-0">
+								<a
+									href="/admin/users/{user.pk}"
+									class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
+								>
+									{user.is_active ? 'Actif' : 'Inactif'}
+								</a>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	{:else}
+		<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+			Aucun résultat.
+		</p>
+	{/if}
 
 	{#if pageCount > 1}
 		<div class="mt-4 flex items-center justify-between gap-4 text-sm">

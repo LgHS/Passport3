@@ -198,57 +198,83 @@
 				</div>
 			{/if}
 
-			<div class="overflow-x-auto">
-				<table class="w-full border-collapse text-sm">
-					<thead>
-						<tr class="bg-black text-white uppercase">
-							<th class="border border-black px-3 py-2 text-left">Début</th>
-							<th class="border border-black px-3 py-2 text-left">Fin</th>
-							<th class="border border-black px-3 py-2 text-left">Montant</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each yearRows as row (row.kind === 'subscription' ? `sub-${row.subscription.id}` : `gap-${row.gap.start.getTime()}`)}
-							{#if row.kind === 'subscription'}
+			{#if yearRows.length > 0 || undatedSubscriptions.length > 0}
+				<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->
+				<div class="space-y-2 sm:hidden">
+					{#each yearRows as row (row.kind === 'subscription' ? `sub-${row.subscription.id}` : `gap-${row.gap.start.getTime()}`)}
+						{#if row.kind === 'subscription'}
+							<div class="border border-black p-3 text-sm">
+								<p class="font-bold">
+									{formatDate(row.subscription.start)} — {formatDate(row.subscription.end)}
+								</p>
+								<p class="mt-1 text-gray-600">{amountFormat.format(row.subscription.amount)}</p>
+							</div>
+						{:else}
+							<div class="border border-black bg-red-50 p-3 text-sm text-red-700">
+								<p class="font-bold">
+									{gapDateFormat.format(row.gap.start)} — {gapDateFormat.format(row.gap.end)}
+								</p>
+								<p class="mt-1">Non perçu</p>
+							</div>
+						{/if}
+					{/each}
+					{#each undatedSubscriptions as subscription (`undated-${subscription.id}`)}
+						<div class="border border-black p-3 text-sm">
+							<p class="font-bold">
+								{formatDate(subscription.start)} — {formatDate(subscription.end)}
+							</p>
+							<p class="mt-1 text-gray-600">{amountFormat.format(subscription.amount)}</p>
+						</div>
+					{/each}
+				</div>
+
+				<div class="hidden overflow-x-auto sm:block">
+					<table class="w-full border-collapse text-sm">
+						<thead>
+							<tr class="bg-black text-white uppercase">
+								<th class="border border-black px-3 py-2 text-left">Début</th>
+								<th class="border border-black px-3 py-2 text-left">Fin</th>
+								<th class="border border-black px-3 py-2 text-left">Montant</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each yearRows as row (row.kind === 'subscription' ? `sub-${row.subscription.id}` : `gap-${row.gap.start.getTime()}`)}
+								{#if row.kind === 'subscription'}
+									<tr>
+										<td class="border border-black px-3 py-2">{formatDate(row.subscription.start)}</td>
+										<td class="border border-black px-3 py-2">{formatDate(row.subscription.end)}</td>
+										<td class="border border-black px-3 py-2"
+											>{amountFormat.format(row.subscription.amount)}</td
+										>
+									</tr>
+								{:else}
+									<tr class="bg-red-50 text-red-700">
+										<td class="border border-black px-3 py-2">{gapDateFormat.format(row.gap.start)}</td>
+										<td class="border border-black px-3 py-2">{gapDateFormat.format(row.gap.end)}</td>
+										<td class="border border-black px-3 py-2">Non perçu</td>
+									</tr>
+								{/if}
+							{/each}
+							<!-- Belonging to no year, these repeat on every page rather than becoming
+							     unreachable. Both date cells render as "—", so a duplicate is recognisable
+							     as the same row and not mistaken for a second subscription. -->
+							{#each undatedSubscriptions as subscription (`undated-${subscription.id}`)}
 								<tr>
-									<td class="border border-black px-3 py-2">{formatDate(row.subscription.start)}</td>
-									<td class="border border-black px-3 py-2">{formatDate(row.subscription.end)}</td>
+									<td class="border border-black px-3 py-2">{formatDate(subscription.start)}</td>
+									<td class="border border-black px-3 py-2">{formatDate(subscription.end)}</td>
 									<td class="border border-black px-3 py-2"
-										>{amountFormat.format(row.subscription.amount)}</td
+										>{amountFormat.format(subscription.amount)}</td
 									>
 								</tr>
-							{:else}
-								<tr class="bg-red-50 text-red-700">
-									<td class="border border-black px-3 py-2">{gapDateFormat.format(row.gap.start)}</td>
-									<td class="border border-black px-3 py-2">{gapDateFormat.format(row.gap.end)}</td>
-									<td class="border border-black px-3 py-2">Non perçu</td>
-								</tr>
-							{/if}
-						{/each}
-						<!-- Belonging to no year, these repeat on every page rather than becoming
-						     unreachable. Both date cells render as "—", so a duplicate is recognisable
-						     as the same row and not mistaken for a second subscription. -->
-						{#each undatedSubscriptions as subscription (`undated-${subscription.id}`)}
-							<tr>
-								<td class="border border-black px-3 py-2">{formatDate(subscription.start)}</td>
-								<td class="border border-black px-3 py-2">{formatDate(subscription.end)}</td>
-								<td class="border border-black px-3 py-2"
-									>{amountFormat.format(subscription.amount)}</td
-								>
-							</tr>
-						{/each}
-						<!-- Can't be the `{:else}` of an `{#each}` any more: emptiness now depends on both
-						     loops, not just the paginated one. -->
-						{#if yearRows.length === 0 && undatedSubscriptions.length === 0}
-							<tr>
-								<td colspan="3" class="border border-black px-3 py-4 text-center text-gray-500">
-									Aucune cotisation enregistrée.
-								</td>
-							</tr>
-						{/if}
-					</tbody>
-				</table>
-			</div>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{:else}
+				<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+					Aucune cotisation enregistrée.
+				</p>
+			{/if}
 
 			{#if hasGapsOnPage}
 				<p class="mt-3 text-sm text-gray-600">
