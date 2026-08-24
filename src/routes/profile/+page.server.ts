@@ -9,8 +9,11 @@ import {
 	listSessions,
 	revokeSession,
 	listMfaDevices,
-	deleteMfaDevice
+	deleteMfaDevice,
+	getNotificationPreferences,
+	updateNotificationPreferences
 } from '$lib/server/authentikAdmin';
+import { getMattermostUsername } from '$lib/server/mattermost';
 import { validateProfileSubmission } from '$lib/server/profileValidation';
 import { clearSessionCookie } from '$lib/server/session';
 import { authentikPk } from '$lib/types';
@@ -36,11 +39,17 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		error(500, 'Impossible de récupérer votre profil Authentik.');
 	}
 
-	const [sessions, mfaDevices, mfaEnrollUrls] = await Promise.all([
-		listSessions(profile.username),
-		listMfaDevices(pk),
-		getMfaEnrollUrls()
-	]);
+	const [sessions, mfaDevices, mfaEnrollUrls, notificationPreferences, mattermostUsername] =
+		await Promise.all([
+			listSessions(profile.username),
+			listMfaDevices(pk),
+			getMfaEnrollUrls(),
+			getNotificationPreferences(pk),
+			// Best-effort: a transient Mattermost hiccup shouldn't break the whole profile page,
+			// same reasoning as the Authentik/Dolibarr .catch()s in +layout.server.ts. Worst case,
+			// the Notifications tab just shows "no linked account" until the next successful check.
+			getMattermostUsername(profile.email).catch(() => null)
+		]);
 
 	return {
 		profile,
@@ -48,7 +57,9 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		authentikAccountUrl: getAuthentikAccountUrl(),
 		mfaEnrollUrls,
 		sessions,
-		mfaDevices
+		mfaDevices,
+		notificationPreferences,
+		mattermostUsername
 	};
 };
 
@@ -106,5 +117,19 @@ export const actions: Actions = {
 		await deleteMfaDevice(pk, devicePk);
 		// Same reasoning as revokeSession above — kept distinct from `success` on purpose.
 		return { mfaDeviceDeleted: true };
+	},
+
+	updateNotificationPreferences: async ({ request, locals }) => {
+		const pk = resolvePk(locals);
+		const formData = await request.formData();
+		const prefs = { mattermostDm: formData.has('mattermostDm') };
+
+		try {
+			await updateNotificationPreferences(pk, prefs);
+		} catch {
+			return fail(500, { notificationPreferencesError: 'La sauvegarde a échoué, réessayez.' });
+		}
+
+		return { notificationPreferencesSuccess: true, notificationPreferences: prefs };
 	}
 };

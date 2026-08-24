@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { avatarSize } from '$lib/avatar';
 	import type { ActionData, PageData } from './$types';
 	import ProfileForm from '$lib/components/ProfileForm.svelte';
 
@@ -12,16 +13,26 @@
 			showToast('success', 'Session révoquée.');
 		} else if (form?.mfaDeviceDeleted) {
 			showToast('success', 'Appareil MFA supprimé.');
+		} else if (form?.notificationPreferencesSuccess) {
+			showToast('success', 'Préférences de notification enregistrées.');
+		} else if (form?.notificationPreferencesError) {
+			showToast('error', form.notificationPreferencesError);
 		}
 	});
+
+	let submittingNotificationPreferences = $state(false);
+	// svelte-ignore state_referenced_locally
+	let mattermostDm = $state(
+		form?.notificationPreferences?.mattermostDm ?? data.notificationPreferences.mattermostDm
+	);
 
 	const dateFormat = new Intl.DateTimeFormat('fr-BE', { dateStyle: 'medium', timeStyle: 'short' });
 	function formatDate(iso: string): string {
 		return dateFormat.format(new Date(iso));
 	}
 
-	type Tab = 'info' | 'sessions' | 'mfa';
-	const VALID_TABS: Tab[] = ['info', 'sessions', 'mfa'];
+	type Tab = 'info' | 'sessions' | 'mfa' | 'notifications';
+	const VALID_TABS: Tab[] = ['info', 'sessions', 'mfa', 'notifications'];
 	const initialTab = page.url.searchParams.get('tab');
 	let activeTab = $state<Tab>(
 		VALID_TABS.includes(initialTab as Tab) ? (initialTab as Tab) : 'info'
@@ -85,6 +96,15 @@
 	>
 		Mes Appareils MFA ({data.mfaDevices.length})
 	</button>
+	<button
+		type="button"
+		onclick={() => (activeTab = 'notifications')}
+		class="px-4 py-2 font-bold uppercase transition-colors {activeTab === 'notifications'
+			? 'bg-black text-white'
+			: 'hover:bg-black hover:text-white'}"
+	>
+		Notifications
+	</button>
 </div>
 
 {#if activeTab === 'info'}
@@ -92,7 +112,7 @@
 		<div class="mx-auto max-w-2xl">
 			<div class="mb-6 flex items-center gap-4">
 				{#if data.profile.avatar}
-					<img src={data.profile.avatar} alt="" class="h-16 w-16 object-cover" />
+					<img src={avatarSize(data.profile.avatar, 128)} alt="" class="h-16 w-16 object-cover" />
 				{/if}
 				<p class="text-sm">
 					Votre photo est associée à votre adresse email via <a
@@ -246,6 +266,57 @@
 					{/each}
 				</tbody>
 			</table>
+		</div>
+	</section>
+{:else if activeTab === 'notifications'}
+	<section class="w-full">
+		<div class="mx-auto max-w-2xl">
+			{#if data.mattermostUsername}
+				<form
+					method="POST"
+					action="?/updateNotificationPreferences"
+					use:enhance={() => {
+						submittingNotificationPreferences = true;
+						return async ({ update }) => {
+							await update({ reset: false });
+							submittingNotificationPreferences = false;
+						};
+					}}
+				>
+					<label class="flex w-fit cursor-pointer items-center gap-3 text-sm">
+						<span
+							class="relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors {mattermostDm
+								? 'bg-black'
+								: 'bg-gray-300'}"
+						>
+							<input
+								type="checkbox"
+								name="mattermostDm"
+								bind:checked={mattermostDm}
+								disabled={submittingNotificationPreferences}
+								onchange={(e) => e.currentTarget.form?.requestSubmit()}
+								class="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait"
+							/>
+							<span
+								class="pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform {mattermostDm
+									? 'translate-x-5'
+									: ''}"
+							></span>
+						</span>
+						Recevoir un message sur Mattermost pour les événements liés à mon compte
+					</label>
+					<p class="mt-2 text-xs text-gray-500">
+						Toutes les modifications majeures apportées à votre compte envoient un message privé
+						sur Mattermost. Activé par défaut, désactivable à tout moment. Compte lié :
+						<span class="font-bold">@{data.mattermostUsername}</span>.
+					</p>
+				</form>
+			{:else}
+				<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+					Aucun compte Mattermost lié à votre adresse email — rien à envoyer pour l'instant.
+					Cette option apparaîtra dès qu'un compte sera relié.
+				</p>
+			{/if}
 		</div>
 	</section>
 {/if}
