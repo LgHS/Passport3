@@ -4,6 +4,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import type { ActionData, PageData } from './$types';
 	import ProfileForm from '$lib/components/ProfileForm.svelte';
+	import EmergencyContactsForm from '$lib/components/EmergencyContactsForm.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -20,8 +21,8 @@
 		return dateFormat.format(new Date(iso));
 	}
 
-	type Tab = 'info' | 'sessions' | 'mfa';
-	const VALID_TABS: Tab[] = ['info', 'sessions', 'mfa'];
+	type Tab = 'info' | 'sessions' | 'mfa' | 'emergency';
+	const VALID_TABS: Tab[] = ['info', 'sessions', 'mfa', 'emergency'];
 	const initialTab = page.url.searchParams.get('tab');
 	let activeTab = $state<Tab>(
 		VALID_TABS.includes(initialTab as Tab) ? (initialTab as Tab) : 'info'
@@ -84,6 +85,15 @@
 			: 'hover:bg-black hover:text-white'}"
 	>
 		Mes Appareils MFA ({data.mfaDevices.length})
+	</button>
+	<button
+		type="button"
+		onclick={() => (activeTab = 'emergency')}
+		class="px-4 py-2 font-bold uppercase transition-colors {activeTab === 'emergency'
+			? 'bg-black text-white'
+			: 'hover:bg-black hover:text-white'}"
+	>
+		Contacts d'urgence
 	</button>
 </div>
 
@@ -247,5 +257,13 @@
 				</tbody>
 			</table>
 		</div>
+	</section>
+{:else if activeTab === 'emergency'}
+	<section class="w-full">
+		<EmergencyContactsForm
+			contacts={data.emergencyContacts}
+			maxContacts={data.maxEmergencyContacts}
+			{form}
+		/>
 	</section>
 {/if}

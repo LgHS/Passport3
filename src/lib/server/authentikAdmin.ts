@@ -1,8 +1,8 @@
 import { requireEnv } from '$lib/server/env';
 import { getCachedProfile, setCachedProfile } from '$lib/server/profileCache';
-import type { ProfileAttributeField, UserProfile } from '$lib/types';
+import type { EmergencyContact, ProfileAttributeField, UserProfile } from '$lib/types';
 
-export type { ProfileAttributeField, UserProfile };
+export type { EmergencyContact, ProfileAttributeField, UserProfile };
 
 // Whitelist that also acts as the merge boundary for updateUserProfile: only these keys are
 // ever read from or written into the user's Authentik `attributes` blob.
@@ -338,6 +338,46 @@ export async function updateTrombinoscopeTag(pk: number, tag: TrombinoscopeTag):
 		method: 'PATCH',
 		body: JSON.stringify({
 			attributes: { ...currentUser.attributes, [TROMBINOSCOPE_ATTRIBUTE]: mergedTrombinoscope }
+		})
+	});
+}
+
+// One-directional, sensitive data: a member records who to contact in case of an accident at the
+// hackerspace, only ever read by an admin (or the member themselves) — never opt-in-public, never
+// shown in the trombinoscope. A structured list rather than a single string, so it lives in its
+// own attribute outside PROFILE_ATTRIBUTE_FIELDS, same reasoning as `trombinoscope`.
+const EMERGENCY_CONTACTS_ATTRIBUTE = 'emergencyContacts';
+export const MAX_EMERGENCY_CONTACTS = 3;
+
+function isEmergencyContact(value: unknown): value is EmergencyContact {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		typeof (value as EmergencyContact).name === 'string' &&
+		typeof (value as EmergencyContact).phone === 'string'
+	);
+}
+
+export async function getEmergencyContacts(pk: number): Promise<EmergencyContact[]> {
+	const res = await authentikApiFetch(`core/users/${pk}/`);
+	const user = (await res.json()) as AuthentikUserRecord;
+	const value = user.attributes[EMERGENCY_CONTACTS_ATTRIBUTE];
+	if (!Array.isArray(value)) return [];
+	return value
+		.filter(isEmergencyContact)
+		.slice(0, MAX_EMERGENCY_CONTACTS)
+		.map((c) => ({ name: c.name, phone: c.phone, relation: typeof c.relation === 'string' ? c.relation : '' }));
+}
+
+// Read-merge-write, same reasoning as updateUserProfile: `attributes` is replaced wholesale by a
+// PATCH, so the rest of the blob must be preserved rather than overwritten.
+export async function updateEmergencyContacts(pk: number, contacts: EmergencyContact[]): Promise<void> {
+	const current = await authentikApiFetch(`core/users/${pk}/`);
+	const currentUser = (await current.json()) as AuthentikUserRecord;
+	await authentikApiFetch(`core/users/${pk}/`, {
+		method: 'PATCH',
+		body: JSON.stringify({
+			attributes: { ...currentUser.attributes, [EMERGENCY_CONTACTS_ATTRIBUTE]: contacts }
 		})
 	});
 }
