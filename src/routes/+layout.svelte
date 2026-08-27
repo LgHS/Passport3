@@ -23,7 +23,7 @@
 	<main class="mx-auto w-full max-w-5xl flex-1 px-4 py-10">
 		{@render children()}
 	</main>
-	<Footer status={data.systemStatus} />
+	<Footer status={data.systemStatus} mattermostCacheStatus={data.mattermostCacheStatus} />
 </div>
 
 <Toast />

@@ -2,11 +2,16 @@ import type { LayoutServerLoad } from './$types';
 import { getUserProfile, type UserProfile } from '$lib/server/authentikAdmin';
 import { getCotisationStatus } from '$lib/server/dolibarr';
 import { getSystemStatus } from '$lib/server/health';
+import { getMattermostCacheStatus } from '$lib/server/mattermost';
 import { authentikPk, type CotisationStatus, type SystemStatus } from '$lib/types';
 
 export const load: LayoutServerLoad = async ({ locals }) => {
 	const pk = locals.user ? authentikPk(locals.user) : null;
 	const email = locals.user?.email;
+
+	// Synchronous and never triggers a fetch itself — see getMattermostCacheStatus()'s own comment
+	// for why this doesn't belong in the Promise.all below with the two live checks.
+	const mattermostCacheStatus = locals.user ? getMattermostCacheStatus() : null;
 
 	const [profile, cotisationStatus, systemStatus] = await Promise.all([
 		pk
@@ -29,5 +34,12 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 		locals.user ? getSystemStatus() : Promise.resolve<SystemStatus | null>(null)
 	]);
 
-	return { user: locals.user, avatarUrl: profile?.avatar ?? null, profile, cotisationStatus, systemStatus };
+	return {
+		user: locals.user,
+		avatarUrl: profile?.avatar ?? null,
+		profile,
+		cotisationStatus,
+		systemStatus,
+		mattermostCacheStatus
+	};
 };
