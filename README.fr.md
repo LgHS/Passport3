@@ -14,6 +14,8 @@ Passport3 sert d'interface personnalisée pour plusieurs services internes, nota
 - **Les systèmes de contrôle d'accès** pour l'accès physique au hackerspace
 - D'autres services communautaires et de gestion des membres
 
+![Dashboard membre de Passport3](docs/screenshots/passportv3.jpg)
+
 ## Objectifs
 
 Passport3 vise à offrir aux membres un endroit central pour :

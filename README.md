@@ -14,6 +14,8 @@ Passport3 acts as a custom frontend for several internal services, including:
 - **Access control systems** for physical access to the hackerspace
 - Additional community and member-management services
 
+![Passport3 member dashboard](docs/screenshots/passportv3.jpg)
+
 ## Goals
 
 Passport3 aims to provide members with one central place to:
