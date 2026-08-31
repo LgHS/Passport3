@@ -150,47 +150,71 @@
 	</section>
 {:else if activeTab === 'sessions'}
 	<section class="w-full">
-		<div class="overflow-x-auto">
-			<table class="w-full border-collapse text-sm">
-				<thead>
-					<tr class="bg-black text-white uppercase">
-						<th class="border border-black px-3 py-2 text-left">Navigateur / OS</th>
-						<th class="border border-black px-3 py-2 text-left">Localisation</th>
-						<th class="border border-black px-3 py-2 text-left whitespace-nowrap">Dernière activité</th>
-						<th class="border border-black px-3 py-2 text-left whitespace-nowrap">Expire le</th>
-						<th class="border border-black px-3 py-2 text-left">Action</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.sessions as session (session.uuid)}
-						<tr>
-							<td class="border border-black px-3 py-2">{session.os} — {session.browser}</td>
-							<td class="border border-black px-3 py-2">{session.location ?? session.lastIp}</td>
-							<td class="border border-black px-3 py-2 whitespace-nowrap">{formatDate(session.lastUsed)}</td>
-							<td class="border border-black px-3 py-2 whitespace-nowrap">{formatDate(session.expires)}</td>
-							<td class="border border-black px-3 py-2">
-								{#if session.current}
-									<span class="text-xs font-bold uppercase">Session actuelle</span>
-								{:else}
-									<form method="POST" action="?/revokeSession" use:enhance>
-										<input type="hidden" name="uuid" value={session.uuid} />
-										<button type="submit" class="text-xs font-bold uppercase underline">
-											Révoquer
-										</button>
-									</form>
-								{/if}
-							</td>
+		{#if data.sessions.length > 0}
+			<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->
+			<div class="space-y-2 sm:hidden">
+				{#each data.sessions as session (session.uuid)}
+					<div class="border border-black p-3 text-sm">
+						<p class="font-bold">{session.os} — {session.browser}</p>
+						<p class="mt-1 text-gray-600">{session.location ?? session.lastIp}</p>
+						<p class="mt-1 text-gray-600">Dernière activité : {formatDate(session.lastUsed)}</p>
+						<p class="mt-1 text-gray-600">Expire le : {formatDate(session.expires)}</p>
+						<div class="mt-2">
+							{#if session.current}
+								<span class="text-xs font-bold uppercase">Session actuelle</span>
+							{:else}
+								<form method="POST" action="?/revokeSession" use:enhance>
+									<input type="hidden" name="uuid" value={session.uuid} />
+									<button type="submit" class="text-xs font-bold uppercase underline">
+										Révoquer
+									</button>
+								</form>
+							{/if}
+						</div>
+					</div>
+				{/each}
+			</div>
+
+			<div class="hidden overflow-x-auto sm:block">
+				<table class="w-full border-collapse text-sm">
+					<thead>
+						<tr class="bg-black text-white uppercase">
+							<th class="border border-black px-3 py-2 text-left">Navigateur / OS</th>
+							<th class="border border-black px-3 py-2 text-left">Localisation</th>
+							<th class="border border-black px-3 py-2 text-left whitespace-nowrap">Dernière activité</th>
+							<th class="border border-black px-3 py-2 text-left whitespace-nowrap">Expire le</th>
+							<th class="border border-black px-3 py-2 text-left">Action</th>
 						</tr>
-					{:else}
-						<tr>
-							<td colspan="5" class="border border-black px-3 py-4 text-center text-gray-500">
-								Aucune session active.
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+					</thead>
+					<tbody>
+						{#each data.sessions as session (session.uuid)}
+							<tr>
+								<td class="border border-black px-3 py-2">{session.os} — {session.browser}</td>
+								<td class="border border-black px-3 py-2">{session.location ?? session.lastIp}</td>
+								<td class="border border-black px-3 py-2 whitespace-nowrap">{formatDate(session.lastUsed)}</td>
+								<td class="border border-black px-3 py-2 whitespace-nowrap">{formatDate(session.expires)}</td>
+								<td class="border border-black px-3 py-2">
+									{#if session.current}
+										<span class="text-xs font-bold uppercase">Session actuelle</span>
+									{:else}
+										<form method="POST" action="?/revokeSession" use:enhance>
+											<input type="hidden" name="uuid" value={session.uuid} />
+											<button type="submit" class="text-xs font-bold uppercase underline">
+												Révoquer
+											</button>
+										</form>
+									{/if}
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{:else}
+			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+				Aucune session active.
+			</p>
+		{/if}
 	</section>
 {:else if activeTab === 'mfa'}
 	<section class="w-full">
@@ -237,41 +261,60 @@
 				</div>
 			{/if}
 		</div>
-		<div class="overflow-x-auto">
-			<table class="w-full border-collapse text-sm">
-				<thead>
-					<tr class="bg-black text-white uppercase">
-						<th class="border border-black px-3 py-2 text-left">Nom</th>
-						<th class="border border-black px-3 py-2 text-left">Type</th>
-						<th class="border border-black px-3 py-2 text-left">Ajouté le</th>
-						<th class="border border-black px-3 py-2 text-left">Action</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.mfaDevices as device (device.pk)}
-						<tr>
-							<td class="border border-black px-3 py-2">{device.name}</td>
-							<td class="border border-black px-3 py-2">{device.type}</td>
-							<td class="border border-black px-3 py-2">{formatDate(device.created)}</td>
-							<td class="border border-black px-3 py-2">
-								<form method="POST" action="?/deleteMfaDevice" use:enhance>
-									<input type="hidden" name="pk" value={device.pk} />
-									<button type="submit" class="text-xs font-bold uppercase underline">
-										Supprimer
-									</button>
-								</form>
-							</td>
+		{#if data.mfaDevices.length > 0}
+			<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->
+			<div class="space-y-2 sm:hidden">
+				{#each data.mfaDevices as device (device.pk)}
+					<div class="border border-black p-3 text-sm">
+						<p class="font-bold">{device.name}</p>
+						<p class="mt-1 text-gray-600">{device.type}</p>
+						<p class="mt-1 text-gray-600">Ajouté le : {formatDate(device.created)}</p>
+						<div class="mt-2">
+							<form method="POST" action="?/deleteMfaDevice" use:enhance>
+								<input type="hidden" name="pk" value={device.pk} />
+								<button type="submit" class="text-xs font-bold uppercase underline">
+									Supprimer
+								</button>
+							</form>
+						</div>
+					</div>
+				{/each}
+			</div>
+
+			<div class="hidden overflow-x-auto sm:block">
+				<table class="w-full border-collapse text-sm">
+					<thead>
+						<tr class="bg-black text-white uppercase">
+							<th class="border border-black px-3 py-2 text-left">Nom</th>
+							<th class="border border-black px-3 py-2 text-left">Type</th>
+							<th class="border border-black px-3 py-2 text-left">Ajouté le</th>
+							<th class="border border-black px-3 py-2 text-left">Action</th>
 						</tr>
-					{:else}
-						<tr>
-							<td colspan="4" class="border border-black px-3 py-4 text-center text-gray-500">
-								Aucun appareil MFA configuré.
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+					</thead>
+					<tbody>
+						{#each data.mfaDevices as device (device.pk)}
+							<tr>
+								<td class="border border-black px-3 py-2">{device.name}</td>
+								<td class="border border-black px-3 py-2">{device.type}</td>
+								<td class="border border-black px-3 py-2">{formatDate(device.created)}</td>
+								<td class="border border-black px-3 py-2">
+									<form method="POST" action="?/deleteMfaDevice" use:enhance>
+										<input type="hidden" name="pk" value={device.pk} />
+										<button type="submit" class="text-xs font-bold uppercase underline">
+											Supprimer
+										</button>
+									</form>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{:else}
+			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+				Aucun appareil MFA configuré.
+			</p>
+		{/if}
 	</section>
 {:else if activeTab === 'emergency'}
 	<section class="w-full">
