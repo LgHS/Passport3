@@ -34,6 +34,33 @@
 			addMenuOpen = false;
 		}
 	}
+
+	// Drives which edge fade(s) show on the scrollable tab strip — only the side(s) with more
+	// content to reveal, not a fixed one-sided hint regardless of scroll position.
+	let tabScrollEl = $state<HTMLDivElement | null>(null);
+	let canScrollTabsLeft = $state(false);
+	let canScrollTabsRight = $state(false);
+
+	function updateTabScrollFade() {
+		const el = tabScrollEl;
+		if (!el) return;
+		canScrollTabsLeft = el.scrollLeft > 0;
+		// -1px tolerance for sub-pixel rounding, which can otherwise leave the fade lingering
+		// right at the end of the scrollable range.
+		canScrollTabsRight = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+	}
+
+	$effect(() => {
+		const el = tabScrollEl;
+		if (!el) return;
+		updateTabScrollFade();
+		el.addEventListener('scroll', updateTabScrollFade, { passive: true });
+		window.addEventListener('resize', updateTabScrollFade);
+		return () => {
+			el.removeEventListener('scroll', updateTabScrollFade);
+			window.removeEventListener('resize', updateTabScrollFade);
+		};
+	});
 </script>
 
 <svelte:window onclick={handleWindowClick} />
@@ -62,7 +89,10 @@
 	<!-- Horizontal scroll instead of wrapping: on a narrow phone, 4+ tabs of varying length wrap
 	     into a ragged, uneven-looking second row. A single scrollable strip stays tidy regardless
 	     of how many tabs there are. -->
-	<div class="no-scrollbar flex flex-nowrap overflow-x-auto border-b-4 border-black text-sm">
+	<div
+		bind:this={tabScrollEl}
+		class="no-scrollbar flex flex-nowrap overflow-x-auto border-b-4 border-black text-sm"
+	>
 		<button
 			type="button"
 			onclick={() => (activeTab = 'info')}
@@ -104,12 +134,20 @@
 			Contacts d'urgence
 		</button>
 	</div>
-	<!-- Fade hint on the right edge suggesting there's more to scroll to — harmless even when
-	     everything already fits, since it just fades over blank background either way. -->
-	<div
-		class="pointer-events-none absolute top-0 right-0 bottom-1 w-8 bg-gradient-to-l from-white to-transparent"
-		aria-hidden="true"
-	></div>
+	<!-- Fade hints only on the edge(s) that actually have more to scroll to, not a fixed
+	     one-sided hint regardless of scroll position. -->
+	{#if canScrollTabsLeft}
+		<div
+			class="pointer-events-none absolute top-0 left-0 bottom-1 w-8 bg-gradient-to-r from-white to-transparent"
+			aria-hidden="true"
+		></div>
+	{/if}
+	{#if canScrollTabsRight}
+		<div
+			class="pointer-events-none absolute top-0 right-0 bottom-1 w-8 bg-gradient-to-l from-white to-transparent"
+			aria-hidden="true"
+		></div>
+	{/if}
 </div>
 
 {#if activeTab === 'info'}
