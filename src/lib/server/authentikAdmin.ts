@@ -733,12 +733,18 @@ interface ApplicationRecord {
 // privileged) service account — so this only ever returns what they'd actually see in Authentik's
 // own application library, not every app that exists. That same endpoint already excludes
 // meta_hide apps server-side, so there's no need to filter those out again here.
+//
+// Passport itself is excluded by name below rather than marked "hide" in Authentik, per the
+// member's choice — fragile if that application gets renamed there, but a one-line fix if so.
+const SELF_APPLICATION_NAME = 'Passport (Members)';
+
 export async function listUserApplications(pk: number): Promise<UserApplication[]> {
 	const res = await authentikApiFetch(`core/applications/?for_user=${pk}&page_size=200`);
 	const data = (await res.json()) as { results: ApplicationRecord[] };
 	return data.results
-		// No launch_url means there's nothing for a link to point to.
-		.filter((a) => a.launch_url)
+		// No launch_url means there's nothing for a link to point to. Also drop Passport's own
+		// entry — a member looking at this list is, by definition, already on Passport.
+		.filter((a) => a.launch_url && a.name !== SELF_APPLICATION_NAME)
 		.map((a) => ({
 			name: a.name,
 			slug: a.slug,
