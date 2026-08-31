@@ -6,6 +6,19 @@
 }
 
 @layer base {
+	/* The hairline of black "teeth" across the very top of the page — same signature strip as
+	   lghs.be (body::before + tooth.svg), reused here so Passport reads as the same site family. */
+	body::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 10px;
+		background: url('/tooth.svg') repeat-x top left;
+		z-index: 50;
+	}
+
 	a {
 		color: #000;
 		text-decoration: none;
