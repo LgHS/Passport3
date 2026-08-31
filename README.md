@@ -26,6 +26,7 @@ Passport3 aims to provide members with one central place to:
 - [x] Request access to the hackerspace's GitHub organization
 - [x] Choose which information is visible to other members
 - [x] Access the member directory and phonebook
+- [x] Manage emergency contacts
 - [ ] Access payment and accounting information
 - [ ] View their physical access permissions
 - Access future hackerspace services through a unified interface
@@ -102,7 +103,6 @@ A restricted admin panel (gated behind an Authentik group) lets designated membe
 - Invoice and document downloads
 - Physical access management
 - Member directory and phonebook, with per-member, per-field visibility control
-- Emergency contact management
 - Notification preferences
 - Audit history
 - API for other hackerspace services
