@@ -9,9 +9,12 @@ import {
 	listSessions,
 	revokeSession,
 	listMfaDevices,
-	deleteMfaDevice
+	deleteMfaDevice,
+	getEmergencyContacts,
+	updateEmergencyContacts,
+	MAX_EMERGENCY_CONTACTS
 } from '$lib/server/authentikAdmin';
-import { validateProfileSubmission } from '$lib/server/profileValidation';
+import { validateProfileSubmission, validateEmergencyContactsSubmission } from '$lib/server/profileValidation';
 import { clearSessionCookie } from '$lib/server/session';
 import { authentikPk } from '$lib/types';
 
@@ -36,10 +39,11 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		error(500, 'Impossible de récupérer votre profil Authentik.');
 	}
 
-	const [sessions, mfaDevices, mfaEnrollUrls] = await Promise.all([
+	const [sessions, mfaDevices, mfaEnrollUrls, emergencyContacts] = await Promise.all([
 		listSessions(profile.username),
 		listMfaDevices(pk),
-		getMfaEnrollUrls()
+		getMfaEnrollUrls(),
+		getEmergencyContacts(pk)
 	]);
 
 	return {
@@ -48,7 +52,9 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		authentikAccountUrl: getAuthentikAccountUrl(),
 		mfaEnrollUrls,
 		sessions,
-		mfaDevices
+		mfaDevices,
+		emergencyContacts,
+		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS
 	};
 };
 
@@ -106,5 +112,25 @@ export const actions: Actions = {
 		await deleteMfaDevice(pk, devicePk);
 		// Same reasoning as revokeSession above — kept distinct from `success` on purpose.
 		return { mfaDeviceDeleted: true };
+	},
+
+	updateEmergencyContacts: async ({ request, locals }) => {
+		const pk = resolvePk(locals);
+		const result = validateEmergencyContactsSubmission(await request.formData());
+
+		if (!result.ok) {
+			return fail(400, { emergencyContactsError: result.error, emergencyContacts: result.contacts });
+		}
+
+		try {
+			await updateEmergencyContacts(pk, result.contacts);
+		} catch {
+			return fail(500, {
+				emergencyContactsError: "La sauvegarde des contacts d'urgence a échoué, réessayez.",
+				emergencyContacts: result.contacts
+			});
+		}
+
+		return { emergencyContactsSuccess: true, emergencyContacts: result.contacts };
 	}
 };

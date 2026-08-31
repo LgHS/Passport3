@@ -3,14 +3,16 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import type { ActionData, PageData } from './$types';
 	import ProfileForm from '$lib/components/ProfileForm.svelte';
+	import EmergencyContactsForm from '$lib/components/EmergencyContactsForm.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	// Collapsed by default — this page has grown to profile form + 3 more sections, accordion
+	// Collapsed by default — this page has grown to profile form + 4 more sections, accordion
 	// keeps it scannable instead of one long scroll.
 	let optinSectionOpen = $state(false);
 	let tagSectionOpen = $state(false);
 	let permissionsSectionOpen = $state(false);
+	let emergencyContactsSectionOpen = $state(false);
 
 	let submittingOptin = $state(false);
 
@@ -71,6 +73,14 @@
 		} else if (form?.tagError) {
 			showToast('error', form.tagError);
 			tagSectionOpen = true;
+		}
+	});
+
+	// EmergencyContactsForm handles its own success/error toast internally — this just makes sure
+	// the collapsed accordion section opens so a returned error is actually visible.
+	$effect(() => {
+		if (form?.emergencyContactsError) {
+			emergencyContactsSectionOpen = true;
 		}
 	});
 </script>
@@ -317,6 +327,22 @@
 			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
 				Aucun groupe associé à ce compte.
 			</p>
+		{/if}
+	{/if}
+
+	{@render accordionHeader("Contacts d'urgence", emergencyContactsSectionOpen, () => (emergencyContactsSectionOpen = !emergencyContactsSectionOpen))}
+	{#if emergencyContactsSectionOpen}
+		{#if data.emergencyContacts === null}
+			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+				Impossible de charger les contacts d'urgence pour le moment — réessayez plus tard.
+			</p>
+		{:else}
+			<EmergencyContactsForm
+				contacts={data.emergencyContacts}
+				maxContacts={data.maxEmergencyContacts}
+				{form}
+				adminView
+			/>
 		{/if}
 	{/if}
 </section>
