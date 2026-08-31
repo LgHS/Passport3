@@ -4,6 +4,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import type { ActionData, PageData } from './$types';
 	import ProfileForm from '$lib/components/ProfileForm.svelte';
+	import EmergencyContactsForm from '$lib/components/EmergencyContactsForm.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -20,8 +21,8 @@
 		return dateFormat.format(new Date(iso));
 	}
 
-	type Tab = 'info' | 'sessions' | 'mfa';
-	const VALID_TABS: Tab[] = ['info', 'sessions', 'mfa'];
+	type Tab = 'info' | 'sessions' | 'mfa' | 'emergency';
+	const VALID_TABS: Tab[] = ['info', 'sessions', 'mfa', 'emergency'];
 	const initialTab = page.url.searchParams.get('tab');
 	let activeTab = $state<Tab>(
 		VALID_TABS.includes(initialTab as Tab) ? (initialTab as Tab) : 'info'
@@ -58,9 +59,9 @@
 {/if}
 
 <div class="relative mb-6">
-	<!-- Horizontal scroll instead of wrapping: on a narrow phone, 3+ tabs of varying length wrap
+	<!-- Horizontal scroll instead of wrapping: on a narrow phone, 4+ tabs of varying length wrap
 	     into a ragged, uneven-looking second row. A single scrollable strip stays tidy regardless
-	     of how many tabs there are (including once Contacts d'urgence lands from its own branch). -->
+	     of how many tabs there are. -->
 	<div class="no-scrollbar flex flex-nowrap overflow-x-auto border-b-4 border-black text-sm">
 		<button
 			type="button"
@@ -91,6 +92,16 @@
 				: 'hover:bg-black hover:text-white'}"
 		>
 			Mes Appareils MFA ({data.mfaDevices.length})
+		</button>
+		<button
+			type="button"
+			onclick={() => (activeTab = 'emergency')}
+			class="shrink-0 px-4 py-2 font-bold whitespace-nowrap uppercase transition-colors {activeTab ===
+			'emergency'
+				? 'bg-black text-white'
+				: 'hover:bg-black hover:text-white'}"
+		>
+			Contacts d'urgence
 		</button>
 	</div>
 	<!-- Fade hint on the right edge suggesting there's more to scroll to — harmless even when
@@ -261,6 +272,14 @@
 				</tbody>
 			</table>
 		</div>
+	</section>
+{:else if activeTab === 'emergency'}
+	<section class="w-full">
+		<EmergencyContactsForm
+			contacts={data.emergencyContacts}
+			maxContacts={data.maxEmergencyContacts}
+			{form}
+		/>
 	</section>
 {/if}
 

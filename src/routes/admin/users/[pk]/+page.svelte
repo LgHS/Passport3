@@ -3,6 +3,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import type { ActionData, PageData } from './$types';
 	import ProfileForm from '$lib/components/ProfileForm.svelte';
+	import EmergencyContactsForm from '$lib/components/EmergencyContactsForm.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -233,4 +234,20 @@
 			{submittingTag ? 'Enregistrement…' : 'Enregistrer'}
 		</button>
 	</form>
+
+	<h2 class="mt-8 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">
+		Contacts d'urgence
+	</h2>
+	{#if data.emergencyContacts === null}
+		<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+			Impossible de charger les contacts d'urgence pour le moment — réessayez plus tard.
+		</p>
+	{:else}
+		<EmergencyContactsForm
+			contacts={data.emergencyContacts}
+			maxContacts={data.maxEmergencyContacts}
+			{form}
+			adminView
+		/>
+	{/if}
 </section>
