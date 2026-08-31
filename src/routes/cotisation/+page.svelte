@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { COTISATION_STATUS_LABEL, COTISATION_STATUS_COLOR, type CotisationStatus } from '$lib/types';
 	import type { ActionData, PageData } from './$types';
+	import CotisationStatusBlock from '$lib/components/CotisationStatusBlock.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -116,21 +116,6 @@
 	const newerYear = $derived(yearIndex > 0 ? availableYears[yearIndex - 1] : null);
 	const yearRows = $derived(cotisationRows.filter((row) => row.year === displayedYear));
 	const hasGapsOnPage = $derived(yearRows.some((row) => row.kind === 'gap'));
-
-	function statusExplanation(status: CotisationStatus, datefin: Date | null): string {
-		switch (status) {
-			case 'a_jour':
-				return `Votre cotisation est valide jusqu'au ${formatDate(datefin)}.`;
-			case 'expiree':
-				return datefin
-					? `Votre cotisation a expiré le ${formatDate(datefin)}. Merci de la renouveler.`
-					: 'Votre adhésion est résiliée.';
-			case 'en_attente':
-				return "Aucune cotisation n'a encore été enregistrée pour votre compte. Si vous venez de payer, comptez quelques jours pour que ce soit traité. Généralement le 1er mercredi du mois si cela ne passe pas automatiquement.";
-			case 'non_applicable':
-				return "En tant que membre d'honneur, vous n'êtes pas soumis·e à cotisation.";
-		}
-	}
 </script>
 
 <svelte:head>
@@ -142,38 +127,10 @@
 		<h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma cotisation</h1>
 
 		{#if data.status === null}
-			<div class="flex items-start gap-3 border border-black bg-gray-100 px-4 py-3">
-				<span
-					class="mt-1 inline-block h-3 w-3 shrink-0 rounded-full bg-gray-400"
-					aria-hidden="true"
-				></span>
-				<div>
-					<p class="text-sm font-bold uppercase">Compte introuvable</p>
-					<p class="text-sm text-gray-600">
-						Nous n'avons pas trouvé de compte correspondant à votre adresse email dans l'outil de
-						gestion des membres. Cela peut simplement vouloir dire que votre inscription n'a pas
-						encore été synchronisée, ou provenir d'une erreur. Si ça persiste, contactez une
-						personne en charge de la trésorerie ou du registre des membres. Via le canal #support
-						du chat ou par mail <a href="mailto:ping@lghs.be">ping@lghs.be</a>.
-					</p>
-				</div>
-			</div>
+			<CotisationStatusBlock status={null} datefin={null} />
 		{:else}
-			<div class="mb-6 flex items-start gap-3 border border-black bg-gray-100 px-4 py-3">
-				<span
-					class="mt-1 inline-block h-3 w-3 shrink-0 rounded-full"
-					style="background-color: {COTISATION_STATUS_COLOR[data.status]};"
-					aria-hidden="true"
-				></span>
-				<div>
-					<p class="text-sm font-bold uppercase">{COTISATION_STATUS_LABEL[data.status]}</p>
-					<p class="text-sm text-gray-600">{statusExplanation(data.status, data.datefin)}</p>
-					{#if data.isInactive}
-						<p class="mt-2 text-sm font-bold">
-							Après 3 mois sans cotisation, votre compte est considéré comme inactif.
-						</p>
-					{/if}
-				</div>
+			<div class="mb-6">
+				<CotisationStatusBlock status={data.status} datefin={data.datefin} isInactive={data.isInactive} />
 			</div>
 
 			{#if availableYears.length > 1}
