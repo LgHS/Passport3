@@ -34,20 +34,23 @@
 </svelte:head>
 
 <section>
-	<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-		<h1 class="bg-black px-4 py-3 text-base font-bold text-white uppercase">Membres</h1>
-		<a href="/admin/invite" class="no-underline-fx btn-primary inline-block px-4 py-2">
+	<h1 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Membres</h1>
+
+	<div class="mb-4 flex flex-wrap items-center gap-4">
+		<input
+			type="search"
+			value={query}
+			oninput={(e) => onSearch(e.currentTarget.value)}
+			placeholder="Rechercher par nom, identifiant ou email…"
+			class="min-w-0 flex-1 border border-black px-3 py-2 text-sm"
+		/>
+		<a
+			href="/admin/invite"
+			class="no-underline-fx btn-primary inline-block shrink-0 px-4 py-2"
+		>
 			Créer une invitation
 		</a>
 	</div>
-
-	<input
-		type="search"
-		value={query}
-		oninput={(e) => onSearch(e.currentTarget.value)}
-		placeholder="Rechercher par nom, identifiant ou email…"
-		class="mb-4 w-full border border-black px-3 py-2 text-sm"
-	/>
 
 	{#if pagedUsers.length > 0}
 		<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->

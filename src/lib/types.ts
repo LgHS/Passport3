@@ -66,3 +66,9 @@ export interface UserProfile {
 	avatar: string | null;
 	attributes: Record<string, string>;
 }
+
+export interface EmergencyContact {
+	name: string;
+	phone: string;
+	relation: string;
+}
