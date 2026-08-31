@@ -57,34 +57,48 @@
 	</p>
 {/if}
 
-<div class="mb-6 flex flex-wrap border-b-4 border-black text-sm">
-	<button
-		type="button"
-		onclick={() => (activeTab = 'info')}
-		class="px-4 py-2 font-bold uppercase transition-colors {activeTab === 'info'
-			? 'bg-black text-white'
-			: 'hover:bg-black hover:text-white'}"
-	>
-		Mes Informations
-	</button>
-	<button
-		type="button"
-		onclick={() => (activeTab = 'sessions')}
-		class="px-4 py-2 font-bold uppercase transition-colors {activeTab === 'sessions'
-			? 'bg-black text-white'
-			: 'hover:bg-black hover:text-white'}"
-	>
-		Mes Sessions ({data.sessions.length})
-	</button>
-	<button
-		type="button"
-		onclick={() => (activeTab = 'mfa')}
-		class="px-4 py-2 font-bold uppercase transition-colors {activeTab === 'mfa'
-			? 'bg-black text-white'
-			: 'hover:bg-black hover:text-white'}"
-	>
-		Mes Appareils MFA ({data.mfaDevices.length})
-	</button>
+<div class="relative mb-6">
+	<!-- Horizontal scroll instead of wrapping: on a narrow phone, 3+ tabs of varying length wrap
+	     into a ragged, uneven-looking second row. A single scrollable strip stays tidy regardless
+	     of how many tabs there are (including once Contacts d'urgence lands from its own branch). -->
+	<div class="no-scrollbar flex flex-nowrap overflow-x-auto border-b-4 border-black text-sm">
+		<button
+			type="button"
+			onclick={() => (activeTab = 'info')}
+			class="shrink-0 px-4 py-2 font-bold whitespace-nowrap uppercase transition-colors {activeTab ===
+			'info'
+				? 'bg-black text-white'
+				: 'hover:bg-black hover:text-white'}"
+		>
+			Mes Informations
+		</button>
+		<button
+			type="button"
+			onclick={() => (activeTab = 'sessions')}
+			class="shrink-0 px-4 py-2 font-bold whitespace-nowrap uppercase transition-colors {activeTab ===
+			'sessions'
+				? 'bg-black text-white'
+				: 'hover:bg-black hover:text-white'}"
+		>
+			Mes Sessions ({data.sessions.length})
+		</button>
+		<button
+			type="button"
+			onclick={() => (activeTab = 'mfa')}
+			class="shrink-0 px-4 py-2 font-bold whitespace-nowrap uppercase transition-colors {activeTab ===
+			'mfa'
+				? 'bg-black text-white'
+				: 'hover:bg-black hover:text-white'}"
+		>
+			Mes Appareils MFA ({data.mfaDevices.length})
+		</button>
+	</div>
+	<!-- Fade hint on the right edge suggesting there's more to scroll to — harmless even when
+	     everything already fits, since it just fades over blank background either way. -->
+	<div
+		class="pointer-events-none absolute top-0 right-0 bottom-1 w-8 bg-gradient-to-l from-white to-transparent"
+		aria-hidden="true"
+	></div>
 </div>
 
 {#if activeTab === 'info'}
@@ -249,3 +263,14 @@
 		</div>
 	</section>
 {/if}
+
+<style>
+	.no-scrollbar {
+		scrollbar-width: none; /* Firefox */
+		-ms-overflow-style: none; /* legacy Edge */
+	}
+
+	.no-scrollbar::-webkit-scrollbar {
+		display: none; /* Chrome, Safari */
+	}
+</style>
