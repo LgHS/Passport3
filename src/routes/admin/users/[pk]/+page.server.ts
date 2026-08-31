@@ -9,6 +9,7 @@ import {
 	optinFromFormData,
 	getTrombinoscopeTag,
 	updateTrombinoscopeTag,
+	getUserGroups,
 	HEX_COLOR_RE,
 	getEmergencyContacts,
 	updateEmergencyContacts,
@@ -28,12 +29,18 @@ function resolvePk(paramPk: string): number {
 export const load: PageServerLoad = async ({ params }) => {
 	const pk = resolvePk(params.pk);
 
-	const [profile, optin, tag, emergencyContacts] = await Promise.all([
+	const [profile, optin, tag, groups, emergencyContacts] = await Promise.all([
 		getUserProfile(pk).catch(() => null),
 		getTrombinoscopeOptin(pk),
 		getTrombinoscopeTag(pk),
-		// null (not []) on failure — an admin seeing "aucun contact" during an actual emergency
-		// must never be a fetch hiccup in disguise, see feedback_distinguish-fetch-failure-from-empty.
+		// Best-effort, same reasoning as getUserProfile's .catch() above — a transient Authentik
+		// hiccup on this specific call shouldn't 500 the whole edit page (profile, visibility, tag
+		// all fail together via Promise.all) just because the Permissions section couldn't load.
+		// null (not []) on failure — "couldn't check" must stay distinguishable from "genuinely no
+		// groups", the two read very differently to an admin looking at someone's access.
+		getUserGroups(pk).catch(() => null),
+		// Same reasoning — an admin seeing "aucun contact" during an actual emergency must never be
+		// a fetch hiccup in disguise, see feedback_distinguish-fetch-failure-from-empty.
 		getEmergencyContacts(pk).catch(() => null)
 	]);
 	if (!profile) {
@@ -46,6 +53,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		fields: PROFILE_ATTRIBUTE_FIELDS,
 		optin,
 		tag,
+		groups,
 		emergencyContacts,
 		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS
 	};
