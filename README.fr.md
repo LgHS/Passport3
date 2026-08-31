@@ -95,11 +95,9 @@ Un panneau d'administration restreint (réservé à un groupe Authentik dédié)
 
 ## Fonctionnalités prévues
 
-- Renouvellement de cotisation en ligne
 - Historique des paiements
 - Téléchargement de factures et documents
 - Gestion de l'accès physique
-- Annuaire des membres et trombinoscope, avec contrôle de visibilité par membre et par champ
 - Préférences de notification
 - Historique d'audit
 - API pour les autres services du hackerspace
