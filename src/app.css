@@ -19,6 +19,14 @@
 		z-index: 50;
 	}
 
+	/* The strip above is absolutely positioned, so it doesn't push anything down on its own — on
+	   lghs.be that's masked by their header's generous 48px padding, but Passport's header sits
+	   much closer to the top (the cotisation badge especially), so without this the strip visually
+	   glues itself to whatever's underneath. */
+	body {
+		padding-top: 16px;
+	}
+
 	a {
 		color: #000;
 		text-decoration: none;
