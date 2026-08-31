@@ -129,12 +129,17 @@ export async function exchangeCode(code: string, codeVerifier: string): Promise<
 
 export async function verifyIdToken(idToken: string): Promise<AppUser> {
 	const config = await getOidcConfig();
+	// Read outside the try below: a missing/misconfigured env var must surface as a real config
+	// error, not get swallowed by the network-failure classification and misreported as an
+	// Authentik outage (this exact class of bug bit the project once already with a renamed
+	// Dolibarr env var — see scripts/check-env.mjs's comment).
+	const audience = requireEnv('AUTHENTIK_CLIENT_ID');
 
 	let payload;
 	try {
 		({ payload } = await jwtVerify(idToken, getJwks(config.jwks_uri), {
 			issuer: config.issuer,
-			audience: requireEnv('AUTHENTIK_CLIENT_ID')
+			audience
 		}));
 	} catch (err) {
 		// A JWKS fetch that times out or fails at the network level means Authentik is
