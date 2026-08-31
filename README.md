@@ -100,11 +100,9 @@ A restricted admin panel (gated behind an Authentik group) lets designated membe
 
 ## Planned Features
 
-- Online subscription renewal
 - Payment history
 - Invoice and document downloads
 - Physical access management
-- Member directory and phonebook, with per-member, per-field visibility control
 - Notification preferences
 - Audit history
 - API for other hackerspace services
