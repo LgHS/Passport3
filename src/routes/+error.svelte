@@ -4,13 +4,15 @@
 	const TITLES: Record<number, string> = {
 		404: 'Page introuvable',
 		403: 'Accès refusé',
-		500: 'Erreur serveur'
+		500: 'Erreur serveur',
+		503: 'Service indisponible'
 	};
 
 	const DESCRIPTIONS: Record<number, string> = {
 		404: "La page que vous recherchez n'existe pas ou a été déplacée.",
 		403: "Vous n'avez pas la permission d'accéder à cette page.",
-		500: 'Une erreur inattendue est survenue. Réessayez plus tard.'
+		500: 'Une erreur inattendue est survenue. Réessayez plus tard.',
+		503: 'Le service est temporairement indisponible. Réessayez dans quelques instants.'
 	};
 
 	// SvelteKit sets its own generic English message (not one we threw ourselves) when a route
