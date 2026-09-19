@@ -63,6 +63,12 @@
 					>
 						Trombinoscope
 					</a>
+					<a
+						href="/wishlist"
+						class="no-underline-fx inline-block px-3 py-2 font-bold uppercase transition-colors hover:bg-black hover:text-white"
+					>
+						Wishlist
+					</a>
 
 					<div class="relative" data-user-menu>
 						<button
@@ -199,6 +205,12 @@
 						class="no-underline-fx inline-block px-2 py-2 font-bold uppercase transition-colors hover:bg-black hover:text-white"
 					>
 						Trombinoscope
+					</a>
+					<a
+						href="/wishlist"
+						class="no-underline-fx inline-block px-2 py-2 font-bold uppercase transition-colors hover:bg-black hover:text-white"
+					>
+						Wishlist
 					</a>
 
 					<div class="relative ml-auto" data-user-menu>
