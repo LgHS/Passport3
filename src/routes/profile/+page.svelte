@@ -26,7 +26,7 @@
 	}
 
 	type Tab = 'info' | 'sessions' | 'mfa' | 'emergency' | 'audit';
-	const VALID_TABS: Tab[] = ['info', 'sessions', 'mfa', 'emergency', 'audit'];
+	const VALID_TABS: Tab[] = ['info', 'emergency', 'mfa', 'sessions', 'audit'];
 	const initialTab = page.url.searchParams.get('tab');
 	let activeTab = $state<Tab>(
 		VALID_TABS.includes(initialTab as Tab) ? (initialTab as Tab) : 'info'
@@ -109,13 +109,13 @@
 		</button>
 		<button
 			type="button"
-			onclick={() => (activeTab = 'sessions')}
+			onclick={() => (activeTab = 'emergency')}
 			class="shrink-0 px-4 py-2 font-bold whitespace-nowrap uppercase transition-colors {activeTab ===
-			'sessions'
+			'emergency'
 				? 'bg-black text-white'
 				: 'hover:bg-black hover:text-white'}"
 		>
-			Mes Sessions ({data.sessions.length})
+			Contacts d'urgence
 		</button>
 		<button
 			type="button"
@@ -129,13 +129,13 @@
 		</button>
 		<button
 			type="button"
-			onclick={() => (activeTab = 'emergency')}
+			onclick={() => (activeTab = 'sessions')}
 			class="shrink-0 px-4 py-2 font-bold whitespace-nowrap uppercase transition-colors {activeTab ===
-			'emergency'
+			'sessions'
 				? 'bg-black text-white'
 				: 'hover:bg-black hover:text-white'}"
 		>
-			Contacts d'urgence
+			Mes Sessions ({data.sessions.length})
 		</button>
 		<button
 			type="button"
