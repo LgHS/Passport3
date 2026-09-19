@@ -16,7 +16,9 @@ import {
 	MAX_EMERGENCY_CONTACTS
 } from '$lib/server/authentikAdmin';
 import { validateProfileSubmission, validateEmergencyContactsSubmission } from '$lib/server/profileValidation';
-import { requireAdmin } from '$lib/server/auth';
+import { requireAdminUser } from '$lib/server/auth';
+import { logAuditEvent } from '$lib/server/auditLog';
+import { displayName } from '$lib/types';
 
 function resolvePk(paramPk: string): number {
 	const pk = Number(paramPk);
@@ -61,7 +63,7 @@ export const load: PageServerLoad = async ({ params }) => {
 
 export const actions: Actions = {
 	updateProfile: async ({ request, params, locals }) => {
-		requireAdmin(locals);
+		const admin = requireAdminUser(locals);
 
 		const pk = resolvePk(params.pk);
 		const result = validateProfileSubmission(await request.formData());
@@ -75,7 +77,26 @@ export const actions: Actions = {
 			});
 		}
 
+		// Read before writing, purely for the audit trail below — updateUserProfile() does its own
+		// separate read-merge-write internally and doesn't expose the prior value.
+		const before = await getUserProfile(pk).catch(() => null);
 		const changed = await updateUserProfile(pk, { name: result.name, attributes: result.attributes });
+
+		if (changed) {
+			// result.attributes only holds the keys actually submitted — mirror
+			// updateUserProfile's own merge so `after` reflects what's actually now stored, not
+			// just what this submission touched (see the member-facing version of this same fix).
+			logAuditEvent(
+				{ sub: admin.sub, label: displayName(admin) },
+				'admin',
+				'profile.update',
+				{ pk },
+				{
+					before: before ? { name: before.name, attributes: before.attributes } : null,
+					after: { name: result.name, attributes: { ...before?.attributes, ...result.attributes } }
+				}
+			);
+		}
 
 		return {
 			success: true,
@@ -90,11 +111,13 @@ export const actions: Actions = {
 	// requests) — same read-merge-write helper as the member-facing form, but the target pk comes
 	// from the trusted route param, never from form data.
 	updateOptin: async ({ request, params, locals }) => {
-		requireAdmin(locals);
+		const admin = requireAdminUser(locals);
 
 		const pk = resolvePk(params.pk);
 		const formData = await request.formData();
 		const optin = optinFromFormData(formData);
+
+		const before = await getTrombinoscopeOptin(pk);
 
 		try {
 			await updateTrombinoscopeOptin(pk, optin);
@@ -102,13 +125,21 @@ export const actions: Actions = {
 			return fail(500, { optinError: "La sauvegarde de la visibilité a échoué, réessayez." });
 		}
 
+		logAuditEvent(
+			{ sub: admin.sub, label: displayName(admin) },
+			'admin',
+			'trombinoscope.optin.update',
+			{ pk },
+			{ before: { ...before }, after: { ...optin } }
+		);
+
 		return { optinSuccess: true, optin };
 	},
 
 	// Admin-only role label (e.g. "Prés. CA") + badge color shown on the trombinoscope —
 	// never edited by the member themselves, see TrombinoscopeTag.
 	updateTag: async ({ request, params, locals }) => {
-		requireAdmin(locals);
+		const admin = requireAdminUser(locals);
 
 		const pk = resolvePk(params.pk);
 		const formData = await request.formData();
@@ -126,17 +157,27 @@ export const actions: Actions = {
 			});
 		}
 
+		const before = await getTrombinoscopeTag(pk);
+
 		try {
 			await updateTrombinoscopeTag(pk, { tag: tag || null, tagColor: tagColor || null });
 		} catch {
 			return fail(500, { tagError: 'La sauvegarde du rôle a échoué, réessayez.', tag, tagColor });
 		}
 
+		logAuditEvent(
+			{ sub: admin.sub, label: displayName(admin) },
+			'admin',
+			'trombinoscope.tag.update',
+			{ pk },
+			{ before: { ...before }, after: { tag, tagColor } }
+		);
+
 		return { tagSuccess: true, tag, tagColor };
 	},
 
 	updateEmergencyContacts: async ({ request, params, locals }) => {
-		requireAdmin(locals);
+		const admin = requireAdminUser(locals);
 
 		const pk = resolvePk(params.pk);
 		const result = validateEmergencyContactsSubmission(await request.formData());
@@ -144,6 +185,8 @@ export const actions: Actions = {
 		if (!result.ok) {
 			return fail(400, { emergencyContactsError: result.error, emergencyContacts: result.contacts });
 		}
+
+		const before = await getEmergencyContacts(pk).catch(() => null);
 
 		try {
 			await updateEmergencyContacts(pk, result.contacts);
@@ -153,6 +196,18 @@ export const actions: Actions = {
 				emergencyContacts: result.contacts
 			});
 		}
+
+		// Deliberately not logging the contacts themselves (names/phone numbers of third parties,
+		// not even the member's own data) — just how many entries there were and how many there are
+		// now. Same stricter-than-usual posture as the rest of this feature's admin-only visibility
+		// rule.
+		logAuditEvent(
+			{ sub: admin.sub, label: displayName(admin) },
+			'admin',
+			'emergencyContacts.update',
+			{ pk },
+			{ before: { contactCount: before?.length ?? null }, after: { contactCount: result.contacts.length } }
+		);
 
 		return { emergencyContactsSuccess: true, emergencyContacts: result.contacts };
 	}

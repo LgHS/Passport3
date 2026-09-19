@@ -1,7 +1,8 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { getRfidUid, regenerateRfidUid } from '$lib/server/authentikAdmin';
-import { authentikPk } from '$lib/types';
+import { logAuditEvent } from '$lib/server/auditLog';
+import { authentikPk, displayName } from '$lib/types';
 
 function resolvePk(locals: App.Locals): number {
 	if (!locals.user) {
@@ -27,7 +28,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 export const actions: Actions = {
 	regenerate: async ({ locals }) => {
 		const pk = resolvePk(locals);
+		const user = locals.user!;
 		const uuid = await regenerateRfidUid(pk);
+
+		// Deliberately no `details` — the badge UUID is a live physical-access credential, not
+		// something to duplicate into the audit log even as a "before" value. Just the fact that a
+		// regeneration happened, same posture as emergency contacts elsewhere in this feature.
+		logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'badge.regenerate', { pk });
+
 		return { success: true, uuid };
 	}
 };

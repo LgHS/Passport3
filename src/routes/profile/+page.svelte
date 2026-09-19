@@ -5,8 +5,12 @@
 	import type { ActionData, PageData } from './$types';
 	import ProfileForm from '$lib/components/ProfileForm.svelte';
 	import EmergencyContactsForm from '$lib/components/EmergencyContactsForm.svelte';
+	import { actionLabel, sourceLabel, detailRows } from '$lib/auditDisplay';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+
+	type AuditEvent = PageData['auditEvents'][number];
+	let selectedEvent = $state<AuditEvent | null>(null);
 
 	$effect(() => {
 		if (form?.sessionRevoked) {
@@ -21,8 +25,8 @@
 		return dateFormat.format(new Date(iso));
 	}
 
-	type Tab = 'info' | 'sessions' | 'mfa' | 'emergency';
-	const VALID_TABS: Tab[] = ['info', 'sessions', 'mfa', 'emergency'];
+	type Tab = 'info' | 'sessions' | 'mfa' | 'emergency' | 'audit';
+	const VALID_TABS: Tab[] = ['info', 'sessions', 'mfa', 'emergency', 'audit'];
 	const initialTab = page.url.searchParams.get('tab');
 	let activeTab = $state<Tab>(
 		VALID_TABS.includes(initialTab as Tab) ? (initialTab as Tab) : 'info'
@@ -132,6 +136,16 @@
 				: 'hover:bg-black hover:text-white'}"
 		>
 			Contacts d'urgence
+		</button>
+		<button
+			type="button"
+			onclick={() => (activeTab = 'audit')}
+			class="shrink-0 px-4 py-2 font-bold whitespace-nowrap uppercase transition-colors {activeTab ===
+			'audit'
+				? 'bg-black text-white'
+				: 'hover:bg-black hover:text-white'}"
+		>
+			Historique
 		</button>
 	</div>
 	<!-- Fade hints only on the edge(s) that actually have more to scroll to, not a fixed
@@ -362,6 +376,137 @@
 			{form}
 		/>
 	</section>
+{:else if activeTab === 'audit'}
+	<section class="w-full">
+		<p class="mb-4 text-xs text-gray-500">
+			L'historique des actions faites sur votre compte, par vous ou par un administrateur.
+			Certaines opérations menées directement dans nos autres outils internes (comme la
+			comptabilité) n'y transitent pas encore.
+		</p>
+		{#if data.auditEvents.length > 0}
+			<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->
+			<div class="space-y-2 sm:hidden">
+				{#each data.auditEvents as event (event.id)}
+					<div class="border border-black p-3 text-sm">
+						<button
+							type="button"
+							onclick={() => (selectedEvent = event)}
+							class="font-bold underline underline-offset-2"
+						>
+							{actionLabel(event.action)}
+						</button>
+						<p class="mt-1 text-gray-600">
+							{formatDate(event.createdAt)} —
+							<span
+								class="inline-block w-16 border border-black px-1 py-0.5 text-center text-[10px] font-bold uppercase"
+							>
+								{sourceLabel(event.source)}
+							</span>
+							{event.source === 'admin' ? event.actorLabel : 'Vous'}
+						</p>
+					</div>
+				{/each}
+			</div>
+
+			<div class="hidden overflow-x-auto sm:block">
+				<table class="w-full border-collapse text-sm">
+					<thead>
+						<tr class="bg-black text-white uppercase">
+							<th class="border border-black px-3 py-2 text-left whitespace-nowrap">Date</th>
+							<th class="border border-black px-3 py-2 text-left whitespace-nowrap">Auteur</th>
+							<th class="border border-black px-3 py-2 text-left">Action</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each data.auditEvents as event (event.id)}
+							<tr>
+								<td class="border border-black px-3 py-2 whitespace-nowrap">
+									{formatDate(event.createdAt)}
+								</td>
+								<td class="border border-black px-3 py-2 whitespace-nowrap">
+									<span
+										class="inline-block w-16 border border-black px-1.5 py-0.5 text-center text-[10px] font-bold uppercase"
+									>
+										{sourceLabel(event.source)}
+									</span>
+									<span class="ml-1">{event.source === 'admin' ? event.actorLabel : 'Vous'}</span>
+								</td>
+								<td class="border border-black px-3 py-2">
+									<button
+										type="button"
+										onclick={() => (selectedEvent = event)}
+										class="font-bold underline underline-offset-2"
+									>
+										{actionLabel(event.action)}
+									</button>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{:else}
+			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+				Aucune action enregistrée pour l'instant.
+			</p>
+		{/if}
+	</section>
+{/if}
+
+{#if selectedEvent}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+		onclick={(e) => {
+			if (e.target === e.currentTarget) selectedEvent = null;
+		}}
+		onkeydown={(e) => e.key === 'Escape' && (selectedEvent = null)}
+		role="button"
+		tabindex="-1"
+	>
+		<div
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
+			class="max-h-[80vh] w-full max-w-lg overflow-y-auto border-4 border-black bg-white p-4"
+		>
+			<div class="mb-3 flex items-start justify-between gap-4">
+				<h2 class="text-base font-bold uppercase">{actionLabel(selectedEvent.action)}</h2>
+				<button
+					type="button"
+					onclick={() => (selectedEvent = null)}
+					aria-label="Fermer"
+					class="shrink-0 px-2 text-lg font-bold leading-none"
+				>
+					×
+				</button>
+			</div>
+			<p class="mb-3 text-sm text-gray-600">
+				{formatDate(selectedEvent.createdAt)} —
+				<span
+					class="inline-block w-16 border border-black px-1 py-0.5 text-center text-[10px] font-bold uppercase"
+				>
+					{sourceLabel(selectedEvent.source)}
+				</span>
+				{selectedEvent.source === 'admin' ? selectedEvent.actorLabel : 'Vous'}
+			</p>
+			<div class="space-y-1 border-t border-black pt-3 font-mono text-xs">
+				{#each detailRows(selectedEvent.details) as row (row.path)}
+					{#if row.kind === 'same'}
+						<p class="break-all text-gray-600"><span class="text-gray-400">{row.path}:</span> {row.value}</p>
+					{:else if row.kind === 'changed'}
+						<p class="break-all bg-red-50 px-1 text-red-700">− {row.path}: {row.before}</p>
+						<p class="break-all bg-green-50 px-1 text-green-700">+ {row.path}: {row.after}</p>
+					{:else if row.kind === 'added'}
+						<p class="break-all bg-green-50 px-1 text-green-700">+ {row.path}: {row.after}</p>
+					{:else}
+						<p class="break-all bg-red-50 px-1 text-red-700">− {row.path}: {row.before}</p>
+					{/if}
+				{:else}
+					<p class="text-gray-600">Aucun détail enregistré.</p>
+				{/each}
+			</div>
+		</div>
+	</div>
 {/if}
 
 <style>

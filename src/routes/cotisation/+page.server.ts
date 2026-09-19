@@ -13,6 +13,8 @@ import {
 	findIbanOwnerConflict
 } from '$lib/server/dolibarr';
 import { validateBankInfoSubmission } from '$lib/server/bankValidation';
+import { logAuditEvent } from '$lib/server/auditLog';
+import { authentikPk, displayName } from '$lib/types';
 
 // Auth guard shared by the load and the action below — never trust a client-submitted member/
 // thirdparty id, always re-derive from the authenticated session's email.
@@ -68,6 +70,13 @@ export const actions: Actions = {
 		if (!member) {
 			error(404, 'Aucun adhérent Dolibarr trouvé pour votre adresse email.');
 		}
+		const user = locals.user!;
+		// Dolibarr's member.id (used everywhere else in this file) and Authentik's pk are two
+		// different id spaces — the audit trail is keyed on the latter, same as every other
+		// action, so it resolves separately here even though the rest of this action never needs it.
+		const pk = authentikPk(user);
+
+		const beforeIbanPro = member.fkSoc ? await getThirdPartyIbanPro(member.fkSoc) : null;
 
 		const formData = await request.formData();
 		// The pro IBAN only exists for members linked to a billing third-party — strip it before
@@ -102,6 +111,20 @@ export const actions: Actions = {
 			updates.push(updateThirdPartyIbanPro(member.fkSoc, result.ibanPro));
 		}
 		await Promise.all(updates);
+
+		// The real values, deliberately — this is the flagship case an audit trail exists for
+		// (knowing who changed a payout IBAN to what, for fraud prevention), not something to
+		// water down to a count like the emergency-contacts case above.
+		logAuditEvent(
+			{ sub: user.sub, label: displayName(user) },
+			'user',
+			'bankInfo.update',
+			pk ? { pk } : { email: user.email },
+			{
+				before: { ibanPerso: member.ibanPerso, ibanPro: beforeIbanPro },
+				after: { ibanPerso: result.ibanPerso, ibanPro: result.ibanPro }
+			}
+		);
 
 		return { success: true, ibanPerso: result.ibanPerso, ibanPro: result.ibanPro };
 	}

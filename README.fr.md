@@ -29,6 +29,7 @@ Passport3 vise à offrir aux membres un endroit central pour :
 - [x] Accéder à l'annuaire des membres et au trombinoscope
 - [x] Choisir quelles informations sont visibles par les autres membres
 - [x] Gérer ses contacts d'urgence
+- [x] Consulter l'historique des actions effectuées sur son compte, par soi-même ou par un admin
 - [ ] Accéder aux informations de paiement et de comptabilité
 - [ ] Voir leurs droits d'accès physique
 - Accéder aux futurs services du hackerspace via une interface unifiée
@@ -92,6 +93,16 @@ Un panneau d'administration restreint (réservé à un groupe Authentik dédié)
 - Lister et rechercher les comptes membres
 - Modifier le profil d'un membre en son nom
 - Créer des invitations d'inscription pour de nouveaux membres
+- Consulter l'historique complet des actions admin et membres
+
+### Historique d'audit
+
+Passport3 conserve un historique des actions effectuées via l'application, aussi bien par les admins (modification du profil d'un membre, création d'une invitation) que par les membres sur leur propre compte (mise à jour du profil, révocation d'une session, changement de coordonnées bancaires). Chaque entrée enregistre qui a fait quoi, quand, et les valeurs avant/après quand c'est pertinent.
+
+- Les admins peuvent consulter l'historique complet sur `/admin/audit`, avec recherche, pagination et une vue de différences montrant précisément ce qui a changé
+- Les membres peuvent consulter l'historique de leur propre compte sur `/profile`, y compris les changements faits par un admin en leur nom, par transparence
+- Certains champs ne sont volontairement jamais enregistrés, même dans l'historique : les contacts d'urgence (données personnelles de tiers) et l'UUID du badge RFID (un identifiant d'accès physique) sont journalisés comme "modifiés", jamais avec leur valeur réelle
+- Les actions effectuées directement dans un autre système (ex. un IBAN modifié directement dans Dolibarr) n'y apparaissent pas, seul ce qui passe par Passport3 lui-même est capturé
 
 ## Fonctionnalités prévues
 
@@ -99,7 +110,6 @@ Un panneau d'administration restreint (réservé à un groupe Authentik dédié)
 - Téléchargement de factures et documents
 - Gestion de l'accès physique
 - Préférences de notification
-- Historique d'audit
 - API pour les autres services du hackerspace
 
 ## Vie privée
@@ -134,7 +144,7 @@ Publier une nouvelle version (`git tag vX.Y.Z && git push --tags`, ou `gh releas
 
 ### Stockage de données local
 
-Passport3 a une petite base SQLite locale (`better-sqlite3`) pour les données qui n'ont pas leur place dans Authentik, Dolibarr ou GitHub — par exemple un historique d'audit des actions admin. `docker-compose.yml` et `docker-compose.preprod.yml` la montent sur un volume nommé (`passport3-data`, sur `/app/data`), défini via la variable d'environnement `DB_PATH`, pour qu'elle survive à la recréation du conteneur — y compris un redéploiement déclenché par Watchtower. **Ce volume contient désormais de la donnée réelle et non reconstructible, à inclure dans la routine de sauvegarde de l'hôte** — contrairement au reste du conteneur, jusqu'ici entièrement stateless et jetable.
+Passport3 a une petite base SQLite locale (`better-sqlite3`) pour les données qui n'ont pas leur place dans Authentik, Dolibarr ou GitHub — par exemple l'historique d'audit des actions admin et membres. `docker-compose.yml` et `docker-compose.preprod.yml` la montent sur un volume nommé (`passport3-data`, sur `/app/data`), défini via la variable d'environnement `DB_PATH`, pour qu'elle survive à la recréation du conteneur — y compris un redéploiement déclenché par Watchtower. **Ce volume contient désormais de la donnée réelle et non reconstructible, à inclure dans la routine de sauvegarde de l'hôte** — contrairement au reste du conteneur, jusqu'ici entièrement stateless et jetable.
 
 ## Contribuer
 
@@ -143,6 +153,8 @@ Les contributions sont les bienvenues.
 Passport3 est développé pour la communauté du Liège Hackerspace. Les problèmes, suggestions et pull requests peuvent être soumis via le dépôt du projet.
 
 Merci de ne jamais inclure de données personnelles de membres, d'identifiants, de clés API ou de configuration de production dans les issues ou contributions.
+
+Toute nouvelle fonctionnalité qui modifie le compte d'un membre ou une donnée admin doit appeler `logAuditEvent()` (`src/lib/server/auditLog.ts`), comme le fait déjà chaque action existante, voir la section [Historique d'audit](#historique-daudit) plus haut.
 
 ## Nom du projet
 

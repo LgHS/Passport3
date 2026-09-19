@@ -2,7 +2,8 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { getGithubUsername, setGithubUsername } from '$lib/server/authentikAdmin';
 import { getGithubOrgMembershipStatus, inviteToGithubOrg } from '$lib/server/githubApp';
-import { authentikPk } from '$lib/types';
+import { logAuditEvent } from '$lib/server/auditLog';
+import { authentikPk, displayName } from '$lib/types';
 
 // Same auth guard shape as the rest of the app.
 function resolvePk(locals: App.Locals): number {
@@ -28,6 +29,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 export const actions: Actions = {
 	invite: async ({ locals }) => {
 		const pk = resolvePk(locals);
+		const user = locals.user!;
 
 		// Re-read from Authentik rather than trust anything the client could submit — the verified
 		// username is only ever set by the OAuth callback, never hand-typed into this form.
@@ -41,6 +43,14 @@ export const actions: Actions = {
 			return fail(400, { error: result.error });
 		}
 
+		logAuditEvent(
+			{ sub: user.sub, label: displayName(user) },
+			'user',
+			'github.invite',
+			{ pk },
+			{ githubUsername }
+		);
+
 		return { success: true };
 	},
 
@@ -49,7 +59,19 @@ export const actions: Actions = {
 	// deliberately resetting first, rather than /github/connect allowing a silent account swap.
 	disconnect: async ({ locals }) => {
 		const pk = resolvePk(locals);
+		const user = locals.user!;
+
+		const before = await getGithubUsername(pk);
 		await setGithubUsername(pk, '');
+
+		logAuditEvent(
+			{ sub: user.sub, label: displayName(user) },
+			'user',
+			'github.disconnect',
+			{ pk },
+			{ before: { githubUsername: before }, after: { githubUsername: null } }
+		);
+
 		return { success: true, disconnected: true };
 	}
 };

@@ -29,6 +29,7 @@ Passport3 aims to provide members with one central place to:
 - [x] Choose which information is visible to other members
 - [x] Access the member directory and phonebook
 - [x] Manage emergency contacts
+- [x] View a history of actions taken on their account, by themselves or by an admin
 - [ ] Access payment and accounting information
 - [ ] View their physical access permissions
 - Access future hackerspace services through a unified interface
@@ -97,6 +98,24 @@ A restricted admin panel (gated behind an Authentik group) lets designated membe
 - List and search member accounts
 - Edit a member's profile on their behalf
 - Create onboarding invitations for new members
+- View a full audit history of admin and member actions
+
+### Audit log
+
+Passport3 keeps a log of actions taken through the app, both by admins (editing a member's
+profile, creating an invitation) and by members on their own account (updating their profile,
+revoking a session, changing bank info). Each entry records who did what, when, and the before/after
+values where relevant.
+
+- Admins can browse the full log at `/admin/audit`, searchable and paginated, with a diff view
+  showing exactly what changed
+- Members can see their own account's history on `/profile`, including changes made by an admin on
+  their behalf, for transparency
+- Some fields are deliberately never recorded even as history — emergency contacts (third-party
+  personal data) and the badge RFID UUID (a physical-access credential) are logged as "changed", never
+  with their actual value
+- Actions performed directly in another system (e.g. an IBAN edited straight in Dolibarr) aren't
+  captured — only what goes through Passport3 itself
 
 ## Planned Features
 
@@ -104,7 +123,6 @@ A restricted admin panel (gated behind an Authentik group) lets designated membe
 - Invoice and document downloads
 - Physical access management
 - Notification preferences
-- Audit history
 - API for other hackerspace services
 
 ## Privacy
@@ -147,7 +165,7 @@ picks up the `preprod` tag update within 5 minutes and redeploys automatically.
 ### Local data storage
 
 Passport3 has a small local SQLite database (`better-sqlite3`) for data that has no home in
-Authentik, Dolibarr, or GitHub — e.g. an audit trail of admin actions. Both `docker-compose.yml`
+Authentik, Dolibarr, or GitHub — e.g. the audit trail of admin and member actions. Both `docker-compose.yml`
 and `docker-compose.preprod.yml` mount it on a named volume (`passport3-data`, at `/app/data`), set
 via the `DB_PATH` environment variable, so it survives container recreation — including a
 Watchtower-triggered redeploy. **This volume now holds real, non-reconstructible data and needs to
@@ -161,6 +179,8 @@ Contributions are welcome.
 Passport3 is developed for the Liège Hackerspace community. Issues, suggestions, and pull requests can be submitted through the project repository.
 
 Please do not include personal member data, credentials, API keys, or production configuration in issues or contributions.
+
+Any new feature that mutates a member's account or admin-side data should call `logAuditEvent()` (`src/lib/server/auditLog.ts`), the same way every existing action does — see the [Audit log](#audit-log) section above.
 
 ## Project Name
 
