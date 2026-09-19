@@ -24,9 +24,15 @@ export function validateWishlistItemSubmission(formData: FormData): WishlistVali
 		return { ok: false, error: 'Type invalide.' };
 	}
 
-	const quantity = Number(String(formData.get('quantity') ?? '').trim());
-	if (!Number.isInteger(quantity) || quantity < 1) {
-		return { ok: false, error: 'La quantité doit être un nombre entier positif.' };
+	// Quantity only means anything for a purchase — the field isn't even rendered for the other
+	// types, so it's never submitted for those. Default to 1 rather than requiring a value the
+	// form doesn't collect.
+	let quantity = 1;
+	if (type === 'achat') {
+		quantity = Number(String(formData.get('quantity') ?? '').trim());
+		if (!Number.isInteger(quantity) || quantity < 1) {
+			return { ok: false, error: 'La quantité doit être un nombre entier positif.' };
+		}
 	}
 
 	const link = String(formData.get('link') ?? '').trim();

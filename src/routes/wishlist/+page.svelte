@@ -28,6 +28,10 @@
 	let selectedItem = $derived(data.items.find((i) => i.id === selectedItemId) ?? null);
 	let isEditing = $state(false);
 	let editDescriptionValue = $state('');
+	// Quantity only means anything for a purchase — tracked so the field can be hidden for the
+	// other types instead of showing a meaningless "quantity" on an idea or an action.
+	let createType = $state<WishlistType>('achat');
+	let editType = $state<WishlistType>('achat');
 	let filterType = $state<FilterValue>('all');
 	let sortBy = $state<SortBy>('newest');
 	let formOpen = $state(false);
@@ -81,6 +85,7 @@
 	function startEditing() {
 		if (!selectedItem) return;
 		editDescriptionValue = selectedItem.description ?? '';
+		editType = selectedItem.type;
 		isEditing = true;
 	}
 
@@ -127,6 +132,7 @@
 			showToast('success', 'Proposition ajoutée.');
 			formOpen = false;
 			descriptionValue = '';
+			createType = 'achat';
 		} else if (form?.edited) {
 			showToast('success', 'Proposition modifiée.');
 			isEditing = false;
@@ -174,7 +180,7 @@
 	{#if formOpen}
 		<form method="POST" action="?/create" use:enhance class="border-t border-black p-4">
 			<div class="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-				<div>
+				<div class={createType === 'achat' ? '' : 'md:col-span-2'}>
 					<label class="mb-1 block text-sm font-bold uppercase" for="title">Titre</label>
 					<input
 						id="title"
@@ -185,18 +191,20 @@
 						class="w-full border border-black px-3 py-2 text-sm"
 					/>
 				</div>
-				<div>
-					<label class="mb-1 block text-sm font-bold uppercase" for="quantity">Quantité</label>
-					<input
-						id="quantity"
-						name="quantity"
-						type="number"
-						min="1"
-						value="1"
-						required
-						class="w-full border border-black px-3 py-2 text-sm"
-					/>
-				</div>
+				{#if createType === 'achat'}
+					<div>
+						<label class="mb-1 block text-sm font-bold uppercase" for="quantity">Quantité</label>
+						<input
+							id="quantity"
+							name="quantity"
+							type="number"
+							min="1"
+							value="1"
+							required
+							class="w-full border border-black px-3 py-2 text-sm"
+						/>
+					</div>
+				{/if}
 			</div>
 
 			<div class="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -249,7 +257,7 @@
 				<div class="flex flex-wrap gap-4">
 					{#each WISHLIST_TYPES as t (t.value)}
 						<label class="flex items-center gap-2 text-sm">
-							<input type="radio" name="type" value={t.value} checked={t.value === 'achat'} />
+							<input type="radio" name="type" value={t.value} bind:group={createType} />
 							{t.icon} {t.label}
 						</label>
 					{/each}
@@ -451,8 +459,9 @@
 			{#if isEditing}
 				<form method="POST" action="?/edit" use:enhance>
 					<input type="hidden" name="itemId" value={selectedItem.id} />
+
 					<div class="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-						<div>
+						<div class={editType === 'achat' ? '' : 'md:col-span-2'}>
 							<label class="mb-1 block text-sm font-bold uppercase" for="edit-title">Titre</label>
 							<input
 								id="edit-title"
@@ -464,20 +473,22 @@
 								class="w-full border border-black px-3 py-2 text-sm"
 							/>
 						</div>
-						<div>
-							<label class="mb-1 block text-sm font-bold uppercase" for="edit-quantity">
-								Quantité
-							</label>
-							<input
-								id="edit-quantity"
-								name="quantity"
-								type="number"
-								min="1"
-								required
-								value={selectedItem.quantity}
-								class="w-full border border-black px-3 py-2 text-sm"
-							/>
-						</div>
+						{#if editType === 'achat'}
+							<div>
+								<label class="mb-1 block text-sm font-bold uppercase" for="edit-quantity">
+									Quantité
+								</label>
+								<input
+									id="edit-quantity"
+									name="quantity"
+									type="number"
+									min="1"
+									required
+									value={selectedItem.quantity}
+									class="w-full border border-black px-3 py-2 text-sm"
+								/>
+							</div>
+						{/if}
 					</div>
 
 					<div class="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -532,12 +543,7 @@
 						<div class="flex flex-wrap gap-4">
 							{#each WISHLIST_TYPES as t (t.value)}
 								<label class="flex items-center gap-2 text-sm">
-									<input
-										type="radio"
-										name="type"
-										value={t.value}
-										checked={t.value === selectedItem.type}
-									/>
+									<input type="radio" name="type" value={t.value} bind:group={editType} />
 									{t.icon} {t.label}
 								</label>
 							{/each}
@@ -553,8 +559,10 @@
 				</form>
 			{:else}
 				<p class="mb-3 text-sm text-gray-600">
-					{typeMeta(selectedItem.type).icon} {typeMeta(selectedItem.type).label} — Quantité :
-					{selectedItem.quantity}
+					{typeMeta(selectedItem.type).icon} {typeMeta(selectedItem.type).label}
+					{#if selectedItem.type === 'achat'}
+						— Quantité : {selectedItem.quantity}
+					{/if}
 					{#if selectedItem.estimatedAmount !== null}
 						— {formatAmount(selectedItem.estimatedAmount)}
 					{/if}
