@@ -2,6 +2,9 @@
 FROM node:22-alpine AS base
 WORKDIR /app
 RUN corepack enable
+# better-sqlite3 compiles a native addon at install time (no prebuilt binary for this musl/alpine
+# target) — needed in both the `deps` and `prod-deps` stages below, which both run `pnpm install`.
+RUN apk add --no-cache python3 make g++
 
 # ---- dependencies (full, incl. dev, for building) ----
 FROM base AS deps

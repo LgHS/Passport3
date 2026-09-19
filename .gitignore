@@ -18,6 +18,9 @@ Thumbs.db
 !.env.example
 !.env.test
 
+# Local SQLite data (see src/lib/server/db.ts) — in Docker this lives on a named volume instead
+/data
+
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
