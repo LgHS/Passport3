@@ -220,7 +220,7 @@
 				</div>
 				<div>
 					<label class="mb-1 block text-sm font-bold uppercase" for="estimatedAmount">
-						Montant estimé (€, optionnel)
+						Montant estimé <span class="text-xs font-normal normal-case">(optionnel)</span>
 					</label>
 					<input
 						id="estimatedAmount"
@@ -243,7 +243,7 @@
 				<textarea
 					id="description"
 					name="description"
-					rows="3"
+					rows="5"
 					maxlength={DESCRIPTION_MAX_LENGTH}
 					bind:value={descriptionValue}
 					placeholder="Contexte, modèle souhaité, contraintes, alternatives…"
@@ -506,7 +506,7 @@
 						</div>
 						<div>
 							<label class="mb-1 block text-sm font-bold uppercase" for="edit-estimatedAmount">
-								Montant estimé (€, optionnel)
+								Montant estimé <span class="text-xs font-normal normal-case">(optionnel)</span>
 							</label>
 							<input
 								id="edit-estimatedAmount"
@@ -531,7 +531,7 @@
 						<textarea
 							id="edit-description"
 							name="description"
-							rows="3"
+							rows="5"
 							maxlength={DESCRIPTION_MAX_LENGTH}
 							bind:value={editDescriptionValue}
 							class="w-full border border-black px-3 py-2 text-sm"
