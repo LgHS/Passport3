@@ -5,18 +5,41 @@ function apiBase(): string {
 	return `${requireEnv('DOLIBARR_URL').replace(/\/+$/, '')}/api/index.php/`;
 }
 
+const FETCH_TIMEOUT_MS = 5_000;
+
+// Thrown specifically when Dolibarr is unreachable or erroring server-side (down, restarting,
+// network blip) — as opposed to a genuinely invalid request (bad IBAN format rejected with a 4xx,
+// member not found, etc.). Mirrors OidcUnavailableError in authentik.ts, so an outage here can be
+// told apart from an application bug the same way a login-time Authentik outage already is.
+export class DolibarrUnavailableError extends Error {}
+
 async function dolibarrApiFetch(path: string, init?: RequestInit): Promise<Response> {
-	const res = await fetch(new URL(path, apiBase()), {
-		...init,
-		headers: {
-			DOLAPIKEY: requireEnv('DOLIBARR_API_KEY'),
-			'Content-Type': 'application/json',
-			...init?.headers
-		}
-	});
+	let res: Response;
+	try {
+		res = await fetch(new URL(path, apiBase()), {
+			...init,
+			signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+			headers: {
+				DOLAPIKEY: requireEnv('DOLIBARR_API_KEY'),
+				'Content-Type': 'application/json',
+				...init?.headers
+			}
+		});
+	} catch (err) {
+		// Network failure or the timeout above firing (AbortSignal.timeout rejects with a
+		// TimeoutError DOMException) — Dolibarr never answered at all.
+		throw new DolibarrUnavailableError(`Dolibarr API request to ${path} timed out or failed: ${err}`);
+	}
 
 	if (!res.ok) {
-		throw new Error(`Dolibarr API request to ${path} failed (${res.status}): ${await res.text()}`);
+		const body = await res.text();
+		// >=500 is Dolibarr's own server erroring out (down/misconfigured/overloaded) — treat as an
+		// outage. A 4xx is a genuine request problem (bad filter, not found, validation) and should
+		// stay a hard error rather than being retried or shown as "temporarily unavailable".
+		if (res.status >= 500) {
+			throw new DolibarrUnavailableError(`Dolibarr API request to ${path} failed (${res.status}): ${body}`);
+		}
+		throw new Error(`Dolibarr API request to ${path} failed (${res.status}): ${body}`);
 	}
 
 	return res;

@@ -126,7 +126,11 @@
 	<section class="w-full md:w-2/3">
 		<h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma cotisation</h1>
 
-		{#if data.status === null}
+		{#if data.unavailable}
+			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+				Service de cotisation temporairement indisponible. Réessayez dans quelques instants.
+			</p>
+		{:else if data.status === null}
 			<CotisationStatusBlock status={null} datefin={null} />
 		{:else}
 			<div class="mb-6">
@@ -249,7 +253,11 @@
 			Renseigner vos coordonnées bancaires facilite l'automatisation des tâches de comptabilité.
 		</p>
 
-		{#if data.bankInfo === null}
+		{#if data.unavailable}
+			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-500">
+				Service temporairement indisponible. Réessayez dans quelques instants.
+			</p>
+		{:else if data.bankInfo === null}
 			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-500">
 				Compte introuvable.
 			</p>
