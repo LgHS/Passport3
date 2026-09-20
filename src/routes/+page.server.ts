@@ -34,12 +34,15 @@ export interface DashboardChecklist {
 	// that's actually already fine.
 	mfaConfigured: boolean | null;
 	emergencyContactConfigured: boolean | null;
-	ibanPersoConfigured: boolean;
+	// Also null when Dolibarr is unavailable, same reasoning as above — a Dolibarr outage must
+	// never be reported as "IBAN not filled in", which would be actively wrong for a member who
+	// already filled it in.
+	ibanPersoConfigured: boolean | null;
 	// Only meaningful (and only ever rendered) when ibanProApplicable is true — a classic member
 	// has no separate pro IBAN to fill in, see /cotisation's own ibanPersoTooltip for the same
 	// perso/pro distinction.
 	ibanProApplicable: boolean;
-	ibanProConfigured: boolean;
+	ibanProConfigured: boolean | null;
 }
 
 const UNGROUPED_LABEL = 'Autres';
@@ -142,9 +145,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const checklist: DashboardChecklist = {
 		mfaConfigured: mfaDevices === null ? null : mfaDevices.length > 0,
 		emergencyContactConfigured: emergencyContacts === null ? null : emergencyContacts.length > 0,
-		ibanPersoConfigured: !!financial.ibanPerso,
+		ibanPersoConfigured: financial.unavailable ? null : !!financial.ibanPerso,
 		ibanProApplicable: financial.isPro,
-		ibanProConfigured: !!financial.ibanPro
+		ibanProConfigured: financial.unavailable ? null : !!financial.ibanPro
 	};
 
 	return {

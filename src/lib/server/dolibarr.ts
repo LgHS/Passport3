@@ -14,13 +14,19 @@ const FETCH_TIMEOUT_MS = 5_000;
 export class DolibarrUnavailableError extends Error {}
 
 async function dolibarrApiFetch(path: string, init?: RequestInit): Promise<Response> {
+	// Deliberately outside the try below: a missing/invalid DOLIBARR_URL or DOLIBARR_API_KEY is a
+	// persistent configuration error, not an outage — letting it fall into the network catch would
+	// mislabel it as "temporarily unavailable" and hide the real, non-retriable cause.
+	const url = new URL(path, apiBase());
+	const apiKey = requireEnv('DOLIBARR_API_KEY');
+
 	let res: Response;
 	try {
-		res = await fetch(new URL(path, apiBase()), {
+		res = await fetch(url, {
 			...init,
 			signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
 			headers: {
-				DOLAPIKEY: requireEnv('DOLIBARR_API_KEY'),
+				DOLAPIKEY: apiKey,
 				'Content-Type': 'application/json',
 				...init?.headers
 			}
