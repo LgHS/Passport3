@@ -37,10 +37,16 @@ export function validateWishlistItemSubmission(formData: FormData): WishlistVali
 
 	const link = String(formData.get('link') ?? '').trim();
 	if (link) {
+		let parsedLink: URL;
 		try {
-			new URL(link);
+			parsedLink = new URL(link);
 		} catch {
 			return { ok: false, error: 'Lien invalide (doit être une URL complète, ex. https://...).' };
+		}
+		// new URL() happily parses javascript:/data:/file: too — this link gets rendered as a plain
+		// <a href> later, so only http(s) is safe to accept.
+		if (parsedLink.protocol !== 'http:' && parsedLink.protocol !== 'https:') {
+			return { ok: false, error: 'Le lien doit commencer par http:// ou https://.' };
 		}
 	}
 

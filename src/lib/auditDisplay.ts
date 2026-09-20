@@ -14,7 +14,8 @@ export const ACTION_LABELS: Record<string, string> = {
 	'badge.regenerate': 'Badge RFID régénéré',
 	'wishlist.create': 'Proposition wishlist créée',
 	'wishlist.edit': 'Proposition wishlist modifiée',
-	'wishlist.delete': 'Proposition wishlist supprimée'
+	'wishlist.delete': 'Proposition wishlist supprimée',
+	'wishlist.resolve': 'Statut de la proposition wishlist changé'
 };
 
 export function actionLabel(action: string): string {

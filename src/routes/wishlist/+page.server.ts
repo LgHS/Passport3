@@ -203,7 +203,21 @@ export const actions: Actions = {
 			return fail(400, { error: 'Requête invalide.' });
 		}
 
+		const item = getWishlistItemForAuth(itemId);
+		if (!item) {
+			return fail(404, { error: 'Proposition introuvable.' });
+		}
+
 		setWishlistItemStatus(itemId, status);
+
+		logAuditEvent(
+			{ sub: user.sub, label: displayName(user) },
+			'admin',
+			'wishlist.resolve',
+			targetFromSub(item.authorSub),
+			{ before: { status: item.status }, after: { status } }
+		);
+
 		return { resolved: true };
 	}
 };
