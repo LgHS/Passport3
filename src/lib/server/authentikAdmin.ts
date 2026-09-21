@@ -39,6 +39,14 @@ function apiBase(): string {
 	return `${authentikOrigin()}/api/v3/`;
 }
 
+const FETCH_TIMEOUT_MS = 5_000;
+
+// Thrown when the Authentik admin API is unreachable or erroring server-side (down, restarting,
+// network blip) — as opposed to a genuinely invalid request (bad payload, 404, etc.). Mirrors
+// DolibarrUnavailableError in dolibarr.ts and OidcUnavailableError in authentik.ts, so an outage
+// here can be told apart from an application bug the same way those already are.
+export class AuthentikUnavailableError extends Error {}
+
 export function getAuthentikAccountUrl(): string {
 	return `${authentikOrigin()}/if/user/`;
 }
@@ -83,17 +91,37 @@ export async function getMfaEnrollUrls(): Promise<{ totp: string; static: string
 }
 
 async function authentikApiFetch(path: string, init?: RequestInit): Promise<Response> {
-	const res = await fetch(new URL(path, apiBase()), {
-		...init,
-		headers: {
-			Authorization: `Bearer ${requireEnv('AUTHENTIK_API_TOKEN')}`,
-			'Content-Type': 'application/json',
-			...init?.headers
-		}
-	});
+	// Outside the try below: a missing/invalid AUTHENTIK_ISSUER or AUTHENTIK_API_TOKEN is a
+	// persistent configuration error, not an outage — same reasoning as dolibarr.ts's
+	// dolibarrApiFetch, which had exactly this class of bug until a review caught it.
+	const url = new URL(path, apiBase());
+	const token = requireEnv('AUTHENTIK_API_TOKEN');
+
+	let res: Response;
+	try {
+		res = await fetch(url, {
+			...init,
+			signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+			headers: {
+				Authorization: `Bearer ${token}`,
+				'Content-Type': 'application/json',
+				...init?.headers
+			}
+		});
+	} catch (err) {
+		// Network failure or the timeout above firing (AbortSignal.timeout rejects with a
+		// TimeoutError DOMException) — Authentik never answered at all.
+		throw new AuthentikUnavailableError(`Authentik API request to ${path} timed out or failed: ${err}`);
+	}
 
 	if (!res.ok) {
-		throw new Error(`Authentik API request to ${path} failed (${res.status}): ${await res.text()}`);
+		const body = await res.text();
+		// >=500 is Authentik's own server erroring out (down/misconfigured/overloaded) — treat as
+		// an outage. A 4xx is a genuine request problem and should stay a hard error.
+		if (res.status >= 500) {
+			throw new AuthentikUnavailableError(`Authentik API request to ${path} failed (${res.status}): ${body}`);
+		}
+		throw new Error(`Authentik API request to ${path} failed (${res.status}): ${body}`);
 	}
 
 	return res;
