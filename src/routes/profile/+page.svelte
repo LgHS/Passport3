@@ -26,6 +26,16 @@
 		form?.notificationPreferences?.mattermostDm ?? data.notificationPreferences.mattermostDm
 	);
 
+	// Resyncs the toggle to the canonical value after every submission, success or failure — the
+	// action echoes back the *saved* value on success and the *reverted* value on failure (see its
+	// own comment), so this is never fighting the user's own in-flight click, only correcting the
+	// toggle once the server has actually had the last word.
+	$effect(() => {
+		if (form?.notificationPreferences) {
+			mattermostDm = form.notificationPreferences.mattermostDm;
+		}
+	});
+
 	const dateFormat = new Intl.DateTimeFormat('fr-BE', { dateStyle: 'medium', timeStyle: 'short' });
 	function formatDate(iso: string): string {
 		return dateFormat.format(new Date(iso));
@@ -271,7 +281,11 @@
 {:else if activeTab === 'notifications'}
 	<section class="w-full">
 		<div class="mx-auto max-w-2xl">
-			{#if data.mattermostUsername}
+			{#if data.mattermostUnavailable}
+				<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+					Impossible de vérifier votre compte Mattermost pour le moment. Réessayez plus tard.
+				</p>
+			{:else if data.mattermostUsername}
 				<form
 					method="POST"
 					action="?/updateNotificationPreferences"

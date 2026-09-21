@@ -13,7 +13,7 @@ import {
 	getNotificationPreferences,
 	updateNotificationPreferences
 } from '$lib/server/authentikAdmin';
-import { getMattermostUsername } from '$lib/server/mattermost';
+import { lookupMattermostUsername } from '$lib/server/mattermost';
 import { validateProfileSubmission } from '$lib/server/profileValidation';
 import { clearSessionCookie } from '$lib/server/session';
 import { authentikPk } from '$lib/types';
@@ -39,16 +39,17 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		error(500, 'Impossible de récupérer votre profil Authentik.');
 	}
 
-	const [sessions, mfaDevices, mfaEnrollUrls, notificationPreferences, mattermostUsername] =
+	const [sessions, mfaDevices, mfaEnrollUrls, notificationPreferences, mattermost] =
 		await Promise.all([
 			listSessions(profile.username),
 			listMfaDevices(pk),
 			getMfaEnrollUrls(),
 			getNotificationPreferences(pk),
 			// Best-effort: a transient Mattermost hiccup shouldn't break the whole profile page,
-			// same reasoning as the Authentik/Dolibarr .catch()s in +layout.server.ts. Worst case,
-			// the Notifications tab just shows "no linked account" until the next successful check.
-			getMattermostUsername(profile.email).catch(() => null)
+			// same reasoning as the Authentik/Dolibarr .catch()s in +layout.server.ts. Unlike a plain
+			// .catch(() => null), `unavailable` stays distinguishable from "no linked account" — see
+			// feedback_distinguish-fetch-failure-from-empty.
+			lookupMattermostUsername(profile.email)
 		]);
 
 	return {
@@ -59,7 +60,8 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		sessions,
 		mfaDevices,
 		notificationPreferences,
-		mattermostUsername
+		mattermostUsername: mattermost.username,
+		mattermostUnavailable: mattermost.unavailable
 	};
 };
 
@@ -127,7 +129,14 @@ export const actions: Actions = {
 		try {
 			await updateNotificationPreferences(pk, prefs);
 		} catch {
-			return fail(500, { notificationPreferencesError: 'La sauvegarde a échoué, réessayez.' });
+			// The client toggles optimistically before this action even runs — on failure, echo
+			// back the value from *before* the attempted change (its logical negation, since a
+			// checkbox toggle always flips) so the client can resync instead of leaving the toggle
+			// showing a state that was never actually saved.
+			return fail(500, {
+				notificationPreferencesError: 'La sauvegarde a échoué, réessayez.',
+				notificationPreferences: { mattermostDm: !prefs.mattermostDm }
+			});
 		}
 
 		return { notificationPreferencesSuccess: true, notificationPreferences: prefs };

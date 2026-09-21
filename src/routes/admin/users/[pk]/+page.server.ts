@@ -11,7 +11,7 @@ import {
 	updateTrombinoscopeTag,
 	HEX_COLOR_RE
 } from '$lib/server/authentikAdmin';
-import { getMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
+import { lookupMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
 import { validateProfileSubmission } from '$lib/server/profileValidation';
 import { requireAdmin } from '$lib/server/auth';
 
@@ -31,15 +31,16 @@ export const load: PageServerLoad = async ({ params }) => {
 		error(404, 'Membre introuvable.');
 	}
 
-	const [optin, tag, mattermostUsername] = await Promise.all([
+	const [optin, tag, mattermost] = await Promise.all([
 		getTrombinoscopeOptin(pk),
 		getTrombinoscopeTag(pk),
 		// Admin-only: shown regardless of the member's own "Pseudo Chat" opt-in on the
 		// trombinoscope — this is an internal tool to reach a member for oral/email requests, not
-		// the public directory, so it isn't gated by the same consent.
-		getMattermostUsername(profile.email).catch(() => null)
+		// the public directory, so it isn't gated by the same consent. `unavailable` stays
+		// distinguishable from "no linked account" — see feedback_distinguish-fetch-failure-from-empty.
+		lookupMattermostUsername(profile.email)
 	]);
-	const mattermostDmUrl = mattermostUsername ? buildMattermostDmUrl(mattermostUsername) : null;
+	const mattermostDmUrl = mattermost.username ? buildMattermostDmUrl(mattermost.username) : null;
 
 	return {
 		pk,
@@ -47,7 +48,8 @@ export const load: PageServerLoad = async ({ params }) => {
 		fields: PROFILE_ATTRIBUTE_FIELDS,
 		optin,
 		tag,
-		mattermostUsername,
+		mattermostUsername: mattermost.username,
+		mattermostUnavailable: mattermost.unavailable,
 		mattermostDmUrl
 	};
 };

@@ -4,11 +4,14 @@ function apiBase(): string {
 	return `${requireEnv('MATTERMOST_URL').replace(/\/+$/, '')}/api/v4/`;
 }
 
+const FETCH_TIMEOUT_MS = 5_000;
+
 // Distinct from mattermost.ts's read-only mattermostApiFetch (different token, different job):
 // this one posts, using the bot account's own credential rather than the read-only lookup token.
 async function mattermostBotFetch(path: string, init?: RequestInit): Promise<Response> {
 	const res = await fetch(new URL(path, apiBase()), {
 		...init,
+		signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
 		headers: {
 			Authorization: `Bearer ${requireEnv('MATTERMOST_BOT_TOKEN')}`,
 			'Content-Type': 'application/json',

@@ -87,7 +87,9 @@
 			<p><span class="font-bold uppercase">Email :</span> {data.profile.email}</p>
 			<p>
 				<span class="font-bold uppercase">Chat :</span>
-				{#if data.mattermostUsername && data.mattermostDmUrl}
+				{#if data.mattermostUnavailable}
+					<span class="text-gray-500">Impossible de vérifier pour le moment</span>
+				{:else if data.mattermostUsername && data.mattermostDmUrl}
 					<a href={data.mattermostDmUrl} target="_blank" rel="noopener">
 						@{data.mattermostUsername}
 					</a>
