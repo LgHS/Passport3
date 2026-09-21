@@ -34,6 +34,12 @@ COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/build ./build
 COPY package.json ./package.json
 
+# /app/data (see src/lib/server/db.ts's DB_PATH) is where the SQLite file lives — a fresh named
+# volume mounted here is root-owned by default, which would leave `passport` unable to create the
+# database file at all. Created and chowned before switching users, so the mountpoint underneath
+# it is already writable regardless of what Docker sets on the volume itself.
+RUN mkdir -p /app/data && chown -R passport:passport /app/data
+
 USER passport
 EXPOSE 8030
 CMD ["node", "build/index.js"]
