@@ -36,6 +36,10 @@ function ensureSchema(): void {
 		db.exec(`ALTER TABLE audit_events ADD COLUMN source TEXT NOT NULL DEFAULT 'admin'`);
 	}
 
+	// Speeds up listAuditEventsForTarget()'s WHERE target_pk = ? ORDER BY id DESC — without it,
+	// that query is a full table scan. Negligible today, but cheap to have before the table grows.
+	db.exec(`CREATE INDEX IF NOT EXISTS audit_events_target_pk_id ON audit_events(target_pk, id DESC)`);
+
 	schemaReady = true;
 }
 

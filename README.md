@@ -107,8 +107,9 @@ profile, creating an invitation) and by members on their own account (updating t
 revoking a session, changing bank info). Each entry records who did what, when, and the before/after
 values where relevant.
 
-- Admins can browse the full log at `/admin/audit`, searchable and paginated, with a diff view
-  showing exactly what changed
+- Admins can browse the log at `/admin/audit`, searchable and paginated, with a diff view showing
+  exactly what changed — v1 only covers the 200 most recent events across the whole app, not the
+  full history
 - Members can see their own account's history on `/profile`, including changes made by an admin on
   their behalf, for transparency
 - Some fields are deliberately never recorded even as history — emergency contacts (third-party
@@ -116,6 +117,12 @@ values where relevant.
   with their actual value
 - Actions performed directly in another system (e.g. an IBAN edited straight in Dolibarr) aren't
   captured — only what goes through Passport3 itself
+- Writing an entry is best-effort: an already-successful action is never failed just because the
+  log write itself failed. This is an informational log for transparency, not a compliance-grade
+  audit trail with retry/alerting guarantees
+- Bank IBANs are logged with their real before/after value (the flagship case this feature exists
+  for), viewable the same way as any other entry — by admins in `/admin/audit`, and by the member
+  themselves in their own `/profile` history. There is no retention limit or purge policy yet
 
 ## Planned Features
 

@@ -99,10 +99,12 @@ Un panneau d'administration restreint (réservé à un groupe Authentik dédié)
 
 Passport3 conserve un historique des actions effectuées via l'application, aussi bien par les admins (modification du profil d'un membre, création d'une invitation) que par les membres sur leur propre compte (mise à jour du profil, révocation d'une session, changement de coordonnées bancaires). Chaque entrée enregistre qui a fait quoi, quand, et les valeurs avant/après quand c'est pertinent.
 
-- Les admins peuvent consulter l'historique complet sur `/admin/audit`, avec recherche, pagination et une vue de différences montrant précisément ce qui a changé
+- Les admins peuvent consulter l'historique sur `/admin/audit`, avec recherche, pagination et une vue de différences montrant précisément ce qui a changé. La v1 ne couvre que les 200 actions les plus récentes de toute l'application, pas l'historique complet
 - Les membres peuvent consulter l'historique de leur propre compte sur `/profile`, y compris les changements faits par un admin en leur nom, par transparence
 - Certains champs ne sont volontairement jamais enregistrés, même dans l'historique : les contacts d'urgence (données personnelles de tiers) et l'UUID du badge RFID (un identifiant d'accès physique) sont journalisés comme "modifiés", jamais avec leur valeur réelle
 - Les actions effectuées directement dans un autre système (ex. un IBAN modifié directement dans Dolibarr) n'y apparaissent pas, seul ce qui passe par Passport3 lui-même est capturé
+- L'écriture d'une entrée se fait en best-effort : une action déjà réussie n'échoue jamais juste parce que l'écriture du log elle-même a échoué. C'est un historique informatif pour la transparence, pas un journal de conformité avec garanties de nouvelle tentative ou d'alerte
+- Les IBAN bancaires sont journalisés avec leur vraie valeur avant/après (le cas phare pour lequel cette fonctionnalité existe), consultable comme n'importe quelle autre entrée : par les admins sur `/admin/audit`, et par le membre lui-même dans son propre historique `/profile`. Il n'y a pas encore de limite de conservation ni de politique de purge
 
 ## Fonctionnalités prévues
 
