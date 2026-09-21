@@ -123,11 +123,33 @@ export const actions: Actions = {
 				});
 			}
 
-			const updates: Promise<void>[] = [updateMemberIbanPerso(member.id, result.ibanPerso)];
-			if (member.fkSoc) {
-				updates.push(updateThirdPartyIbanPro(member.fkSoc, result.ibanPro));
+			// Only touch what actually changed, and one write at a time rather than in parallel —
+			// if the second one fails, we then know precisely which one landed instead of a bare
+			// "something went wrong" while part of the change may have already gone through.
+			const currentIbanPro = member.fkSoc ? await getThirdPartyIbanPro(member.fkSoc) : null;
+			const ibanPersoChanged = result.ibanPerso !== member.ibanPerso;
+			const ibanProChanged = member.fkSoc !== null && result.ibanPro !== currentIbanPro;
+
+			if (ibanPersoChanged) {
+				await updateMemberIbanPerso(member.id, result.ibanPerso);
 			}
-			await Promise.all(updates);
+			if (ibanProChanged) {
+				try {
+					await updateThirdPartyIbanPro(member.fkSoc as number, result.ibanPro);
+				} catch (err) {
+					// A genuine Dolibarr outage still reads as "temporarily unavailable" overall
+					// (the outer catch below) — this only refines the message for a real,
+					// non-outage failure on this second write specifically.
+					if (err instanceof DolibarrUnavailableError) throw err;
+					return fail(500, {
+						error: ibanPersoChanged
+							? "L'IBAN personnel a été enregistré, mais l'IBAN professionnel n'a pas pu être mis à jour. Réessayez avec l'IBAN professionnel."
+							: "La mise à jour de l'IBAN professionnel a échoué, réessayez.",
+						ibanPerso: result.ibanPerso,
+						ibanPro: result.ibanPro
+					});
+				}
+			}
 
 			return { success: true, ibanPerso: result.ibanPerso, ibanPro: result.ibanPro };
 		} catch (err) {
