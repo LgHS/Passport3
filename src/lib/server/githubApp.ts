@@ -1,6 +1,35 @@
 import { createSign } from 'node:crypto';
 import { requireEnv } from '$lib/server/env';
 
+const FETCH_TIMEOUT_MS = 5_000;
+
+// Thrown when GitHub is unreachable or erroring server-side (down, network blip) — as opposed to
+// a well-formed 4xx response, which every call site below already interprets for itself (404 =
+// not found, 422 = already invited, etc., neither of which is an "outage"). Mirrors
+// DolibarrUnavailableError/AuthentikUnavailableError.
+export class GithubUnavailableError extends Error {}
+
+// Every call site below (and in github.ts, the member-facing OAuth flow — no credential is baked
+// in here, so sharing this across both privilege boundaries is fine) still inspects its own status
+// codes afterwards (404, 422, ...) exactly as before — this only adds a timeout and classifies
+// true unreachability/5xx, it never throws on a 4xx itself.
+export async function githubApiFetch(url: string, init?: RequestInit): Promise<Response> {
+	let res: Response;
+	try {
+		res = await fetch(url, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+	} catch (err) {
+		throw new GithubUnavailableError(`GitHub API request to ${url} timed out or failed: ${err}`);
+	}
+
+	if (res.status >= 500) {
+		throw new GithubUnavailableError(
+			`GitHub API request to ${url} failed (${res.status}): ${await res.text()}`
+		);
+	}
+
+	return res;
+}
+
 function base64url(input: string): string {
 	return Buffer.from(input).toString('base64url');
 }
@@ -57,7 +86,7 @@ async function getInstallationAccessToken(): Promise<string> {
 	}
 
 	const installationId = requireEnv('GITHUB_APP_INSTALLATION_ID');
-	const res = await fetch(
+	const res = await githubApiFetch(
 		`https://api.github.com/app/installations/${installationId}/access_tokens`,
 		{
 			method: 'POST',
@@ -97,7 +126,7 @@ export async function getGithubOrgMembershipStatus(
 	const token = await getInstallationAccessToken();
 	const org = requireEnv('GITHUB_ORG');
 
-	const res = await fetch(
+	const res = await githubApiFetch(
 		`https://api.github.com/orgs/${org}/memberships/${encodeURIComponent(username)}`,
 		{ headers: githubApiHeaders(token) }
 	);
@@ -125,7 +154,7 @@ export async function inviteToGithubOrg(username: string): Promise<GithubInviteR
 	const token = await getInstallationAccessToken();
 	const org = requireEnv('GITHUB_ORG');
 
-	const userRes = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}`, {
+	const userRes = await githubApiFetch(`https://api.github.com/users/${encodeURIComponent(username)}`, {
 		headers: githubApiHeaders(token)
 	});
 
@@ -137,7 +166,7 @@ export async function inviteToGithubOrg(username: string): Promise<GithubInviteR
 	}
 	const user = (await userRes.json()) as { id: number };
 
-	const inviteRes = await fetch(`https://api.github.com/orgs/${org}/invitations`, {
+	const inviteRes = await githubApiFetch(`https://api.github.com/orgs/${org}/invitations`, {
 		method: 'POST',
 		headers: { ...githubApiHeaders(token), 'Content-Type': 'application/json' },
 		body: JSON.stringify({ invitee_id: user.id })
