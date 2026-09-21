@@ -29,6 +29,7 @@ Passport3 vise à offrir aux membres un endroit central pour :
 - [x] Accéder à l'annuaire des membres et au trombinoscope
 - [x] Choisir quelles informations sont visibles par les autres membres
 - [x] Gérer ses contacts d'urgence
+- [x] Consulter ses propres permissions et groupes d'appartenance
 - [ ] Accéder aux informations de paiement et de comptabilité
 - [ ] Voir leurs droits d'accès physique
 - Accéder aux futurs services du hackerspace via une interface unifiée
@@ -91,6 +92,8 @@ Un panneau d'administration restreint (réservé à un groupe Authentik dédié)
 
 - Lister et rechercher les comptes membres
 - Modifier le profil d'un membre en son nom
+- Modifier la visibilité trombinoscope et le rôle affiché d'un membre en son nom
+- Gérer les contacts d'urgence d'un membre en son nom
 - Créer des invitations d'inscription pour de nouveaux membres
 
 ## Fonctionnalités prévues
