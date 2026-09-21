@@ -4,8 +4,11 @@ function apiBase(): string {
 	return `${requireEnv('MATTERMOST_URL').replace(/\/+$/, '')}/api/v4/`;
 }
 
+const FETCH_TIMEOUT_MS = 5_000;
+
 async function mattermostApiFetch(path: string): Promise<Response> {
 	const res = await fetch(new URL(path, apiBase()), {
+		signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
 		headers: { Authorization: `Bearer ${requireEnv('MATTERMOST_TOKEN')}` }
 	});
 
@@ -56,10 +59,10 @@ let lastFetch: { latencyMs: number; cachedAt: number } | null = null;
 // the same request instead.
 let inFlight: Promise<Map<string, string>> | null = null;
 
-async function getEmailToUsernameMap(): Promise<Map<string, string>> {
-	if (cached && cached.expiresAt > Date.now()) {
-		return cached.emailToUsername;
-	}
+// Only ever replaces `cached`/`lastFetch` on success, and only right at the end — a failed fetch
+// (Mattermost down mid-refresh) leaves whatever was there before untouched, so a still-usable
+// directory keeps serving instead of getting wiped out from under everyone.
+async function fetchAndCacheDirectory(): Promise<Map<string, string>> {
 	if (inFlight) {
 		return inFlight;
 	}
@@ -89,6 +92,13 @@ async function getEmailToUsernameMap(): Promise<Map<string, string>> {
 	}
 }
 
+async function getEmailToUsernameMap(): Promise<Map<string, string>> {
+	if (cached && cached.expiresAt > Date.now()) {
+		return cached.emailToUsername;
+	}
+	return fetchAndCacheDirectory();
+}
+
 // Matches by email against the member's own Authentik email — same identity key already used to
 // link other services (see the "non éditable" note on /profile). Returns null if the member has
 // no active Mattermost account under that email, or uses a different email on each service.
@@ -98,13 +108,11 @@ export async function getMattermostUsername(email: string): Promise<string | nul
 }
 
 // Lets an admin force a refresh (new Mattermost signup, account renamed, etc.) rather than wait
-// out the hour-long TTL. Rebuilds immediately rather than just dropping the cache — an admin
-// clicking "Régénérer" expects the footer to show a fresh cache right after, not "jamais rempli"
-// until the next unrelated trombinoscope visit happens to trigger one.
+// out the hour-long TTL. Calls fetchAndCacheDirectory() directly (bypassing the freshness check,
+// forcing a real refetch) rather than nulling `cached` first — if this fails, the admin sees the
+// error, but the existing cache keeps serving everyone else instead of being wiped out first.
 export async function refreshMattermostCache(): Promise<void> {
-	cached = null;
-	lastFetch = null;
-	await getEmailToUsernameMap();
+	await fetchAndCacheDirectory();
 }
 
 // Read-only, never triggers a fetch — `null` means no successful fetch has happened yet (fresh
