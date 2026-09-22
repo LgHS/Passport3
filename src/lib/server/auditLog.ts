@@ -4,40 +4,9 @@ import { getDb } from '$lib/server/db';
 // below, the same way every existing admin/*+page.server.ts and member self-service action does —
 // see the README's "Audit log" section. This is also the single place a future Mattermost push
 // for these events should hook in, rather than each of the ~15 call sites individually.
-
-// Lazy, idempotent — same rationale as db.ts's own lazy connection: owning this table's schema is
-// this module's job, but nothing should run just from importing it.
-let schemaReady = false;
-
-function ensureSchema(): void {
-	if (schemaReady) return;
-	const db = getDb();
-	db.exec(`
-		CREATE TABLE IF NOT EXISTS audit_events (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-			actor_sub TEXT NOT NULL,
-			actor_label TEXT NOT NULL,
-			action TEXT NOT NULL,
-			target_pk INTEGER,
-			target_email TEXT,
-			details TEXT
-		)
-	`);
-
-	// `source` was added after this table already shipped — CREATE TABLE IF NOT EXISTS above is a
-	// no-op on a pre-existing file, so an already-deployed DB needs the column added explicitly.
-	// Existing rows all predate the admin/user distinction, so they backfill as 'admin' (every
-	// action logged before this column existed was an admin one).
-	const hasSourceColumn = (db.pragma('table_info(audit_events)') as { name: string }[]).some(
-		(col) => col.name === 'source'
-	);
-	if (!hasSourceColumn) {
-		db.exec(`ALTER TABLE audit_events ADD COLUMN source TEXT NOT NULL DEFAULT 'admin'`);
-	}
-
-	schemaReady = true;
-}
+//
+// The audit_events table itself is created by src/lib/server/migrations.ts (run once from
+// db.ts's getDb()) rather than by this module — see that file's migrations 1 and 2.
 
 // 'admin' = an admin acted on someone else's behalf (via /admin/*). 'user' = a member acted on
 // their own account (via /profile, /badge, /cotisation, /trombinoscope, /github). The target is
@@ -85,7 +54,6 @@ export function logAuditEvent(
 	details?: Record<string, unknown>
 ): void {
 	try {
-		ensureSchema();
 		getDb()
 			.prepare(
 				`INSERT INTO audit_events (actor_sub, actor_label, source, action, target_pk, target_email, details)
@@ -105,6 +73,19 @@ export function logAuditEvent(
 	}
 }
 
+function parseDetails(details: string | null, eventId: number): Record<string, unknown> | null {
+	if (!details) return null;
+	try {
+		return JSON.parse(details) as Record<string, unknown>;
+	} catch (err) {
+		// A single malformed row (manual DB edit, future incompatible format, ...) must never take
+		// down the whole history page for every admin/member — same best-effort spirit as
+		// logAuditEvent()'s own write-side try/catch above.
+		console.error(`[auditLog] Failed to parse details JSON for event ${eventId}:`, err);
+		return null;
+	}
+}
+
 function rowToEvent(r: AuditEventRow): AuditEvent {
 	return {
 		id: r.id,
@@ -114,12 +95,11 @@ function rowToEvent(r: AuditEventRow): AuditEvent {
 		action: r.action,
 		targetPk: r.target_pk,
 		targetEmail: r.target_email,
-		details: r.details ? (JSON.parse(r.details) as Record<string, unknown>) : null
+		details: parseDetails(r.details, r.id)
 	};
 }
 
 export function listAuditEvents(limit = 200): AuditEvent[] {
-	ensureSchema();
 	const rows = getDb()
 		.prepare(
 			`SELECT id, created_at, actor_label, source, action, target_pk, target_email, details
@@ -134,7 +114,6 @@ export function listAuditEvents(limit = 200): AuditEvent[] {
 // their profile via /admin) and 'user' events they generated themselves (target_pk is always set
 // to their own pk for those, per logAuditEvent's convention).
 export function listAuditEventsForTarget(pk: number, limit = 200): AuditEvent[] {
-	ensureSchema();
 	const rows = getDb()
 		.prepare(
 			`SELECT id, created_at, actor_label, source, action, target_pk, target_email, details

@@ -79,31 +79,24 @@ export const actions: Actions = {
 			});
 		}
 
-		// Read before writing, purely for the audit trail below — same reasoning as the admin
-		// version of this same action.
-		const before = await getUserProfile(pk).catch(() => null);
-		const changed = await updateUserProfile(pk, { name: result.name, attributes: result.attributes });
+		// before/after come from updateUserProfile()'s own internal read, not a separate call here
+		// — that read is the one the merge/PATCH was actually based on, so the audit trail can't
+		// drift from what was truly written (see ProfileMutationResult in authentikAdmin.ts).
+		const mutation = await updateUserProfile(pk, { name: result.name, attributes: result.attributes });
 
-		if (changed) {
-			// result.attributes only holds the keys actually submitted (the "Divers" social fields
-			// can be absent from the form entirely) — logging it alone as `after` would make an
-			// untouched field look "removed" in the diff. Mirror updateUserProfile's own merge so
-			// `after` reflects what's actually now stored, not just what this submission touched.
+		if (mutation.changed) {
 			logAuditEvent(
 				{ sub: user.sub, label: displayName(user) },
 				'user',
 				'profile.update',
 				{ pk },
-				{
-					before: before ? { name: before.name, attributes: before.attributes } : null,
-					after: { name: result.name, attributes: { ...before?.attributes, ...result.attributes } }
-				}
+				{ before: mutation.before, after: mutation.after }
 			);
 		}
 
 		return {
 			success: true,
-			changed,
+			changed: mutation.changed,
 			firstName: result.firstName,
 			lastName: result.lastName,
 			attributes: result.attributes
@@ -169,10 +162,9 @@ export const actions: Actions = {
 			return fail(400, { emergencyContactsError: result.error, emergencyContacts: result.contacts });
 		}
 
-		const before = await getEmergencyContacts(pk).catch(() => null);
-
+		let mutation;
 		try {
-			await updateEmergencyContacts(pk, result.contacts);
+			mutation = await updateEmergencyContacts(pk, result.contacts);
 		} catch {
 			return fail(500, {
 				emergencyContactsError: "La sauvegarde des contacts d'urgence a échoué, réessayez.",
@@ -186,7 +178,7 @@ export const actions: Actions = {
 			'user',
 			'emergencyContacts.update',
 			{ pk },
-			{ before: { contactCount: before?.length ?? null }, after: { contactCount: result.contacts.length } }
+			{ before: { contactCount: mutation.before.length }, after: { contactCount: mutation.after.length } }
 		);
 
 		return { emergencyContactsSuccess: true, emergencyContacts: result.contacts };

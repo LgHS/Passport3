@@ -29,6 +29,7 @@ Passport3 aims to provide members with one central place to:
 - [x] Choose which information is visible to other members
 - [x] Access the member directory and phonebook
 - [x] Manage emergency contacts
+- [x] View their own permissions and group memberships
 - [x] View a history of actions taken on their account, by themselves or by an admin
 - [ ] Access payment and accounting information
 - [ ] View their physical access permissions
@@ -97,6 +98,8 @@ A restricted admin panel (gated behind an Authentik group) lets designated membe
 
 - List and search member accounts
 - Edit a member's profile on their behalf
+- Edit a member's trombinoscope visibility and displayed role on their behalf
+- Manage a member's emergency contacts on their behalf
 - Create onboarding invitations for new members
 - View a full audit history of admin and member actions
 
@@ -107,8 +110,9 @@ profile, creating an invitation) and by members on their own account (updating t
 revoking a session, changing bank info). Each entry records who did what, when, and the before/after
 values where relevant.
 
-- Admins can browse the full log at `/admin/audit`, searchable and paginated, with a diff view
-  showing exactly what changed
+- Admins can browse the log at `/admin/audit`, searchable and paginated, with a diff view showing
+  exactly what changed — v1 only covers the 200 most recent events across the whole app, not the
+  full history
 - Members can see their own account's history on `/profile`, including changes made by an admin on
   their behalf, for transparency
 - Some fields are deliberately never recorded even as history — emergency contacts (third-party
@@ -116,6 +120,12 @@ values where relevant.
   with their actual value
 - Actions performed directly in another system (e.g. an IBAN edited straight in Dolibarr) aren't
   captured — only what goes through Passport3 itself
+- Writing an entry is best-effort: an already-successful action is never failed just because the
+  log write itself failed. This is an informational log for transparency, not a compliance-grade
+  audit trail with retry/alerting guarantees
+- Bank IBANs are logged with their real before/after value (the flagship case this feature exists
+  for), viewable the same way as any other entry — by admins in `/admin/audit`, and by the member
+  themselves in their own `/profile` history. There is no retention limit or purge policy yet
 
 ## Planned Features
 
@@ -171,6 +181,15 @@ via the `DB_PATH` environment variable, so it survives container recreation — 
 Watchtower-triggered redeploy. **This volume now holds real, non-reconstructible data and needs to
 be included in whatever backup routine the host already has** — unlike the rest of the container,
 which was previously fully stateless and disposable.
+
+The database runs in WAL mode, so `passport3.db` alone is not a consistent snapshot while the
+container is running — recent transactions can still be sitting in `passport3.db-wal`. Either stop
+the container before copying just the `.db` file, or back up the whole volume (`.db`, `.db-wal`,
+`.db-shm` together) in one atomic snapshot.
+
+Tables are created by numbered, append-only migrations in `src/lib/server/migrations.ts` (run
+automatically on first connection) rather than by each feature module creating its own table ad
+hoc — add a new entry there for a new table instead of a local `CREATE TABLE IF NOT EXISTS`.
 
 ## Contributing
 

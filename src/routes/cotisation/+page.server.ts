@@ -12,7 +12,7 @@ import {
 	updateThirdPartyIbanPro,
 	findIbanOwnerConflict
 } from '$lib/server/dolibarr';
-import { validateBankInfoSubmission } from '$lib/server/bankValidation';
+import { validateBankInfoSubmission, maskIban } from '$lib/server/bankValidation';
 import { logAuditEvent } from '$lib/server/auditLog';
 import { authentikPk, displayName } from '$lib/types';
 
@@ -112,17 +112,17 @@ export const actions: Actions = {
 		}
 		await Promise.all(updates);
 
-		// The real values, deliberately — this is the flagship case an audit trail exists for
-		// (knowing who changed a payout IBAN to what, for fraud prevention), not something to
-		// water down to a count like the emergency-contacts case above.
+		// Masked to the last 4 digits — this is the flagship case an audit trail exists for
+		// (knowing who changed a payout IBAN, for fraud prevention), but the full number doesn't
+		// need to live a second time at rest here just to serve that purpose.
 		logAuditEvent(
 			{ sub: user.sub, label: displayName(user) },
 			'user',
 			'bankInfo.update',
 			pk ? { pk } : { email: user.email },
 			{
-				before: { ibanPerso: member.ibanPerso, ibanPro: beforeIbanPro },
-				after: { ibanPerso: result.ibanPerso, ibanPro: result.ibanPro }
+				before: { ibanPerso: maskIban(member.ibanPerso ?? ''), ibanPro: maskIban(beforeIbanPro ?? '') },
+				after: { ibanPerso: maskIban(result.ibanPerso), ibanPro: maskIban(result.ibanPro) }
 			}
 		);
 

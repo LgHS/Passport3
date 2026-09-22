@@ -37,10 +37,9 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const optin = optinFromFormData(formData);
 
-		const before = await getTrombinoscopeOptin(pk);
-
+		let mutation;
 		try {
-			await updateTrombinoscopeOptin(pk, optin);
+			mutation = await updateTrombinoscopeOptin(pk, optin);
 		} catch {
 			return fail(500, { error: "La sauvegarde a échoué, réessayez." });
 		}
@@ -50,7 +49,7 @@ export const actions: Actions = {
 			'user',
 			'trombinoscope.optin.update',
 			{ pk },
-			{ before: { ...before }, after: { ...optin } }
+			{ before: mutation.before, after: mutation.after }
 		);
 
 		return { success: true, optin };
