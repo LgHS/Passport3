@@ -43,6 +43,18 @@
 
 	const amountFormat = new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' });
 
+	// A visible label, not just the amount's color: red/green alone isn't enough for some forms of
+	// colorblindness, and an abandoned-but-unpaid invoice showing in red would otherwise read as a
+	// normal debt rather than a written-off one.
+	function invoiceStatusLabel(invoice: { paid: boolean; abandoned: boolean }): string {
+		if (invoice.abandoned) return 'Abandonnée';
+		return invoice.paid ? 'Payée' : 'À payer';
+	}
+	function invoiceStatusColor(invoice: { paid: boolean; abandoned: boolean }): string {
+		if (invoice.abandoned) return 'text-gray-500';
+		return invoice.paid ? 'text-green-700' : 'text-red-700';
+	}
+
 	// Dolibarr may return a subscription with either bound missing (see parseDolibarrDate: "", 0 and
 	// "0" all mean "no date"). One that still has a start or an end can be placed on the timeline;
 	// one with neither carries no chronological information at all and is listed apart. Pinning the
@@ -325,7 +337,7 @@
 									>
 										{@render downloadIcon()}
 									</span>
-								{:else if invoice.documentPath}
+								{:else if invoice.downloadable}
 									<a
 										href="/cotisation/invoice/{invoice.id}"
 										aria-label="Télécharger la facture {invoice.ref}"
@@ -334,11 +346,15 @@
 									>
 										{@render downloadIcon()}
 									</a>
+								{:else}
+									<span title="Document indisponible" class="shrink-0 text-gray-400">
+										{@render downloadIcon()}
+									</span>
 								{/if}
 							</div>
 							<p class="mt-1 text-gray-600">{formatDate(invoice.date)}</p>
-							<p class="mt-1 font-bold {invoice.paid ? 'text-green-700' : 'text-red-700'}">
-								{amountFormat.format(invoice.amount)}
+							<p class="mt-1 font-bold {invoiceStatusColor(invoice)}">
+								{amountFormat.format(invoice.amount)} ({invoiceStatusLabel(invoice)})
 							</p>
 						</div>
 					{/each}
@@ -361,12 +377,8 @@
 									<td class="border border-black px-3 py-2">{invoice.ref}</td>
 									<td class="border border-black px-3 py-2">{invoice.type}</td>
 									<td class="border border-black px-3 py-2">{formatDate(invoice.date)}</td>
-									<td
-										class="border border-black px-3 py-2 font-bold {invoice.paid
-											? 'text-green-700'
-											: 'text-red-700'}"
-									>
-										{amountFormat.format(invoice.amount)}
+									<td class="border border-black px-3 py-2 font-bold {invoiceStatusColor(invoice)}">
+										{amountFormat.format(invoice.amount)} ({invoiceStatusLabel(invoice)})
 									</td>
 									<td class="border border-black px-3 py-2 text-center">
 										{#if invoice.abandoned}
@@ -376,7 +388,7 @@
 											>
 												{@render downloadIcon()}
 											</span>
-										{:else if invoice.documentPath}
+										{:else if invoice.downloadable}
 											<a
 												href="/cotisation/invoice/{invoice.id}"
 												aria-label="Télécharger la facture {invoice.ref}"

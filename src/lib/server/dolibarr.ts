@@ -13,6 +13,19 @@ const FETCH_TIMEOUT_MS = 5_000;
 // told apart from an application bug the same way a login-time Authentik outage already is.
 export class DolibarrUnavailableError extends Error {}
 
+// Carries the real HTTP status for a genuine 4xx (never thrown for >=500, see dolibarrApiFetch
+// below — those become DolibarrUnavailableError instead). Lets a caller distinguish a real 404
+// from e.g. a 403/401 permissions/auth misconfiguration, which a bare Error couldn't — see
+// getOwnedInvoiceDocument()'s use of it below.
+export class DolibarrApiError extends Error {
+	constructor(
+		public readonly status: number,
+		message: string
+	) {
+		super(message);
+	}
+}
+
 async function dolibarrApiFetch(path: string, init?: RequestInit): Promise<Response> {
 	// Deliberately outside the try below: a missing/invalid DOLIBARR_URL or DOLIBARR_API_KEY is a
 	// persistent configuration error, not an outage — letting it fall into the network catch would
@@ -45,7 +58,7 @@ async function dolibarrApiFetch(path: string, init?: RequestInit): Promise<Respo
 		if (res.status >= 500) {
 			throw new DolibarrUnavailableError(`Dolibarr API request to ${path} failed (${res.status}): ${body}`);
 		}
-		throw new Error(`Dolibarr API request to ${path} failed (${res.status}): ${body}`);
+		throw new DolibarrApiError(res.status, `Dolibarr API request to ${path} failed (${res.status}): ${body}`);
 	}
 
 	return res;
@@ -457,16 +470,18 @@ export interface DolibarrInvoice {
 	date: Date | null;
 	amount: number;
 	paid: boolean;
-	// True for a facture classée "abandonnée" (close_code = 'abandon') — kept visible for the
-	// record, but never downloadable: the document may no longer reflect anything actually owed,
-	// and the source of truth for what happened to it is compta, not this PDF.
+	// True for a facture classée statut 3 ("abandonnée"/cancelled in Dolibarr's own terms) — kept
+	// visible for the record, but never downloadable: the document may no longer reflect anything
+	// actually owed, and the source of truth for what happened to it is compta, not this PDF.
+	// `close_code` (fetched below) could distinguish *why* it was cancelled, but isn't used here —
+	// every statut-3 invoice is treated the same way for Passport's purposes.
 	abandoned: boolean;
 	// French label for Dolibarr's invoice `type` field — see INVOICE_TYPE_LABELS below.
 	type: string;
-	// Relative path Dolibarr uses internally to locate the generated PDF (see `last_main_doc`) —
-	// opaque to callers, only meant to be handed back to downloadInvoiceDocument() below. Some
-	// invoices (draft, never validated/regenerated) have none yet.
-	documentPath: string | null;
+	// Whether a document actually exists to download — never the raw Dolibarr-internal path
+	// itself (see downloadDocument()'s own resolution via getOwnedInvoiceDocument), so nothing
+	// about Dolibarr's storage layout leaks into the page data sent to the browser.
+	downloadable: boolean;
 }
 
 interface RawInvoiceRecord {
@@ -476,9 +491,9 @@ interface RawInvoiceRecord {
 	total_ttc?: string | number;
 	paye?: string | number;
 	// Dolibarr's FactureStatique status, confirmé empiriquement sur l'instance réelle : 0 =
-	// brouillon, 1 = validée, 2 = classée payée, 3 = classée abandonnée (avec close_code =
-	// 'abandon'). Même champ que `statut`/`fk_adherent_type` ailleurs dans ce fichier — deux noms
-	// exposés pour la même valeur selon la version.
+	// brouillon, 1 = validée, 2 = classée payée, 3 = classée abandonnée. Même champ que
+	// `statut`/`fk_adherent_type` ailleurs dans ce fichier — deux noms exposés pour la même valeur
+	// selon la version.
 	statut?: string | number;
 	status?: string | number;
 	close_code?: string | null;
@@ -506,11 +521,16 @@ const INVOICE_TYPE_LABELS: Record<number, string> = {
 // empiriquement contre l'instance réelle que `thirdparty_ids` filtre bien côté serveur (pas besoin
 // du contournement limit=0 utilisé par findIbanOwnerConflict, cette colonne n'est pas un extrafield).
 //
+// `limit=0` : Dolibarr's REST API defaults to `limit=100` (confirmed against
+// api_invoices.class.php's own signature) — without this, a thirdparty crossing 100 invoices
+// would silently lose its most recent ones, since the default sort is oldest-first. The results
+// are re-sorted below regardless, so no server-side sortfield/sortorder is needed on top of this.
+//
 // Les brouillons sont exclus : leur montant peut encore changer avant validation, et Dolibarr ne
 // génère leur PDF qu'à la validation — les montrer inviterait à télécharger un document qui
 // n'existe pas encore, pour une facture qui n'est pas encore définitive.
 export async function getThirdPartyInvoices(thirdPartyId: number): Promise<DolibarrInvoice[]> {
-	const res = await dolibarrApiFetch(`invoices?thirdparty_ids=${thirdPartyId}`);
+	const res = await dolibarrApiFetch(`invoices?thirdparty_ids=${thirdPartyId}&limit=0`);
 	const results = (await res.json()) as RawInvoiceRecord[];
 	return results
 		.filter((r) => Number(r.statut ?? r.status) !== INVOICE_STATUS_DRAFT)
@@ -521,8 +541,9 @@ export async function getThirdPartyInvoices(thirdPartyId: number): Promise<Dolib
 			amount: Number(r.total_ttc ?? 0),
 			paid: String(r.paye) === '1',
 			abandoned: Number(r.statut ?? r.status) === INVOICE_STATUS_ABANDONED,
-			type: INVOICE_TYPE_LABELS[Number(r.type)] ?? 'Facture',
-			documentPath: r.last_main_doc || null
+			type: INVOICE_TYPE_LABELS[Number(r.type)] ?? 'Autre',
+			downloadable:
+				!!r.last_main_doc && Number(r.statut ?? r.status) !== INVOICE_STATUS_ABANDONED
 		}))
 		.sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0));
 }
@@ -562,8 +583,10 @@ async function downloadDocument(documentPath: string): Promise<DolibarrDocument>
 // Re-fetches the invoice from Dolibarr itself to confirm `thirdPartyId` really owns it before
 // downloading anything — never trust a client-supplied invoice id on its own, an authenticated
 // member could otherwise guess another member's invoice id and read their document. Returns null
-// for "not found or not yours" (a plain 404 to the caller), distinct from DolibarrUnavailableError
-// which is left to propagate — same distinction as the rest of this module.
+// for "not found or not yours" (a plain 404 to the caller). DolibarrUnavailableError propagates as
+// before; a genuine non-404 DolibarrApiError (401/403/400 — a permissions or config problem, not
+// a missing invoice) also propagates rather than being silently reported as "not found", so it
+// actually gets noticed instead of looking identical to a routine 404.
 export async function getOwnedInvoiceDocument(
 	thirdPartyId: number,
 	invoiceId: number
@@ -574,13 +597,16 @@ export async function getOwnedInvoiceDocument(
 		record = (await res.json()) as RawInvoiceRecord;
 	} catch (err) {
 		if (err instanceof DolibarrUnavailableError) throw err;
-		return null;
+		if (err instanceof DolibarrApiError && err.status === 404) return null;
+		throw err;
 	}
 
+	const status = Number(record.statut ?? record.status);
 	if (
 		Number(record.socid) !== thirdPartyId ||
 		!record.last_main_doc ||
-		Number(record.statut ?? record.status) === INVOICE_STATUS_ABANDONED
+		status === INVOICE_STATUS_DRAFT ||
+		status === INVOICE_STATUS_ABANDONED
 	) {
 		return null;
 	}
@@ -590,8 +616,10 @@ export async function getOwnedInvoiceDocument(
 	} catch (err) {
 		// The invoice record pointed to a document that's since gone missing on Dolibarr's side
 		// (moved/deleted on disk while the DB path stayed) — same "not found" outcome as above from
-		// the caller's point of view, not a Passport3 bug or an outage.
+		// the caller's point of view, not a Passport3 bug or an outage. Same 404-only carve-out as
+		// above for anything else.
 		if (err instanceof DolibarrUnavailableError) throw err;
-		return null;
+		if (err instanceof DolibarrApiError && err.status === 404) return null;
+		throw err;
 	}
 }
