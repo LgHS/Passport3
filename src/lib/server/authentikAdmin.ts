@@ -12,6 +12,13 @@ export const PROFILE_ATTRIBUTE_FIELDS: ProfileAttributeField[] = [
 	{ key: 'postal_code', label: 'Code postal', required: true },
 	{ key: 'locality', label: 'Localité', required: true },
 	{ key: 'country', label: 'Pays', required: true },
+	{ key: 'birthday', label: 'Date de naissance', required: false },
+	// Boolean stored as the string "true"/"false" (see validateProfileSubmission's special-case
+	// normalization) rather than a free value. Checked by default in the UI (ProfileForm.svelte) —
+	// confirmed with the user despite this being a public disclosure (unlike the opt-out-by-default
+	// NotificationPreferences, which is a private DM setting) — a never-set value reads as "on",
+	// only an explicit "false" (member unchecked and saved) turns it off.
+	{ key: 'birthdayAnnounce', label: 'Annonce anniversaire sur Mattermost', required: false },
 	// Réseaux sociaux — optionnels, affichés dans un panneau replié sur /profile ("Divers
 	// (facultatifs)"). D'autres réseaux pourront suivre ce même schéma (key + label +
 	// required: false, plus un validateur dédié dans profileValidation.ts si le format doit être
