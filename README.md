@@ -29,6 +29,7 @@ Passport3 aims to provide members with one central place to:
 - [x] Choose which information is visible to other members
 - [x] Access the member directory and phonebook
 - [x] Manage emergency contacts
+- [x] View their own permissions and group memberships
 - [ ] Access payment and accounting information
 - [ ] View their physical access permissions
 - Access future hackerspace services through a unified interface
@@ -96,6 +97,8 @@ A restricted admin panel (gated behind an Authentik group) lets designated membe
 
 - List and search member accounts
 - Edit a member's profile on their behalf
+- Edit a member's trombinoscope visibility and displayed role on their behalf
+- Manage a member's emergency contacts on their behalf
 - Create onboarding invitations for new members
 
 ## Planned Features

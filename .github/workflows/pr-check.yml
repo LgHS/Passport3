@@ -1,0 +1,29 @@
+name: PR checks
+
+# Runs on every pull request targeting main — separate from docker-release.yml (triggered by
+# version tags only), never touches main directly and never builds/pushes the Docker image.
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Same mechanism as the Dockerfile's own `RUN corepack enable` — respects the pnpm version
+      # pinned in package.json's `packageManager` field, no separate pnpm-specific action needed.
+      - name: Enable pnpm via corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm check
