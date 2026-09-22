@@ -11,6 +11,7 @@ import {
 	updateMemberIbanPerso,
 	updateThirdPartyIbanPro,
 	findIbanOwnerConflict,
+	getThirdPartyInvoices,
 	DolibarrUnavailableError
 } from '$lib/server/dolibarr';
 
@@ -43,7 +44,8 @@ const NO_MEMBER_RESULT = {
 	subscriptions: [],
 	gaps: [],
 	isInactive: false,
-	bankInfo: null
+	bankInfo: null,
+	invoices: []
 };
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -56,10 +58,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 			return NO_MEMBER_RESULT;
 		}
 
-		const [types, subscriptions, ibanPro] = await Promise.all([
+		const [types, subscriptions, ibanPro, invoices] = await Promise.all([
 			getMemberTypes(),
 			getMemberSubscriptions(member.id),
-			member.fkSoc ? getThirdPartyIbanPro(member.fkSoc) : Promise.resolve(null)
+			member.fkSoc ? getThirdPartyIbanPro(member.fkSoc) : Promise.resolve(null),
+			// Invoices hang off the billing third-party, same as ibanPro above — not every invoice
+			// lines up with a subscription period (see the dedicated section below the subscription
+			// table), so this is intentionally its own list rather than a column on `subscriptions`.
+			member.fkSoc ? getThirdPartyInvoices(member.fkSoc) : Promise.resolve([])
 		]);
 		const { gaps, isInactive } = detectCotisationGaps(subscriptions);
 
@@ -77,7 +83,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 				// IBAN has actually been entered there yet.
 				isPro: member.fkSoc !== null,
 				pro: ibanPro
-			}
+			},
+			invoices
 		};
 	} catch (err) {
 		if (err instanceof DolibarrUnavailableError) {

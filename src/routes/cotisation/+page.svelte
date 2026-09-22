@@ -118,6 +118,13 @@
 	const hasGapsOnPage = $derived(yearRows.some((row) => row.kind === 'gap'));
 </script>
 
+{#snippet downloadIcon()}
+	<svg viewBox="0 0 20 20" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.75">
+		<path d="M10 3v10.5m0 0-3.25-3.25M10 13.5l3.25-3.25" stroke-linecap="round" stroke-linejoin="round" />
+		<path d="M4 14.5v1A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5v-1" stroke-linecap="round" stroke-linejoin="round" />
+	</svg>
+{/snippet}
+
 <svelte:head>
 	<title>Ma cotisation — Passport</title>
 </svelte:head>
@@ -243,6 +250,97 @@
 					n'avons trouvé aucune cotisation. Si ça vous semble être une erreur, contactez
 					<a href="mailto:compta@lghs.be">compta@lghs.be</a>.
 				</p>
+			{/if}
+
+			{#if data.invoices.length > 0}
+				<h2 class="mt-8 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">
+					Factures
+				</h2>
+
+				<!-- Its own table, separate from the subscription one above: an invoice doesn't always
+				     line up with a cotisation period (see project_invoice-downloads-todo), so it can't be
+				     folded into that table as just another column. -->
+				<div class="space-y-2 sm:hidden">
+					{#each data.invoices as invoice (invoice.id)}
+						<div class="border border-black p-3 text-sm">
+							<div class="flex items-center justify-between gap-2">
+								<p class="font-bold">{invoice.ref} <span class="text-gray-500">({invoice.type})</span></p>
+								{#if invoice.abandoned}
+									<span
+										title="Facture abandonnée, contactez compta@lghs.be"
+										class="shrink-0 text-gray-400"
+									>
+										{@render downloadIcon()}
+									</span>
+								{:else if invoice.documentPath}
+									<a
+										href="/cotisation/invoice/{invoice.id}"
+										aria-label="Télécharger la facture {invoice.ref}"
+										title="Télécharger"
+										class="no-underline-fx shrink-0 text-gray-600 hover:text-black"
+									>
+										{@render downloadIcon()}
+									</a>
+								{/if}
+							</div>
+							<p class="mt-1 text-gray-600">{formatDate(invoice.date)}</p>
+							<p class="mt-1 font-bold {invoice.paid ? 'text-green-700' : 'text-red-700'}">
+								{amountFormat.format(invoice.amount)}
+							</p>
+						</div>
+					{/each}
+				</div>
+
+				<div class="hidden overflow-x-auto sm:block">
+					<table class="w-full border-collapse text-sm">
+						<thead>
+							<tr class="bg-black text-white uppercase">
+								<th class="border border-black px-3 py-2 text-left">Référence</th>
+								<th class="border border-black px-3 py-2 text-left">Type</th>
+								<th class="border border-black px-3 py-2 text-left">Date</th>
+								<th class="border border-black px-3 py-2 text-left">Montant</th>
+								<th class="border border-black px-3 py-2 text-left"></th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each data.invoices as invoice (invoice.id)}
+								<tr>
+									<td class="border border-black px-3 py-2">{invoice.ref}</td>
+									<td class="border border-black px-3 py-2">{invoice.type}</td>
+									<td class="border border-black px-3 py-2">{formatDate(invoice.date)}</td>
+									<td
+										class="border border-black px-3 py-2 font-bold {invoice.paid
+											? 'text-green-700'
+											: 'text-red-700'}"
+									>
+										{amountFormat.format(invoice.amount)}
+									</td>
+									<td class="border border-black px-3 py-2 text-center">
+										{#if invoice.abandoned}
+											<span
+												title="Facture abandonnée, contactez compta@lghs.be"
+												class="inline-flex text-gray-400"
+											>
+												{@render downloadIcon()}
+											</span>
+										{:else if invoice.documentPath}
+											<a
+												href="/cotisation/invoice/{invoice.id}"
+												aria-label="Télécharger la facture {invoice.ref}"
+												title="Télécharger"
+												class="no-underline-fx inline-flex text-gray-600 hover:text-black"
+											>
+												{@render downloadIcon()}
+											</a>
+										{:else}
+											—
+										{/if}
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			{/if}
 		{/if}
 	</section>
