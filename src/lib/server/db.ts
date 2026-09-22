@@ -2,6 +2,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
 import { env } from '$env/dynamic/private';
+import { runMigrations } from '$lib/server/migrations';
 
 // Optional, with a default: unlike requireEnv()'d config, nothing about running Passport locally
 // should require setting this up front. In Docker, DB_PATH must point inside the persistent named
@@ -20,6 +21,7 @@ export function getDb(): Database.Database {
 		db = new Database(DB_PATH);
 		db.pragma('journal_mode = WAL');
 		db.pragma('foreign_keys = ON');
+		runMigrations(db);
 	}
 	return db;
 }

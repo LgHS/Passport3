@@ -187,6 +187,10 @@ container is running — recent transactions can still be sitting in `passport3.
 the container before copying just the `.db` file, or back up the whole volume (`.db`, `.db-wal`,
 `.db-shm` together) in one atomic snapshot.
 
+Tables are created by numbered, append-only migrations in `src/lib/server/migrations.ts` (run
+automatically on first connection) rather than by each feature module creating its own table ad
+hoc — add a new entry there for a new table instead of a local `CREATE TABLE IF NOT EXISTS`.
+
 ## Contributing
 
 Contributions are welcome.
