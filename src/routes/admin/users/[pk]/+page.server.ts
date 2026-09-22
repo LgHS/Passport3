@@ -210,12 +210,18 @@ export const actions: Actions = {
 	},
 
 	// Lets an admin force-regenerate a member's badge on their behalf (lost/stolen/unreachable
-	// member) — the confirmation checkbox on the client is the only thing standing between a
-	// misclick and immediately deactivating someone's physical access, so it mirrors /badge's own
-	// warning UI rather than being a bare button.
-	regenerateRfid: async ({ params, locals }) => {
+	// member) — the confirmation checkbox is enforced here, not just on the client: an admin
+	// action invalidating someone else's physical-access credential is higher-stakes than the
+	// member's own /badge regenerate (which exempts a first-ever badge, nothing to lose there —
+	// this page always shows the warning, so it's always required here too).
+	regenerateRfid: async ({ request, params, locals }) => {
 		const admin = requireAdminUser(locals);
 		const pk = resolvePk(params.pk);
+
+		const formData = await request.formData();
+		if (!formData.has('confirmRegenerate')) {
+			return fail(400, { rfidError: 'Confirmation requise.' });
+		}
 
 		await regenerateRfidUid(pk);
 

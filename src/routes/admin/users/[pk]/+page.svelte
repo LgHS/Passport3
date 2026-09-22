@@ -93,6 +93,9 @@
 		if (form?.rfidRegenerated) {
 			showToast('success', 'Badge RFID régénéré.');
 			rfidUnderstood = false;
+		} else if (form?.rfidError) {
+			showToast('error', form.rfidError);
+			rfidSectionOpen = true;
 		}
 	});
 </script>
@@ -415,11 +418,6 @@
 					fonctionner immédiatement. À n'utiliser qu'à sa demande explicite (badge perdu ou
 					copié), jamais par précaution.
 				</p>
-				<label class="mb-4 flex items-start gap-2 text-sm">
-					<input type="checkbox" bind:checked={rfidUnderstood} class="mt-1" />
-					J'ai confirmé avec le membre que son (ses) badge(s) actuel(s) doit (doivent) être
-					régénéré(s).
-				</label>
 				<form
 					method="POST"
 					action="?/regenerateRfid"
@@ -431,6 +429,17 @@
 						};
 					}}
 				>
+					<label class="mb-4 flex items-start gap-2 text-sm">
+						<input
+							type="checkbox"
+							name="confirmRegenerate"
+							value="yes"
+							bind:checked={rfidUnderstood}
+							class="mt-1"
+						/>
+						J'ai confirmé avec le membre que son (ses) badge(s) actuel(s) doit (doivent) être
+						régénéré(s).
+					</label>
 					<button
 						type="submit"
 						disabled={!rfidUnderstood || submittingRfid}
