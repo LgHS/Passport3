@@ -27,3 +27,10 @@ jobs:
 
       - name: Type-check
         run: pnpm check
+
+      # Catches what type-check alone can't: server-only code leaking into the client bundle,
+      # build-time env vars ($env/static/*), or anything else that only breaks at actual
+      # compilation. No secrets needed — verified locally that `pnpm build` succeeds with an
+      # empty environment.
+      - name: Build
+        run: pnpm build
