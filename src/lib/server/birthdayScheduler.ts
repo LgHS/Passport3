@@ -67,17 +67,22 @@ function markSent(pk: number, year: number): void {
 // Watchtower redeploys the container on every release, which would reset an in-memory-only "did I
 // run this hour" flag — harmless here since `alreadySentThisYear` is the real dedup guard, but
 // worth noting this function itself can safely run more than once in the same hour.
-function nowInBrussels(): { hour: number; monthDay: string } {
+function nowInBrussels(): { hour: number; monthDay: string; year: number } {
 	try {
 		const parts = new Intl.DateTimeFormat('en-CA', {
 			timeZone: 'Europe/Brussels',
+			year: 'numeric',
 			month: '2-digit',
 			day: '2-digit',
 			hour: '2-digit',
 			hour12: false
 		}).formatToParts(new Date());
 		const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
-		return { hour: Number(get('hour')), monthDay: `${get('month')}-${get('day')}` };
+		return {
+			hour: Number(get('hour')),
+			monthDay: `${get('month')}-${get('day')}`,
+			year: Number(get('year'))
+		};
 	} catch (err) {
 		// Confirmed working in the real node:22-alpine image (docker run --rm node:22-alpine …,
 		// 2026-09-22): full ICU is bundled by default, Europe/Brussels resolves correctly. This
@@ -87,7 +92,8 @@ function nowInBrussels(): { hour: number; monthDay: string } {
 		const now = new Date();
 		return {
 			hour: now.getUTCHours(),
-			monthDay: `${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`
+			monthDay: `${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`,
+			year: now.getUTCFullYear()
 		};
 	}
 }
@@ -96,10 +102,13 @@ async function checkAndAnnounceBirthdays(): Promise<void> {
 	const settings = getBirthdaySettings();
 	if (!settings.enabled) return;
 
-	const { hour, monthDay } = nowInBrussels();
-	if (hour !== settings.hour) return;
+	const { hour, monthDay, year } = nowInBrussels();
+	// >= rather than === : if Passport3 was down or restarting during the configured hour, the
+	// next hourly check still catches up later the same day instead of skipping that birthday for
+	// the whole year. alreadySentThisYear() is what actually prevents duplicates.
+	if (hour < settings.hour) return;
 
-	const year = new Date().getFullYear();
+	const channelId = requireEnv('MATTERMOST_BIRTHDAY_CHANNEL_ID');
 	const members = await listBirthdayAnnounceMembers();
 
 	for (const member of members) {
@@ -111,7 +120,7 @@ async function checkAndAnnounceBirthdays(): Promise<void> {
 		if (!mattermost.username) continue; // no linked account, nothing to @-mention
 
 		const message = pickTemplate().replace('{mention}', `@${mattermost.username}`);
-		const sent = await postToChannel(requireEnv('MATTERMOST_BIRTHDAY_CHANNEL_ID'), message);
+		const sent = await postToChannel(channelId, message);
 		if (sent) markSent(member.pk, year);
 	}
 }

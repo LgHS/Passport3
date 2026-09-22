@@ -500,12 +500,23 @@ export interface BirthdayAnnounceMember {
 }
 
 // Only members who opted in and actually filled in a birthday — the two are independent fields
-// (see PROFILE_ATTRIBUTE_FIELDS above), a member could have one without the other.
+// (see PROFILE_ATTRIBUTE_FIELDS above), a member could have one without the other. Same
+// active/excluded-account filtering as listDirectoryMembers() — a deactivated or leftover
+// service-account attribute set shouldn't keep getting a birthday shout-out.
 export async function listBirthdayAnnounceMembers(): Promise<BirthdayAnnounceMember[]> {
 	const res = await authentikApiFetch('core/users/?page_size=500');
-	const data = (await res.json()) as { results: AuthentikUserRecord[] };
+	const data = (await res.json()) as {
+		results: (AuthentikUserRecord & { is_active: boolean; type: string })[];
+	};
 	return data.results
-		.filter((u) => u.attributes.birthdayAnnounce === 'true' && !!u.attributes.birthday)
+		.filter(
+			(u) =>
+				u.is_active &&
+				!EXCLUDED_USERNAMES.has(u.username) &&
+				!EXCLUDED_TYPES.has(u.type) &&
+				u.attributes.birthdayAnnounce === 'true' &&
+				!!u.attributes.birthday
+		)
 		.map((u) => ({ pk: u.pk, email: u.email, birthday: String(u.attributes.birthday) }));
 }
 
