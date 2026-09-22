@@ -43,8 +43,8 @@ const FETCH_TIMEOUT_MS = 5_000;
 
 // Thrown when the Authentik admin API is unreachable or erroring server-side (down, restarting,
 // network blip) — as opposed to a genuinely invalid request (bad payload, 404, etc.). Mirrors
-// DolibarrUnavailableError in dolibarr.ts and OidcUnavailableError in authentik.ts, so an outage
-// here can be told apart from an application bug the same way those already are.
+// OidcUnavailableError in authentik.ts, so an outage here can be told apart from an application
+// bug the same way that one already is.
 export class AuthentikUnavailableError extends Error {}
 
 export function getAuthentikAccountUrl(): string {
@@ -92,15 +92,18 @@ export async function getMfaEnrollUrls(): Promise<{ totp: string; static: string
 
 async function authentikApiFetch(path: string, init?: RequestInit): Promise<Response> {
 	// Outside the try below: a missing/invalid AUTHENTIK_ISSUER or AUTHENTIK_API_TOKEN is a
-	// persistent configuration error, not an outage — same reasoning as dolibarr.ts's
-	// dolibarrApiFetch, which had exactly this class of bug until a review caught it.
+	// persistent configuration error, not an outage.
 	const url = new URL(path, apiBase());
 	const token = requireEnv('AUTHENTIK_API_TOKEN');
 
 	let res: Response;
+	let body: string | undefined;
 	try {
 		res = await fetch(url, {
 			...init,
+			// NB: placed after `...init`, so it silently wins over a caller-supplied `init.signal`
+			// rather than the other way round. Harmless today (no caller passes one — 32 call
+			// sites, none with a signal), but worth revisiting if one ever needs to.
 			signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
 			headers: {
 				Authorization: `Bearer ${token}`,
@@ -108,14 +111,23 @@ async function authentikApiFetch(path: string, init?: RequestInit): Promise<Resp
 				...init?.headers
 			}
 		});
+		// Reading the error body under the same try: the AbortSignal above stays armed for the
+		// full exchange, not just until headers arrive, so a body that's still streaming in at
+		// T+5s must be caught here too — otherwise a slow-body timeout would surface as a raw
+		// TimeoutError instead of AuthentikUnavailableError, defeating the point of this function.
+		if (!res.ok) {
+			body = await res.text();
+		}
 	} catch (err) {
-		// Network failure or the timeout above firing (AbortSignal.timeout rejects with a
-		// TimeoutError DOMException) — Authentik never answered at all.
-		throw new AuthentikUnavailableError(`Authentik API request to ${path} timed out or failed: ${err}`);
+		// Network failure, or the timeout above firing on either the connection or the body read
+		// (AbortSignal.timeout rejects with a TimeoutError DOMException either way) — Authentik
+		// never gave us a complete answer.
+		throw new AuthentikUnavailableError(`Authentik API request to ${path} timed out or failed: ${err}`, {
+			cause: err
+		});
 	}
 
 	if (!res.ok) {
-		const body = await res.text();
 		// >=500 is Authentik's own server erroring out (down/misconfigured/overloaded) — treat as
 		// an outage. A 4xx is a genuine request problem and should stay a hard error.
 		if (res.status >= 500) {
