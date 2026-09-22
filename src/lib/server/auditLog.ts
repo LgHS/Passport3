@@ -109,6 +109,19 @@ export function logAuditEvent(
 	}
 }
 
+function parseDetails(details: string | null, eventId: number): Record<string, unknown> | null {
+	if (!details) return null;
+	try {
+		return JSON.parse(details) as Record<string, unknown>;
+	} catch (err) {
+		// A single malformed row (manual DB edit, future incompatible format, ...) must never take
+		// down the whole history page for every admin/member — same best-effort spirit as
+		// logAuditEvent()'s own write-side try/catch above.
+		console.error(`[auditLog] Failed to parse details JSON for event ${eventId}:`, err);
+		return null;
+	}
+}
+
 function rowToEvent(r: AuditEventRow): AuditEvent {
 	return {
 		id: r.id,
@@ -118,7 +131,7 @@ function rowToEvent(r: AuditEventRow): AuditEvent {
 		action: r.action,
 		targetPk: r.target_pk,
 		targetEmail: r.target_email,
-		details: r.details ? (JSON.parse(r.details) as Record<string, unknown>) : null
+		details: parseDetails(r.details, r.id)
 	};
 }
 

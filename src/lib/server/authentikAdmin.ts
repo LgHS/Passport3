@@ -128,12 +128,22 @@ export async function getUserProfile(pk: number): Promise<UserProfile> {
 	return profile;
 }
 
-// Returns whether anything actually changed (and was written), so callers can skip telling the
-// user "saved" when they just re-submitted the same values.
+export interface ProfileMutationResult {
+	// Whether anything actually changed (and was written), so callers can skip telling the user
+	// "saved" when they just re-submitted the same values, and skip logging a no-op audit event.
+	changed: boolean;
+	// Sourced from the same read used for the merge/PATCH below, not from getUserProfile()'s
+	// cache — a caller reading its own "before" via getUserProfile() first can get a stale value
+	// if the cache hasn't expired yet, which would make the audit trail lie about what changed and
+	// when. See feedback_recheck-must-verify-usage-not-just-types and PR #45's review.
+	before: { name: string; attributes: Record<string, string> };
+	after: { name: string; attributes: Record<string, string> };
+}
+
 export async function updateUserProfile(
 	pk: number,
 	update: { name: string; attributes: Record<string, string> }
-): Promise<boolean> {
+): Promise<ProfileMutationResult> {
 	// Read-merge-write: `attributes` is an opaque JSON blob on the Authentik side, and a PATCH
 	// replaces it wholesale — so we must merge into the current value rather than send ours alone,
 	// or we'd silently wipe out attributes this app doesn't know about.
@@ -147,13 +157,16 @@ export async function updateUserProfile(
 		}
 	}
 
+	const before = { name: currentUser.name, attributes: pickAttributes(currentUser.attributes) };
+	const after = { name: update.name, attributes: pickAttributes(mergedAttributes) };
+
 	const nameChanged = update.name !== currentUser.name;
 	const attributesChanged = PROFILE_ATTRIBUTE_FIELDS.some(
 		({ key }) => (currentUser.attributes[key] ?? '') !== (mergedAttributes[key] ?? '')
 	);
 
 	if (!nameChanged && !attributesChanged) {
-		return false;
+		return { changed: false, before, after: before };
 	}
 
 	await authentikApiFetch(`core/users/${pk}/`, {
@@ -172,7 +185,7 @@ export async function updateUserProfile(
 		attributes: pickAttributes(mergedAttributes)
 	});
 
-	return true;
+	return { changed: true, before, after };
 }
 
 // Not part of PROFILE_ATTRIBUTE_FIELDS: that whitelist is specifically the merge boundary for
@@ -267,8 +280,12 @@ export interface TrombinoscopeOptin {
 
 const TROMBINOSCOPE_DEFAULTS: TrombinoscopeOptin = {
 	visible: false,
-	showAvatar: false,
-	showChat: false,
+	// showAvatar/showChat default to true, unlike every other field here — a deliberate choice,
+	// applies retroactively to members who opted into the trombinoscope before these fields
+	// existed (their stored attribute has no such key, so this default fills it in on next read
+	// either way).
+	showAvatar: true,
+	showChat: true,
 	showFirstname: false,
 	showLastname: false,
 	showMail: false,
@@ -279,13 +296,27 @@ const TROMBINOSCOPE_DEFAULTS: TrombinoscopeOptin = {
 // field edited through the generic profile form, it's a structured on/off blob with its own form.
 const TROMBINOSCOPE_ATTRIBUTE = 'trombinoscope';
 
+// The `trombinoscope` attribute also holds `tag`/`tagc` (see TrombinoscopeTag below) in that same
+// object — a plain spread of the raw value over TROMBINOSCOPE_DEFAULTS would silently carry those
+// along too despite the TrombinoscopeOptin type claiming only these 7 fields. That bit both
+// getTrombinoscopeOptin() and the audit trail below: a member merely toggling their visibility got
+// tag/tagc showing up as "removed" in the diff, since `after` (a clean TrombinoscopeOptin) never
+// had them in the first place. Whitelisting explicitly, same spirit as pickAttributes() above.
+function pickTrombinoscopeOptin(raw: unknown): TrombinoscopeOptin {
+	const source = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+	const optin = { ...TROMBINOSCOPE_DEFAULTS };
+	for (const key of Object.keys(TROMBINOSCOPE_DEFAULTS) as (keyof TrombinoscopeOptin)[]) {
+		if (typeof source[key] === 'boolean') {
+			optin[key] = source[key] as boolean;
+		}
+	}
+	return optin;
+}
+
 export async function getTrombinoscopeOptin(pk: number): Promise<TrombinoscopeOptin> {
 	const res = await authentikApiFetch(`core/users/${pk}/`);
 	const user = (await res.json()) as AuthentikUserRecord;
-	const value = user.attributes[TROMBINOSCOPE_ATTRIBUTE];
-	return typeof value === 'object' && value !== null
-		? { ...TROMBINOSCOPE_DEFAULTS, ...(value as Partial<TrombinoscopeOptin>) }
-		: TROMBINOSCOPE_DEFAULTS;
+	return pickTrombinoscopeOptin(user.attributes[TROMBINOSCOPE_ATTRIBUTE]);
 }
 
 // Unchecked checkboxes simply aren't present in FormData — absence means false, same convention
@@ -303,21 +334,42 @@ export function optinFromFormData(formData: FormData): TrombinoscopeOptin {
 	};
 }
 
+export interface TrombinoscopeOptinMutationResult {
+	// Sourced from this same call's own read, not a separate getTrombinoscopeOptin() call made by
+	// the caller beforehand — two independent reads leave a window where the value could change
+	// between them, which would make the audit trail's "before" not actually be the state this
+	// PATCH was based on. See ProfileMutationResult above and PR #45's review.
+	before: TrombinoscopeOptin;
+	after: TrombinoscopeOptin;
+}
+
 // Read-merge-write, same reasoning as updateUserProfile/regenerateRfidUid — but two levels deep
 // here: not just `attributes` as a whole, but also the `trombinoscope` value inside it. Fields
 // like `tag`/`tagc` (admin-assigned role labels) live in that same object outside of what this
 // member-facing form ever submits — replacing it wholesale would silently wipe them out the next
 // time a member just toggles their own visibility.
-export async function updateTrombinoscopeOptin(pk: number, optin: TrombinoscopeOptin): Promise<void> {
+export async function updateTrombinoscopeOptin(
+	pk: number,
+	optin: TrombinoscopeOptin
+): Promise<TrombinoscopeOptinMutationResult> {
 	const current = await authentikApiFetch(`core/users/${pk}/`);
 	const currentUser = (await current.json()) as AuthentikUserRecord;
 	const currentTrombinoscope = currentUser.attributes[TROMBINOSCOPE_ATTRIBUTE];
-	const mergedTrombinoscope = {
-		...(typeof currentTrombinoscope === 'object' && currentTrombinoscope !== null
+	const currentTrombinoscopeObj =
+		typeof currentTrombinoscope === 'object' && currentTrombinoscope !== null
 			? currentTrombinoscope
-			: {}),
-		...optin
-	};
+			: {};
+	const before = pickTrombinoscopeOptin(currentTrombinoscope);
+
+	// Hiding the profile must only flip `visible`: the member-facing form removes the other
+	// checkboxes from the DOM entirely while hidden (see /trombinoscope's
+	// `{#if wantsToBeDisplayed}`), so an absent checkbox in that submission means "not shown right
+	// now", not "turn this off for good". Applying it as a real change would silently wipe every
+	// other preference the moment someone hides their profile, resetting them all by the time they
+	// show it again.
+	const mergedTrombinoscope = optin.visible
+		? { ...currentTrombinoscopeObj, ...optin }
+		: { ...currentTrombinoscopeObj, visible: false };
 
 	await authentikApiFetch(`core/users/${pk}/`, {
 		method: 'PATCH',
@@ -325,6 +377,8 @@ export async function updateTrombinoscopeOptin(pk: number, optin: TrombinoscopeO
 			attributes: { ...currentUser.attributes, [TROMBINOSCOPE_ATTRIBUTE]: mergedTrombinoscope }
 		})
 	});
+
+	return { before, after: pickTrombinoscopeOptin(mergedTrombinoscope) };
 }
 
 // `tag`/`tagc` — an admin-assigned role label (e.g. "Prés. CA") and its badge color — live in the
@@ -349,17 +403,37 @@ export async function getTrombinoscopeTag(pk: number): Promise<TrombinoscopeTag>
 	};
 }
 
+export interface TrombinoscopeTagMutationResult {
+	// Same freshness reasoning as TrombinoscopeOptinMutationResult above.
+	before: TrombinoscopeTag;
+	after: TrombinoscopeTag;
+}
+
 // Same read-merge-write shape as updateTrombinoscopeOptin, kept as its own function rather than
 // folded into it: the two are edited from different forms (this one only exists in the admin UI)
 // and have independent validation (tagColor is a hex string, not a checkbox).
-export async function updateTrombinoscopeTag(pk: number, tag: TrombinoscopeTag): Promise<void> {
+export async function updateTrombinoscopeTag(
+	pk: number,
+	tag: TrombinoscopeTag
+): Promise<TrombinoscopeTagMutationResult> {
 	const current = await authentikApiFetch(`core/users/${pk}/`);
 	const currentUser = (await current.json()) as AuthentikUserRecord;
 	const currentTrombinoscope = currentUser.attributes[TROMBINOSCOPE_ATTRIBUTE];
+	const rawTrombi =
+		typeof currentTrombinoscope === 'object' && currentTrombinoscope !== null
+			? (currentTrombinoscope as Record<string, unknown>)
+			: {};
+	const beforeTagValue = rawTrombi.tag;
+	const beforeTagColorValue = rawTrombi.tagc;
+	const before: TrombinoscopeTag = {
+		tag: typeof beforeTagValue === 'string' && beforeTagValue.trim() ? beforeTagValue : null,
+		tagColor:
+			typeof beforeTagColorValue === 'string' && HEX_COLOR_RE.test(beforeTagColorValue)
+				? beforeTagColorValue
+				: null
+	};
 	const mergedTrombinoscope = {
-		...(typeof currentTrombinoscope === 'object' && currentTrombinoscope !== null
-			? currentTrombinoscope
-			: {}),
+		...rawTrombi,
 		tag: tag.tag ?? '',
 		tagc: tag.tagColor ?? ''
 	};
@@ -370,6 +444,8 @@ export async function updateTrombinoscopeTag(pk: number, tag: TrombinoscopeTag):
 			attributes: { ...currentUser.attributes, [TROMBINOSCOPE_ATTRIBUTE]: mergedTrombinoscope }
 		})
 	});
+
+	return { before, after: tag };
 }
 
 // One-directional, sensitive data: a member records who to contact in case of an accident at the
@@ -399,17 +475,43 @@ export async function getEmergencyContacts(pk: number): Promise<EmergencyContact
 		.map((c) => ({ name: c.name, phone: c.phone, relation: typeof c.relation === 'string' ? c.relation : '' }));
 }
 
+export interface EmergencyContactsMutationResult {
+	// Same freshness reasoning as ProfileMutationResult above — also incidentally more reliable
+	// than the previous caller-side getEmergencyContacts(pk).catch(() => null): that read could
+	// fail independently of the mutation and log a misleading `null` "before", whereas this one
+	// can't fail without the mutation itself failing too.
+	before: EmergencyContact[];
+	after: EmergencyContact[];
+}
+
 // Read-merge-write, same reasoning as updateUserProfile: `attributes` is replaced wholesale by a
 // PATCH, so the rest of the blob must be preserved rather than overwritten.
-export async function updateEmergencyContacts(pk: number, contacts: EmergencyContact[]): Promise<void> {
+export async function updateEmergencyContacts(
+	pk: number,
+	contacts: EmergencyContact[]
+): Promise<EmergencyContactsMutationResult> {
 	const current = await authentikApiFetch(`core/users/${pk}/`);
 	const currentUser = (await current.json()) as AuthentikUserRecord;
+	const beforeValue = currentUser.attributes[EMERGENCY_CONTACTS_ATTRIBUTE];
+	const before = Array.isArray(beforeValue)
+		? beforeValue
+				.filter(isEmergencyContact)
+				.slice(0, MAX_EMERGENCY_CONTACTS)
+				.map((c) => ({
+					name: c.name,
+					phone: c.phone,
+					relation: typeof c.relation === 'string' ? c.relation : ''
+				}))
+		: [];
+
 	await authentikApiFetch(`core/users/${pk}/`, {
 		method: 'PATCH',
 		body: JSON.stringify({
 			attributes: { ...currentUser.attributes, [EMERGENCY_CONTACTS_ATTRIBUTE]: contacts }
 		})
 	});
+
+	return { before, after: contacts };
 }
 
 export interface AdminUserSummary {

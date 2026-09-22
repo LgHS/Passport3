@@ -2,6 +2,15 @@ export function normalizeIban(raw: string): string {
 	return raw.replace(/\s+/g, '').toUpperCase();
 }
 
+// For anywhere an IBAN is persisted outside of Dolibarr itself (the audit log, notably) — keeping
+// enough to spot which account changed without keeping the full number at rest in a second place.
+// '' -> null (nothing to mask, matches "no IBAN" the same way the rest of this module treats it).
+export function maskIban(raw: string): string | null {
+	const iban = normalizeIban(raw);
+	if (!iban) return null;
+	return iban.length <= 4 ? iban : `••••${iban.slice(-4)}`;
+}
+
 // Format (ISO 13616) + mod-97 checksum (ISO 7064) — a plausible-looking string isn't enough
 // before this gets written into Dolibarr's accounting data, so validate the real checksum
 // server-side rather than trusting the client-side input pattern.

@@ -77,30 +77,23 @@ export const actions: Actions = {
 			});
 		}
 
-		// Read before writing, purely for the audit trail below — updateUserProfile() does its own
-		// separate read-merge-write internally and doesn't expose the prior value.
-		const before = await getUserProfile(pk).catch(() => null);
-		const changed = await updateUserProfile(pk, { name: result.name, attributes: result.attributes });
+		// before/after come from updateUserProfile()'s own internal read, not a separate call here
+		// — see the member-facing version of this same fix (src/routes/profile/+page.server.ts).
+		const mutation = await updateUserProfile(pk, { name: result.name, attributes: result.attributes });
 
-		if (changed) {
-			// result.attributes only holds the keys actually submitted — mirror
-			// updateUserProfile's own merge so `after` reflects what's actually now stored, not
-			// just what this submission touched (see the member-facing version of this same fix).
+		if (mutation.changed) {
 			logAuditEvent(
 				{ sub: admin.sub, label: displayName(admin) },
 				'admin',
 				'profile.update',
 				{ pk },
-				{
-					before: before ? { name: before.name, attributes: before.attributes } : null,
-					after: { name: result.name, attributes: { ...before?.attributes, ...result.attributes } }
-				}
+				{ before: mutation.before, after: mutation.after }
 			);
 		}
 
 		return {
 			success: true,
-			changed,
+			changed: mutation.changed,
 			firstName: result.firstName,
 			lastName: result.lastName,
 			attributes: result.attributes
@@ -117,10 +110,9 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const optin = optinFromFormData(formData);
 
-		const before = await getTrombinoscopeOptin(pk);
-
+		let mutation;
 		try {
-			await updateTrombinoscopeOptin(pk, optin);
+			mutation = await updateTrombinoscopeOptin(pk, optin);
 		} catch {
 			return fail(500, { optinError: "La sauvegarde de la visibilité a échoué, réessayez." });
 		}
@@ -130,7 +122,7 @@ export const actions: Actions = {
 			'admin',
 			'trombinoscope.optin.update',
 			{ pk },
-			{ before: { ...before }, after: { ...optin } }
+			{ before: mutation.before, after: mutation.after }
 		);
 
 		return { optinSuccess: true, optin };
@@ -157,10 +149,9 @@ export const actions: Actions = {
 			});
 		}
 
-		const before = await getTrombinoscopeTag(pk);
-
+		let mutation;
 		try {
-			await updateTrombinoscopeTag(pk, { tag: tag || null, tagColor: tagColor || null });
+			mutation = await updateTrombinoscopeTag(pk, { tag: tag || null, tagColor: tagColor || null });
 		} catch {
 			return fail(500, { tagError: 'La sauvegarde du rôle a échoué, réessayez.', tag, tagColor });
 		}
@@ -170,7 +161,7 @@ export const actions: Actions = {
 			'admin',
 			'trombinoscope.tag.update',
 			{ pk },
-			{ before: { ...before }, after: { tag, tagColor } }
+			{ before: mutation.before, after: mutation.after }
 		);
 
 		return { tagSuccess: true, tag, tagColor };
@@ -186,10 +177,9 @@ export const actions: Actions = {
 			return fail(400, { emergencyContactsError: result.error, emergencyContacts: result.contacts });
 		}
 
-		const before = await getEmergencyContacts(pk).catch(() => null);
-
+		let mutation;
 		try {
-			await updateEmergencyContacts(pk, result.contacts);
+			mutation = await updateEmergencyContacts(pk, result.contacts);
 		} catch {
 			return fail(500, {
 				emergencyContactsError: "La sauvegarde des contacts d'urgence a échoué, réessayez.",
@@ -206,7 +196,7 @@ export const actions: Actions = {
 			'admin',
 			'emergencyContacts.update',
 			{ pk },
-			{ before: { contactCount: before?.length ?? null }, after: { contactCount: result.contacts.length } }
+			{ before: { contactCount: mutation.before.length }, after: { contactCount: mutation.after.length } }
 		);
 
 		return { emergencyContactsSuccess: true, emergencyContacts: result.contacts };
