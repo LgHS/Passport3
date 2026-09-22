@@ -116,6 +116,37 @@
 	const newerYear = $derived(yearIndex > 0 ? availableYears[yearIndex - 1] : null);
 	const yearRows = $derived(cotisationRows.filter((row) => row.year === displayedYear));
 	const hasGapsOnPage = $derived(yearRows.some((row) => row.kind === 'gap'));
+
+	// Separate year pager from the one above, deliberately not shared with it: an invoice doesn't
+	// necessarily fall in a year that has a subscription or gap (see project_invoice-downloads-todo),
+	// so deriving this pager's years from cotisationRows would make those invoices' years
+	// unreachable — never offered as a choice, never shown. Same self-healing pattern otherwise.
+	const datedInvoices = $derived(data.invoices.filter((i) => i.date !== null));
+	const undatedInvoices = $derived(data.invoices.filter((i) => i.date === null));
+	const invoiceYears = $derived(
+		Array.from(new Set(datedInvoices.map((i) => (i.date as Date).getFullYear()))).sort(
+			(a, b) => b - a
+		)
+	);
+	let selectedInvoiceYear = $state<number | null>(null);
+	const displayedInvoiceYear = $derived(
+		selectedInvoiceYear !== null && invoiceYears.includes(selectedInvoiceYear)
+			? selectedInvoiceYear
+			: (invoiceYears[0] ?? new Date().getFullYear())
+	);
+	const invoiceYearIndex = $derived(invoiceYears.indexOf(displayedInvoiceYear));
+	const olderInvoiceYear = $derived(
+		invoiceYearIndex >= 0 && invoiceYearIndex + 1 < invoiceYears.length
+			? invoiceYears[invoiceYearIndex + 1]
+			: null
+	);
+	const newerInvoiceYear = $derived(invoiceYearIndex > 0 ? invoiceYears[invoiceYearIndex - 1] : null);
+	const yearInvoices = $derived(
+		datedInvoices.filter((i) => (i.date as Date).getFullYear() === displayedInvoiceYear)
+	);
+	// Undated invoices belong to no year, so they repeat on every page rather than becoming
+	// unreachable — same reasoning as undatedSubscriptions above.
+	const displayedInvoices = $derived([...yearInvoices, ...undatedInvoices]);
 </script>
 
 {#snippet downloadIcon()}
@@ -257,11 +288,33 @@
 					Factures
 				</h2>
 
+				{#if invoiceYears.length > 1}
+					<div class="mb-3 flex items-center justify-between border border-black">
+						<button
+							type="button"
+							onclick={() => (selectedInvoiceYear = olderInvoiceYear)}
+							disabled={olderInvoiceYear === null}
+							class="px-3 py-2 text-sm font-bold uppercase hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-black"
+						>
+							‹ {olderInvoiceYear ?? ''}
+						</button>
+						<span class="text-sm font-bold uppercase">{displayedInvoiceYear}</span>
+						<button
+							type="button"
+							onclick={() => (selectedInvoiceYear = newerInvoiceYear)}
+							disabled={newerInvoiceYear === null}
+							class="px-3 py-2 text-sm font-bold uppercase hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-black"
+						>
+							{newerInvoiceYear ?? ''} ›
+						</button>
+					</div>
+				{/if}
+
 				<!-- Its own table, separate from the subscription one above: an invoice doesn't always
 				     line up with a cotisation period (see project_invoice-downloads-todo), so it can't be
 				     folded into that table as just another column. -->
 				<div class="space-y-2 sm:hidden">
-					{#each data.invoices as invoice (invoice.id)}
+					{#each displayedInvoices as invoice (invoice.id)}
 						<div class="border border-black p-3 text-sm">
 							<div class="flex items-center justify-between gap-2">
 								<p class="font-bold">{invoice.ref} <span class="text-gray-500">({invoice.type})</span></p>
@@ -303,7 +356,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each data.invoices as invoice (invoice.id)}
+							{#each displayedInvoices as invoice (invoice.id)}
 								<tr>
 									<td class="border border-black px-3 py-2">{invoice.ref}</td>
 									<td class="border border-black px-3 py-2">{invoice.type}</td>
