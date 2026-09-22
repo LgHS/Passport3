@@ -23,6 +23,10 @@
 	<p class="mb-6 border-4 border-black bg-lghs-yellow px-4 py-3 font-bold">
 		{wasEmpty ? 'Votre badge a été généré.' : 'Votre (vos) badge(s) a (ont) été régénéré(s).'}
 	</p>
+{:else if form?.error}
+	<p class="mb-6 border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+		{form.error}
+	</p>
 {/if}
 
 {#if uuid === null}
@@ -115,10 +119,6 @@
 						immédiatement. Cette opération ne doit être utilisée qu'en cas de perte ou de copie de
 						votre (vos) badge(s).
 					</p>
-					<label class="mb-4 flex items-start gap-2 text-sm">
-						<input type="checkbox" bind:checked={understood} class="mt-1" />
-						J'ai compris que mon (mes) badge(s) actuel(s) ne fonctionnera(ont) plus.
-					</label>
 					<form
 						method="POST"
 						action="?/regenerate"
@@ -132,6 +132,16 @@
 							};
 						}}
 					>
+						<label class="mb-4 flex items-start gap-2 text-sm">
+							<input
+								type="checkbox"
+								name="confirmRegenerate"
+								value="yes"
+								bind:checked={understood}
+								class="mt-1"
+							/>
+							J'ai compris que mon (mes) badge(s) actuel(s) ne fonctionnera(ont) plus.
+						</label>
 						<div class="flex gap-3 pb-1">
 							<button
 								type="submit"
