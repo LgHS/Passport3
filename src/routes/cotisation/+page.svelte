@@ -394,6 +394,13 @@
 						</tbody>
 					</table>
 				</div>
+
+				<p class="mt-3 text-sm text-gray-600">
+					Si vous êtes enregistré·e sur le réseau Peppol, la facture vous est également envoyée
+					par ce biais. Si le bouton de téléchargement est inactif, la facture est abandonnée ou
+					dans un état anormal. Pour toute question, contactez
+					<a href="mailto:compta@lghs.be">compta@lghs.be</a>.
+				</p>
 			{/if}
 		{/if}
 	</section>
