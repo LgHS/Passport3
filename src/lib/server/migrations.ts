@@ -42,6 +42,47 @@ const migrations: Migration[] = [
 			// admin/user distinction did, so every row logged before it shipped was an admin action.
 			db.exec(`ALTER TABLE audit_events ADD COLUMN source TEXT NOT NULL DEFAULT 'admin'`);
 		}
+	},
+	{
+		version: 3,
+		name: 'create wishlist_items and wishlist_votes',
+		up: (db) => {
+			db.exec(`
+				CREATE TABLE wishlist_items (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+					author_sub TEXT NOT NULL,
+					author_label TEXT NOT NULL,
+					title TEXT NOT NULL,
+					description TEXT,
+					link TEXT,
+					quantity INTEGER NOT NULL DEFAULT 1,
+					estimated_amount REAL,
+					type TEXT NOT NULL
+				)
+			`);
+			// References wishlist_items, so must be created after it — foreign_keys is ON.
+			db.exec(`
+				CREATE TABLE wishlist_votes (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					item_id INTEGER NOT NULL REFERENCES wishlist_items(id) ON DELETE CASCADE,
+					voter_sub TEXT NOT NULL,
+					voter_label TEXT NOT NULL,
+					value INTEGER NOT NULL,
+					created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+					UNIQUE(item_id, voter_sub)
+				)
+			`);
+		}
+	},
+	{
+		version: 4,
+		name: 'add wishlist_items.status and resolved_at',
+		up: (db) => {
+			// Every pre-existing row predates resolution, hence the 'pending' default/backfill.
+			db.exec(`ALTER TABLE wishlist_items ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'`);
+			db.exec(`ALTER TABLE wishlist_items ADD COLUMN resolved_at TEXT`);
+		}
 	}
 ];
 
