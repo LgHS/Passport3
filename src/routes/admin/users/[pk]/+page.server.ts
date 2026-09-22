@@ -9,9 +9,14 @@ import {
 	optinFromFormData,
 	getTrombinoscopeTag,
 	updateTrombinoscopeTag,
-	HEX_COLOR_RE
+	getUserGroups,
+	HEX_COLOR_RE,
+	getEmergencyContacts,
+	updateEmergencyContacts,
+	MAX_EMERGENCY_CONTACTS
 } from '$lib/server/authentikAdmin';
-import { validateProfileSubmission } from '$lib/server/profileValidation';
+import { lookupMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
+import { validateProfileSubmission, validateEmergencyContactsSubmission } from '$lib/server/profileValidation';
 import { requireAdmin } from '$lib/server/auth';
 
 function resolvePk(paramPk: string): number {
@@ -25,16 +30,44 @@ function resolvePk(paramPk: string): number {
 export const load: PageServerLoad = async ({ params }) => {
 	const pk = resolvePk(params.pk);
 
-	const [profile, optin, tag] = await Promise.all([
+	const [profile, optin, tag, groups, emergencyContacts] = await Promise.all([
 		getUserProfile(pk).catch(() => null),
 		getTrombinoscopeOptin(pk),
-		getTrombinoscopeTag(pk)
+		getTrombinoscopeTag(pk),
+		// Best-effort, same reasoning as getUserProfile's .catch() above — a transient Authentik
+		// hiccup on this specific call shouldn't 500 the whole edit page (profile, visibility, tag
+		// all fail together via Promise.all) just because the Permissions section couldn't load.
+		// null (not []) on failure — "couldn't check" must stay distinguishable from "genuinely no
+		// groups", the two read very differently to an admin looking at someone's access.
+		getUserGroups(pk).catch(() => null),
+		// Same reasoning — an admin seeing "aucun contact" during an actual emergency must never be
+		// a fetch hiccup in disguise, see feedback_distinguish-fetch-failure-from-empty.
+		getEmergencyContacts(pk).catch(() => null)
 	]);
 	if (!profile) {
 		error(404, 'Membre introuvable.');
 	}
 
-	return { pk, profile, fields: PROFILE_ATTRIBUTE_FIELDS, optin, tag };
+	// Admin-only: shown regardless of the member's own "Pseudo Chat" opt-in on the
+	// trombinoscope — this is an internal tool to reach a member for oral/email requests, not
+	// the public directory, so it isn't gated by the same consent. `unavailable` stays
+	// distinguishable from "no linked account" — see feedback_distinguish-fetch-failure-from-empty.
+	const mattermost = await lookupMattermostUsername(profile.email);
+	const mattermostDmUrl = mattermost.username ? buildMattermostDmUrl(mattermost.username) : null;
+
+	return {
+		pk,
+		profile,
+		fields: PROFILE_ATTRIBUTE_FIELDS,
+		optin,
+		tag,
+		mattermostUsername: mattermost.username,
+		mattermostUnavailable: mattermost.unavailable,
+		mattermostDmUrl,
+		groups,
+		emergencyContacts,
+		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS
+	};
 };
 
 export const actions: Actions = {
@@ -111,5 +144,27 @@ export const actions: Actions = {
 		}
 
 		return { tagSuccess: true, tag, tagColor };
+	},
+
+	updateEmergencyContacts: async ({ request, params, locals }) => {
+		requireAdmin(locals);
+
+		const pk = resolvePk(params.pk);
+		const result = validateEmergencyContactsSubmission(await request.formData());
+
+		if (!result.ok) {
+			return fail(400, { emergencyContactsError: result.error, emergencyContacts: result.contacts });
+		}
+
+		try {
+			await updateEmergencyContacts(pk, result.contacts);
+		} catch {
+			return fail(500, {
+				emergencyContactsError: "La sauvegarde des contacts d'urgence a échoué, réessayez.",
+				emergencyContacts: result.contacts
+			});
+		}
+
+		return { emergencyContactsSuccess: true, emergencyContacts: result.contacts };
 	}
 };

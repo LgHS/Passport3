@@ -48,9 +48,17 @@ export interface ServiceStatus {
 	latencyMs: number;
 }
 
+// Distinct from ServiceStatus: this isn't a live up/down check, just a report of the cached
+// Mattermost directory lookup's last successful fetch — `null` means never fetched yet.
+export interface MattermostCacheStatus {
+	latencyMs: number;
+	cachedAt: number;
+}
+
 export interface SystemStatus {
 	authentik: ServiceStatus;
 	dolibarr: ServiceStatus;
+	mattermost: ServiceStatus;
 }
 
 export interface ProfileAttributeField {
@@ -65,4 +73,10 @@ export interface UserProfile {
 	email: string;
 	avatar: string | null;
 	attributes: Record<string, string>;
+}
+
+export interface EmergencyContact {
+	name: string;
+	phone: string;
+	relation: string;
 }

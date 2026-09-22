@@ -38,13 +38,31 @@ async function checkDolibarr(): Promise<ServiceStatus> {
 	}
 }
 
+async function checkMattermost(): Promise<ServiceStatus> {
+	const start = Date.now();
+	try {
+		const base = requireEnv('MATTERMOST_URL').replace(/\/+$/, '');
+		// Unauthenticated on this instance (confirmed empirically) — no token needed just to ping.
+		const res = await fetch(`${base}/api/v4/system/ping`, {
+			signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS)
+		});
+		return { healthy: res.ok, latencyMs: Date.now() - start };
+	} catch {
+		return { healthy: false, latencyMs: Date.now() - start };
+	}
+}
+
 export async function getSystemStatus(): Promise<SystemStatus> {
 	if (cached && cached.expiresAt > Date.now()) {
 		return cached.status;
 	}
 
-	const [authentik, dolibarr] = await Promise.all([checkAuthentik(), checkDolibarr()]);
-	const status: SystemStatus = { authentik, dolibarr };
+	const [authentik, dolibarr, mattermost] = await Promise.all([
+		checkAuthentik(),
+		checkDolibarr(),
+		checkMattermost()
+	]);
+	const status: SystemStatus = { authentik, dolibarr, mattermost };
 	cached = { status, expiresAt: Date.now() + CACHE_TTL_MS };
 	return status;
 }

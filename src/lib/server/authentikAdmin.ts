@@ -1,8 +1,9 @@
 import { requireEnv } from '$lib/server/env';
 import { getCachedProfile, setCachedProfile } from '$lib/server/profileCache';
-import type { ProfileAttributeField, UserProfile } from '$lib/types';
+import { getMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
+import type { EmergencyContact, ProfileAttributeField, UserProfile } from '$lib/types';
 
-export type { ProfileAttributeField, UserProfile };
+export type { EmergencyContact, ProfileAttributeField, UserProfile };
 
 // Whitelist that also acts as the merge boundary for updateUserProfile: only these keys are
 // ever read from or written into the user's Authentik `attributes` blob.
@@ -186,6 +187,36 @@ export async function updateUserProfile(
 // the member-editable profile form, whereas rfid_uid is provisioned by us and never user-entered.
 const RFID_UID_ATTRIBUTE = 'rfid_uid';
 
+export interface UserGroup {
+	name: string;
+	isSuperuser: boolean;
+	// From the group's own `attributes.notes`, if set (Directory -> Groups -> [group] -> Edit ->
+	// Attributes, in Authentik's admin UI). Most groups won't have one.
+	note: string | null;
+}
+
+interface AuthentikUserRecordWithGroups extends AuthentikUserRecord {
+	groups_obj: { name: string; is_superuser: boolean; attributes: Record<string, unknown> }[];
+}
+
+// Full group objects (name, is_superuser, attributes) — unlike the plain group name list already
+// carried in the member's own OIDC session (`profile` scope's `groups` claim, group names only),
+// this needs the privileged service token: group attributes are never exposed via the ID token.
+export async function getUserGroups(pk: number): Promise<UserGroup[]> {
+	const res = await authentikApiFetch(`core/users/${pk}/`);
+	const user = (await res.json()) as AuthentikUserRecordWithGroups;
+	// Defensive: this is a cast, not a runtime-validated schema — don't assume the field is always
+	// present in whatever shape a future Authentik version (or a differently-scoped token) returns.
+	return (user.groups_obj ?? []).map((g) => {
+		const note = g.attributes.notes;
+		return {
+			name: g.name,
+			isSuperuser: g.is_superuser,
+			note: typeof note === 'string' && note.trim() ? note : null
+		};
+	});
+}
+
 export async function getRfidUid(pk: number): Promise<string | null> {
 	const res = await authentikApiFetch(`core/users/${pk}/`);
 	const user = (await res.json()) as AuthentikUserRecord;
@@ -245,7 +276,7 @@ export interface TrombinoscopeOptin {
 const TROMBINOSCOPE_DEFAULTS: TrombinoscopeOptin = {
 	visible: false,
 	showAvatar: false,
-	showChat: false,
+	showChat: true,
 	showFirstname: false,
 	showLastname: false,
 	showMail: false,
@@ -304,6 +335,47 @@ export async function updateTrombinoscopeOptin(pk: number, optin: TrombinoscopeO
 	});
 }
 
+export interface NotificationPreferences {
+	// Opt-out, not opt-in — the mattermostBot webhook module (see src/lib/server/mattermostBot.ts)
+	// is expected to notify by default, a member has to explicitly turn it off. Confirmed with the
+	// user rather than assumed, since every other opt-in on this app (trombinoscope, sessions,
+	// etc.) defaults the other way.
+	mattermostDm: boolean;
+}
+
+const NOTIFICATION_PREFERENCES_DEFAULTS: NotificationPreferences = {
+	mattermostDm: true
+};
+
+// Own attribute, not folded into `trombinoscope` — unrelated concern (delivery preference, not
+// directory visibility).
+const NOTIFICATION_PREFERENCES_ATTRIBUTE = 'notificationPreferences';
+
+export async function getNotificationPreferences(pk: number): Promise<NotificationPreferences> {
+	const res = await authentikApiFetch(`core/users/${pk}/`);
+	const user = (await res.json()) as AuthentikUserRecord;
+	const value = user.attributes[NOTIFICATION_PREFERENCES_ATTRIBUTE];
+	return typeof value === 'object' && value !== null
+		? { ...NOTIFICATION_PREFERENCES_DEFAULTS, ...(value as Partial<NotificationPreferences>) }
+		: NOTIFICATION_PREFERENCES_DEFAULTS;
+}
+
+// Read-merge-write, same reasoning as updateTrombinoscopeOptin.
+export async function updateNotificationPreferences(
+	pk: number,
+	prefs: NotificationPreferences
+): Promise<void> {
+	const current = await authentikApiFetch(`core/users/${pk}/`);
+	const currentUser = (await current.json()) as AuthentikUserRecord;
+
+	await authentikApiFetch(`core/users/${pk}/`, {
+		method: 'PATCH',
+		body: JSON.stringify({
+			attributes: { ...currentUser.attributes, [NOTIFICATION_PREFERENCES_ATTRIBUTE]: prefs }
+		})
+	});
+}
+
 // `tag`/`tagc` — an admin-assigned role label (e.g. "Prés. CA") and its badge color — live in the
 // same `trombinoscope` attribute as TrombinoscopeOptin, but are kept in a separate type: they're
 // admin-only fields, never part of what the member-facing /trombinoscope form reads or submits.
@@ -345,6 +417,46 @@ export async function updateTrombinoscopeTag(pk: number, tag: TrombinoscopeTag):
 		method: 'PATCH',
 		body: JSON.stringify({
 			attributes: { ...currentUser.attributes, [TROMBINOSCOPE_ATTRIBUTE]: mergedTrombinoscope }
+		})
+	});
+}
+
+// One-directional, sensitive data: a member records who to contact in case of an accident at the
+// hackerspace, only ever read by an admin (or the member themselves) — never opt-in-public, never
+// shown in the trombinoscope. A structured list rather than a single string, so it lives in its
+// own attribute outside PROFILE_ATTRIBUTE_FIELDS, same reasoning as `trombinoscope`.
+const EMERGENCY_CONTACTS_ATTRIBUTE = 'emergencyContacts';
+export const MAX_EMERGENCY_CONTACTS = 3;
+
+function isEmergencyContact(value: unknown): value is EmergencyContact {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		typeof (value as EmergencyContact).name === 'string' &&
+		typeof (value as EmergencyContact).phone === 'string'
+	);
+}
+
+export async function getEmergencyContacts(pk: number): Promise<EmergencyContact[]> {
+	const res = await authentikApiFetch(`core/users/${pk}/`);
+	const user = (await res.json()) as AuthentikUserRecord;
+	const value = user.attributes[EMERGENCY_CONTACTS_ATTRIBUTE];
+	if (!Array.isArray(value)) return [];
+	return value
+		.filter(isEmergencyContact)
+		.slice(0, MAX_EMERGENCY_CONTACTS)
+		.map((c) => ({ name: c.name, phone: c.phone, relation: typeof c.relation === 'string' ? c.relation : '' }));
+}
+
+// Read-merge-write, same reasoning as updateUserProfile: `attributes` is replaced wholesale by a
+// PATCH, so the rest of the blob must be preserved rather than overwritten.
+export async function updateEmergencyContacts(pk: number, contacts: EmergencyContact[]): Promise<void> {
+	const current = await authentikApiFetch(`core/users/${pk}/`);
+	const currentUser = (await current.json()) as AuthentikUserRecord;
+	await authentikApiFetch(`core/users/${pk}/`, {
+		method: 'PATCH',
+		body: JSON.stringify({
+			attributes: { ...currentUser.attributes, [EMERGENCY_CONTACTS_ATTRIBUTE]: contacts }
 		})
 	});
 }
@@ -399,6 +511,12 @@ export interface DirectoryMember {
 	telegram: string | null;
 	discord: string | null;
 	matrix: string | null;
+	// Gated by TrombinoscopeOptin.showChat (unlike signal/telegram/discord/matrix above) — this
+	// isn't member-entered, it's looked up from Mattermost by email, so presence alone can't be the
+	// consent signal the way it is for those. null if showChat is off, or no active Mattermost
+	// account was found under the member's email.
+	mattermostUsername: string | null;
+	mattermostDmUrl: string | null;
 }
 
 function stringAttr(attributes: Record<string, unknown>, key: string): string | null {
@@ -425,25 +543,34 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 		results: (AuthentikUserRecord & { is_active: boolean; type: string })[];
 	};
 
-	return data.results
-		.filter(
-			(u) => u.is_active && !EXCLUDED_USERNAMES.has(u.username) && !EXCLUDED_TYPES.has(u.type)
-		)
-		.flatMap((u) => {
-			const raw = u.attributes[TROMBINOSCOPE_ATTRIBUTE];
-			const optin: TrombinoscopeOptin =
-				typeof raw === 'object' && raw !== null
-					? { ...TROMBINOSCOPE_DEFAULTS, ...(raw as Partial<TrombinoscopeOptin>) }
-					: TROMBINOSCOPE_DEFAULTS;
-			if (!optin.visible) return [];
+	const members = await Promise.all(
+		data.results
+			.filter(
+				(u) => u.is_active && !EXCLUDED_USERNAMES.has(u.username) && !EXCLUDED_TYPES.has(u.type)
+			)
+			.map(async (u): Promise<DirectoryMember | null> => {
+				const raw = u.attributes[TROMBINOSCOPE_ATTRIBUTE];
+				const optin: TrombinoscopeOptin =
+					typeof raw === 'object' && raw !== null
+						? { ...TROMBINOSCOPE_DEFAULTS, ...(raw as Partial<TrombinoscopeOptin>) }
+						: TROMBINOSCOPE_DEFAULTS;
+				if (!optin.visible) return null;
 
-			const { firstName, lastName } = splitName(u.name);
-			const rawTrombi = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
-			const tagValue = rawTrombi.tag;
-			const tagColorValue = rawTrombi.tagc;
+				const { firstName, lastName } = splitName(u.name);
+				const rawTrombi = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+				const tagValue = rawTrombi.tag;
+				const tagColorValue = rawTrombi.tagc;
 
-			return [
-				{
+				// Same rationale as the .catch() calls around Authentik/Dolibarr in +layout.server.ts:
+				// a transient Mattermost hiccup on a cache-miss shouldn't 500 the entire directory
+				// just because one member has "Pseudo Chat" enabled — that member's chat link is
+				// simply absent this time, everyone else's data still loads.
+				const mattermostUsername =
+					optin.showChat && u.email
+						? await getMattermostUsername(u.email).catch(() => null)
+						: null;
+
+				return {
 					pk: u.pk,
 					username: u.username,
 					firstName: optin.showFirstname ? firstName : null,
@@ -462,10 +589,14 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 					signal: stringAttr(u.attributes, 'signal'),
 					telegram: stringAttr(u.attributes, 'telegram'),
 					discord: stringAttr(u.attributes, 'discord'),
-					matrix: stringAttr(u.attributes, 'matrix')
-				}
-			];
-		});
+					matrix: stringAttr(u.attributes, 'matrix'),
+					mattermostUsername,
+					mattermostDmUrl: mattermostUsername ? buildMattermostDmUrl(mattermostUsername) : null
+				};
+			})
+	);
+
+	return members.filter((m): m is DirectoryMember => m !== null);
 }
 
 interface FlowRecord {
@@ -670,12 +801,18 @@ interface ApplicationRecord {
 // privileged) service account — so this only ever returns what they'd actually see in Authentik's
 // own application library, not every app that exists. That same endpoint already excludes
 // meta_hide apps server-side, so there's no need to filter those out again here.
+//
+// Passport itself is excluded by name below rather than marked "hide" in Authentik, per the
+// member's choice — fragile if that application gets renamed there, but a one-line fix if so.
+const SELF_APPLICATION_NAME = 'Passport (Members)';
+
 export async function listUserApplications(pk: number): Promise<UserApplication[]> {
 	const res = await authentikApiFetch(`core/applications/?for_user=${pk}&page_size=200`);
 	const data = (await res.json()) as { results: ApplicationRecord[] };
 	return data.results
-		// No launch_url means there's nothing for a link to point to.
-		.filter((a) => a.launch_url)
+		// No launch_url means there's nothing for a link to point to. Also drop Passport's own
+		// entry — a member looking at this list is, by definition, already on Passport.
+		.filter((a) => a.launch_url && a.name !== SELF_APPLICATION_NAME)
 		.map((a) => ({
 			name: a.name,
 			slug: a.slug,

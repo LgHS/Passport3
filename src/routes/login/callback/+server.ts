@@ -1,6 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { exchangeCode, verifyIdToken } from '$lib/server/authentik';
+import { exchangeCode, OidcUnavailableError, verifyIdToken } from '$lib/server/authentik';
 import {
 	clearOAuthCookies,
 	OAUTH_STATE_COOKIE,
@@ -20,10 +20,17 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		error(400, 'Invalid or expired login attempt. Please try logging in again.');
 	}
 
-	const tokens = await exchangeCode(code, codeVerifier);
-
-	// Verify before trusting the token as a session — also confirms it's really Authentik's.
-	await verifyIdToken(tokens.id_token);
+	let tokens;
+	try {
+		tokens = await exchangeCode(code, codeVerifier);
+		// Verify before trusting the token as a session — also confirms it's really Authentik's.
+		await verifyIdToken(tokens.id_token);
+	} catch (err) {
+		if (err instanceof OidcUnavailableError) {
+			error(503, 'La connexion est temporairement indisponible. Réessayez dans quelques instants.');
+		}
+		throw err;
+	}
 
 	setSessionCookie(cookies, tokens.id_token, tokens.expires_in);
 

@@ -9,9 +9,15 @@ import {
 	listSessions,
 	revokeSession,
 	listMfaDevices,
-	deleteMfaDevice
+	deleteMfaDevice,
+	getNotificationPreferences,
+	updateNotificationPreferences,
+	getEmergencyContacts,
+	updateEmergencyContacts,
+	MAX_EMERGENCY_CONTACTS
 } from '$lib/server/authentikAdmin';
-import { validateProfileSubmission } from '$lib/server/profileValidation';
+import { lookupMattermostUsername } from '$lib/server/mattermost';
+import { validateProfileSubmission, validateEmergencyContactsSubmission } from '$lib/server/profileValidation';
 import { clearSessionCookie } from '$lib/server/session';
 import { authentikPk } from '$lib/types';
 
@@ -36,11 +42,19 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		error(500, 'Impossible de récupérer votre profil Authentik.');
 	}
 
-	const [sessions, mfaDevices, mfaEnrollUrls] = await Promise.all([
-		listSessions(profile.username),
-		listMfaDevices(pk),
-		getMfaEnrollUrls()
-	]);
+	const [sessions, mfaDevices, mfaEnrollUrls, notificationPreferences, mattermost, emergencyContacts] =
+		await Promise.all([
+			listSessions(profile.username),
+			listMfaDevices(pk),
+			getMfaEnrollUrls(),
+			getNotificationPreferences(pk),
+			// Best-effort: a transient Mattermost hiccup shouldn't break the whole profile page,
+			// same reasoning as the Authentik/Dolibarr .catch()s in +layout.server.ts. Unlike a plain
+			// .catch(() => null), `unavailable` stays distinguishable from "no linked account" — see
+			// feedback_distinguish-fetch-failure-from-empty.
+			lookupMattermostUsername(profile.email),
+			getEmergencyContacts(pk)
+		]);
 
 	return {
 		profile,
@@ -48,7 +62,12 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		authentikAccountUrl: getAuthentikAccountUrl(),
 		mfaEnrollUrls,
 		sessions,
-		mfaDevices
+		mfaDevices,
+		notificationPreferences,
+		mattermostUsername: mattermost.username,
+		mattermostUnavailable: mattermost.unavailable,
+		emergencyContacts,
+		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS
 	};
 };
 
@@ -106,5 +125,46 @@ export const actions: Actions = {
 		await deleteMfaDevice(pk, devicePk);
 		// Same reasoning as revokeSession above — kept distinct from `success` on purpose.
 		return { mfaDeviceDeleted: true };
+	},
+
+	updateNotificationPreferences: async ({ request, locals }) => {
+		const pk = resolvePk(locals);
+		const formData = await request.formData();
+		const prefs = { mattermostDm: formData.has('mattermostDm') };
+
+		try {
+			await updateNotificationPreferences(pk, prefs);
+		} catch {
+			// The client toggles optimistically before this action even runs — on failure, echo
+			// back the value from *before* the attempted change (its logical negation, since a
+			// checkbox toggle always flips) so the client can resync instead of leaving the toggle
+			// showing a state that was never actually saved.
+			return fail(500, {
+				notificationPreferencesError: 'La sauvegarde a échoué, réessayez.',
+				notificationPreferences: { mattermostDm: !prefs.mattermostDm }
+			});
+		}
+
+		return { notificationPreferencesSuccess: true, notificationPreferences: prefs };
+	},
+
+	updateEmergencyContacts: async ({ request, locals }) => {
+		const pk = resolvePk(locals);
+		const result = validateEmergencyContactsSubmission(await request.formData());
+
+		if (!result.ok) {
+			return fail(400, { emergencyContactsError: result.error, emergencyContacts: result.contacts });
+		}
+
+		try {
+			await updateEmergencyContacts(pk, result.contacts);
+		} catch {
+			return fail(500, {
+				emergencyContactsError: "La sauvegarde des contacts d'urgence a échoué, réessayez.",
+				emergencyContacts: result.contacts
+			});
+		}
+
+		return { emergencyContactsSuccess: true, emergencyContacts: result.contacts };
 	}
 };
