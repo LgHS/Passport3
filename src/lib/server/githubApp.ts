@@ -6,7 +6,7 @@ const FETCH_TIMEOUT_MS = 5_000;
 // Thrown when GitHub is unreachable or erroring server-side (down, network blip) — as opposed to
 // a well-formed 4xx response, which every call site below already interprets for itself (404 =
 // not found, 422 = already invited, etc., neither of which is an "outage"). Mirrors
-// DolibarrUnavailableError/AuthentikUnavailableError.
+// OidcUnavailableError in authentik.ts.
 export class GithubUnavailableError extends Error {}
 
 // Every call site below (and in github.ts, the member-facing OAuth flow — no credential is baked
@@ -15,16 +15,29 @@ export class GithubUnavailableError extends Error {}
 // true unreachability/5xx, it never throws on a 4xx itself.
 export async function githubApiFetch(url: string, init?: RequestInit): Promise<Response> {
 	let res: Response;
+	let body: string | undefined;
 	try {
-		res = await fetch(url, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+		res = await fetch(url, {
+			...init,
+			// NB: placed after `...init`, so it silently wins over a caller-supplied `init.signal`
+			// rather than the other way round. Harmless today (no caller passes one), but worth
+			// revisiting (e.g. AbortSignal.any([...])) if one ever needs to.
+			signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+		});
+		// Reading the 5xx body under the same try: the AbortSignal stays armed for the full
+		// exchange, not just until headers arrive, so a slow body on a 503 must be caught here too
+		// — otherwise it surfaces as a raw TimeoutError instead of GithubUnavailableError.
+		if (res.status >= 500) {
+			body = await res.text();
+		}
 	} catch (err) {
-		throw new GithubUnavailableError(`GitHub API request to ${url} timed out or failed: ${err}`);
+		throw new GithubUnavailableError(`GitHub API request to ${url} timed out or failed: ${err}`, {
+			cause: err
+		});
 	}
 
 	if (res.status >= 500) {
-		throw new GithubUnavailableError(
-			`GitHub API request to ${url} failed (${res.status}): ${await res.text()}`
-		);
+		throw new GithubUnavailableError(`GitHub API request to ${url} failed (${res.status}): ${body}`);
 	}
 
 	return res;

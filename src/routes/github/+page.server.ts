@@ -1,7 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { getGithubUsername, setGithubUsername } from '$lib/server/authentikAdmin';
-import { getGithubOrgMembershipStatus, inviteToGithubOrg } from '$lib/server/githubApp';
+import { getGithubOrgMembershipStatus, inviteToGithubOrg, GithubUnavailableError } from '$lib/server/githubApp';
 import { authentikPk } from '$lib/types';
 
 // Same auth guard shape as the rest of the app.
@@ -19,10 +19,25 @@ function resolvePk(locals: App.Locals): number {
 export const load: PageServerLoad = async ({ locals }) => {
 	const pk = resolvePk(locals);
 	const githubUsername = await getGithubUsername(pk);
-	const membershipStatus = githubUsername
-		? await getGithubOrgMembershipStatus(githubUsername)
-		: null;
-	return { githubUsername, membershipStatus };
+
+	if (!githubUsername) {
+		return { githubUsername: null, membershipStatus: null, githubUnavailable: false };
+	}
+
+	try {
+		const membershipStatus = await getGithubOrgMembershipStatus(githubUsername);
+		return { githubUsername, membershipStatus, githubUnavailable: false };
+	} catch (err) {
+		if (err instanceof GithubUnavailableError) {
+			// Distinct from `membershipStatus === null` meaning "no linked account" — this member
+			// *is* linked, we just can't tell their status right now. The page must not fall
+			// through to the invite button while that's unknown (see feedback_distinguish-fetch-
+			// failure-from-empty), it would risk a redundant invite attempt against a status we
+			// never actually confirmed.
+			return { githubUsername, membershipStatus: null, githubUnavailable: true };
+		}
+		throw err;
+	}
 };
 
 export const actions: Actions = {
