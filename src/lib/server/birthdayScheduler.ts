@@ -9,12 +9,28 @@ import { postToChannel } from '$lib/server/mattermostBot';
 // point during that hour, not hit it exactly on the minute.
 const CHECK_INTERVAL_MS = 60 * 60_000;
 
-// TODO: placeholder wording — swap in the real messages before this ships. {mention} is replaced
-// with an @-mention of the member's Mattermost username.
+// {mention} is replaced with an @-mention of the member's Mattermost username. Emoji written as
+// Mattermost's `:shortcode:` syntax rather than literal unicode, rendered client-side same as any
+// other message.
 const MESSAGE_TEMPLATES = [
-	'Joyeux anniversaire {mention} ! 🎉',
-	'Toute l’équipe du Hackerspace souhaite un très bon anniversaire à {mention} !',
-	'{mention} fête son anniversaire aujourd’hui, l’occasion de lui souhaiter une belle journée !'
+	'Joyeux anniversaire {mention} ! :tada:',
+	'Joyeux anniversaire {mention} ! :birthday:',
+	'Joyeux anniversaire {mention} ! :cake: :balloon:',
+	'Joyeux anniversaire {mention} ! :confetti_ball: Passe une super journée !',
+	'Joyeux anniversaire {mention} ! :gift: Profite bien de ta journée !',
+	'Joyeux anniversaire {mention} ! :partying_face: :tada:',
+	'Joyeux anniversaire {mention} ! :champagne: Santé et bonheur pour cette nouvelle année !',
+	'Joyeux anniversaire {mention} ! :clinking_glasses: On trinque à ta santé !',
+	'Joyeux anniversaire {mention} ! :sparkles: Plein de belles choses pour cette nouvelle année !',
+	'Joyeux anniversaire {mention} ! :star2: Que cette année soit la meilleure !',
+	'Joyeux anniversaire {mention} ! :crown: C’est ta journée, profite !',
+	'Joyeux anniversaire {mention} ! :rocket: Une année de plus au compteur, et toujours au top !',
+	'Joyeux anniversaire {mention} ! :fireworks: Que la fête commence !',
+	'Joyeux anniversaire {mention} ! :sunglasses: Toujours aussi jeune, on ne va pas se mentir !',
+	'Joyeux anniversaire {mention} ! :heart: Belle journée à toi !',
+	'Joyeux anniversaire {mention} ! :muscle: Encore une année de plus, et toujours en forme !',
+	'Joyeux anniversaire {mention} ! :beers: La tournée est pour toi mercredi ?',
+	'Joyeux anniversaire {mention} ! :100: Une année parfaite en perspective !'
 ];
 
 function pickTemplate(): string {
@@ -63,10 +79,10 @@ function nowInBrussels(): { hour: number; monthDay: string } {
 		const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
 		return { hour: Number(get('hour')), monthDay: `${get('month')}-${get('day')}` };
 	} catch (err) {
-		// Not verified against the actual node:22-alpine runtime image (no local Docker daemon to
-		// test against) — official Node.js builds have shipped full ICU by default since v13,
-		// alpine included, but if that ever turns out wrong in prod, fall back to the container's
-		// own clock (UTC, see Dockerfile) rather than crashing the scheduler.
+		// Confirmed working in the real node:22-alpine image (docker run --rm node:22-alpine …,
+		// 2026-09-22): full ICU is bundled by default, Europe/Brussels resolves correctly. This
+		// catch is just a safety net in case a future base image ever strips it, falling back to
+		// the container's own clock (UTC, see Dockerfile) rather than crashing the scheduler.
 		console.error('[birthdayScheduler] Europe/Brussels timezone unavailable, falling back to UTC:', err);
 		const now = new Date();
 		return {
