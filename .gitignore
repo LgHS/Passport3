@@ -20,6 +20,8 @@ Thumbs.db
 
 # Local SQLite data (see src/lib/server/db.ts) — in Docker this lives on a named volume instead
 /data
+*.db
+*.db*
 
 # Vite
 vite.config.js.timestamp-*
