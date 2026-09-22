@@ -14,6 +14,8 @@ Passport3 sert d'interface personnalisée pour plusieurs services internes, nota
 - **Les systèmes de contrôle d'accès** pour l'accès physique au hackerspace
 - D'autres services communautaires et de gestion des membres
 
+![Dashboard membre de Passport3](docs/screenshots/passportv3.jpg)
+
 ## Objectifs
 
 Passport3 vise à offrir aux membres un endroit central pour :
@@ -24,9 +26,11 @@ Passport3 vise à offrir aux membres un endroit central pour :
 - [x] Gérer l'authentification et les paramètres de sécurité (sessions actives, appareils MFA)
 - [x] Gérer leurs badges ou identifiants d'accès (UUID du badge RFID)
 - [x] Demander l'accès à l'organisation GitHub du hackerspace
+- [x] Accéder à l'annuaire des membres et au trombinoscope
+- [x] Choisir quelles informations sont visibles par les autres membres
+- [x] Gérer ses contacts d'urgence
+- [x] Consulter ses propres permissions et groupes d'appartenance
 - [ ] Accéder aux informations de paiement et de comptabilité
-- [ ] Accéder à l'annuaire des membres et au trombinoscope
-- [ ] Choisir quelles informations sont visibles par les autres membres
 - [ ] Voir leurs droits d'accès physique
 - Accéder aux futurs services du hackerspace via une interface unifiée
 
@@ -88,16 +92,15 @@ Un panneau d'administration restreint (réservé à un groupe Authentik dédié)
 
 - Lister et rechercher les comptes membres
 - Modifier le profil d'un membre en son nom
+- Modifier la visibilité trombinoscope et le rôle affiché d'un membre en son nom
+- Gérer les contacts d'urgence d'un membre en son nom
 - Créer des invitations d'inscription pour de nouveaux membres
 
 ## Fonctionnalités prévues
 
-- Renouvellement de cotisation en ligne
 - Historique des paiements
 - Téléchargement de factures et documents
 - Gestion de l'accès physique
-- Annuaire des membres et trombinoscope, avec contrôle de visibilité par membre et par champ
-- Gestion des contacts d'urgence
 - Préférences de notification
 - Historique d'audit
 - API pour les autres services du hackerspace

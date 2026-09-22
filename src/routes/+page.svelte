@@ -1,8 +1,32 @@
 <script lang="ts">
 	import { displayName } from '$lib/types';
+	import CotisationStatusBlock from '$lib/components/CotisationStatusBlock.svelte';
 
 	let { data } = $props();
 </script>
+
+{#snippet checklistItem(href: string, done: boolean | null, doneLabel: string, todoLabel: string)}
+	<a
+		{href}
+		class="no-underline-fx flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-gray-50"
+	>
+		<span
+			class="flex h-5 w-5 shrink-0 items-center justify-center border text-xs font-bold {done
+				? 'border-black bg-black text-white'
+				: 'border-gray-400 text-transparent'}"
+			aria-hidden="true"
+		>
+			✓
+		</span>
+		{#if done === null}
+			<span class="text-gray-500">Impossible de vérifier pour le moment</span>
+		{:else if done}
+			<span>{doneLabel}</span>
+		{:else}
+			<span class="font-bold">{todoLabel}</span>
+		{/if}
+	</a>
+{/snippet}
 
 <svelte:head>
 	<title>Passport</title>
@@ -46,6 +70,50 @@
 </section>
 
 {#if data.user}
+	<div class="mb-10 flex flex-col gap-8 md:flex-row md:items-start">
+		<section class="w-full md:w-1/2">
+			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma cotisation</h2>
+			<CotisationStatusBlock
+				status={data.cotisation.status}
+				datefin={data.cotisation.datefin}
+				isInactive={data.cotisation.isInactive}
+			/>
+			<a href="/cotisation" class="mt-2 inline-block text-sm">Voir le détail →</a>
+		</section>
+
+		<section class="w-full md:w-1/2">
+			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma check-list</h2>
+			<div class="divide-y divide-black border border-black">
+				{@render checklistItem(
+					'/profile?tab=mfa',
+					data.checklist.mfaConfigured,
+					'MFA configuré',
+					'Configurer un MFA'
+				)}
+				{@render checklistItem(
+					'/profile?tab=emergency',
+					data.checklist.emergencyContactConfigured,
+					'Contact "d’urgence" renseigné',
+					'Renseigner au moins un contact "d’urgence"'
+				)}
+				{@render checklistItem(
+					'/cotisation',
+					data.checklist.ibanPersoConfigured,
+					'IBAN personnel renseigné',
+					'Renseigner un IBAN personnel'
+				)}
+				{#if data.checklist.ibanProApplicable}
+					{@render checklistItem(
+						'/cotisation',
+						data.checklist.ibanProConfigured,
+						'IBAN professionnel renseigné',
+						'Renseigner un IBAN professionnel'
+					)}
+				{/if}
+			</div>
+		</section>
+	</div>
+
 	{#if data.groups === null || data.groups.length === 0}
 		<section>
 			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Mes apps</h2>

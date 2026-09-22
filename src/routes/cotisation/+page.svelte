@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { COTISATION_STATUS_LABEL, COTISATION_STATUS_COLOR, type CotisationStatus } from '$lib/types';
 	import type { ActionData, PageData } from './$types';
+	import CotisationStatusBlock from '$lib/components/CotisationStatusBlock.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -116,21 +116,6 @@
 	const newerYear = $derived(yearIndex > 0 ? availableYears[yearIndex - 1] : null);
 	const yearRows = $derived(cotisationRows.filter((row) => row.year === displayedYear));
 	const hasGapsOnPage = $derived(yearRows.some((row) => row.kind === 'gap'));
-
-	function statusExplanation(status: CotisationStatus, datefin: Date | null): string {
-		switch (status) {
-			case 'a_jour':
-				return `Votre cotisation est valide jusqu'au ${formatDate(datefin)}.`;
-			case 'expiree':
-				return datefin
-					? `Votre cotisation a expiré le ${formatDate(datefin)}. Merci de la renouveler.`
-					: 'Votre adhésion est résiliée.';
-			case 'en_attente':
-				return "Aucune cotisation n'a encore été enregistrée pour votre compte. Si vous venez de payer, comptez quelques jours pour que ce soit traité. Généralement le 1er mercredi du mois si cela ne passe pas automatiquement.";
-			case 'non_applicable':
-				return "En tant que membre d'honneur, vous n'êtes pas soumis·e à cotisation.";
-		}
-	}
 </script>
 
 <svelte:head>
@@ -142,38 +127,10 @@
 		<h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma cotisation</h1>
 
 		{#if data.status === null}
-			<div class="flex items-start gap-3 border border-black bg-gray-100 px-4 py-3">
-				<span
-					class="mt-1 inline-block h-3 w-3 shrink-0 rounded-full bg-gray-400"
-					aria-hidden="true"
-				></span>
-				<div>
-					<p class="text-sm font-bold uppercase">Compte introuvable</p>
-					<p class="text-sm text-gray-600">
-						Nous n'avons pas trouvé de compte correspondant à votre adresse email dans l'outil de
-						gestion des membres. Cela peut simplement vouloir dire que votre inscription n'a pas
-						encore été synchronisée, ou provenir d'une erreur. Si ça persiste, contactez une
-						personne en charge de la trésorerie ou du registre des membres. Via le canal #support
-						du chat ou par mail <a href="mailto:ping@lghs.be">ping@lghs.be</a>.
-					</p>
-				</div>
-			</div>
+			<CotisationStatusBlock status={null} datefin={null} />
 		{:else}
-			<div class="mb-6 flex items-start gap-3 border border-black bg-gray-100 px-4 py-3">
-				<span
-					class="mt-1 inline-block h-3 w-3 shrink-0 rounded-full"
-					style="background-color: {COTISATION_STATUS_COLOR[data.status]};"
-					aria-hidden="true"
-				></span>
-				<div>
-					<p class="text-sm font-bold uppercase">{COTISATION_STATUS_LABEL[data.status]}</p>
-					<p class="text-sm text-gray-600">{statusExplanation(data.status, data.datefin)}</p>
-					{#if data.isInactive}
-						<p class="mt-2 text-sm font-bold">
-							Après 3 mois sans cotisation, votre compte est considéré comme inactif.
-						</p>
-					{/if}
-				</div>
+			<div class="mb-6">
+				<CotisationStatusBlock status={data.status} datefin={data.datefin} isInactive={data.isInactive} />
 			</div>
 
 			{#if availableYears.length > 1}
@@ -198,57 +155,83 @@
 				</div>
 			{/if}
 
-			<div class="overflow-x-auto">
-				<table class="w-full border-collapse text-sm">
-					<thead>
-						<tr class="bg-black text-white uppercase">
-							<th class="border border-black px-3 py-2 text-left">Début</th>
-							<th class="border border-black px-3 py-2 text-left">Fin</th>
-							<th class="border border-black px-3 py-2 text-left">Montant</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each yearRows as row (row.kind === 'subscription' ? `sub-${row.subscription.id}` : `gap-${row.gap.start.getTime()}`)}
-							{#if row.kind === 'subscription'}
+			{#if yearRows.length > 0 || undatedSubscriptions.length > 0}
+				<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->
+				<div class="space-y-2 sm:hidden">
+					{#each yearRows as row (row.kind === 'subscription' ? `sub-${row.subscription.id}` : `gap-${row.gap.start.getTime()}`)}
+						{#if row.kind === 'subscription'}
+							<div class="border border-black p-3 text-sm">
+								<p class="font-bold">
+									{formatDate(row.subscription.start)} — {formatDate(row.subscription.end)}
+								</p>
+								<p class="mt-1 text-gray-600">{amountFormat.format(row.subscription.amount)}</p>
+							</div>
+						{:else}
+							<div class="border border-black bg-red-50 p-3 text-sm text-red-700">
+								<p class="font-bold">
+									{gapDateFormat.format(row.gap.start)} — {gapDateFormat.format(row.gap.end)}
+								</p>
+								<p class="mt-1">Non perçu</p>
+							</div>
+						{/if}
+					{/each}
+					{#each undatedSubscriptions as subscription (`undated-${subscription.id}`)}
+						<div class="border border-black p-3 text-sm">
+							<p class="font-bold">
+								{formatDate(subscription.start)} — {formatDate(subscription.end)}
+							</p>
+							<p class="mt-1 text-gray-600">{amountFormat.format(subscription.amount)}</p>
+						</div>
+					{/each}
+				</div>
+
+				<div class="hidden overflow-x-auto sm:block">
+					<table class="w-full border-collapse text-sm">
+						<thead>
+							<tr class="bg-black text-white uppercase">
+								<th class="border border-black px-3 py-2 text-left">Début</th>
+								<th class="border border-black px-3 py-2 text-left">Fin</th>
+								<th class="border border-black px-3 py-2 text-left">Montant</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each yearRows as row (row.kind === 'subscription' ? `sub-${row.subscription.id}` : `gap-${row.gap.start.getTime()}`)}
+								{#if row.kind === 'subscription'}
+									<tr>
+										<td class="border border-black px-3 py-2">{formatDate(row.subscription.start)}</td>
+										<td class="border border-black px-3 py-2">{formatDate(row.subscription.end)}</td>
+										<td class="border border-black px-3 py-2"
+											>{amountFormat.format(row.subscription.amount)}</td
+										>
+									</tr>
+								{:else}
+									<tr class="bg-red-50 text-red-700">
+										<td class="border border-black px-3 py-2">{gapDateFormat.format(row.gap.start)}</td>
+										<td class="border border-black px-3 py-2">{gapDateFormat.format(row.gap.end)}</td>
+										<td class="border border-black px-3 py-2">Non perçu</td>
+									</tr>
+								{/if}
+							{/each}
+							<!-- Belonging to no year, these repeat on every page rather than becoming
+							     unreachable. Both date cells render as "—", so a duplicate is recognisable
+							     as the same row and not mistaken for a second subscription. -->
+							{#each undatedSubscriptions as subscription (`undated-${subscription.id}`)}
 								<tr>
-									<td class="border border-black px-3 py-2">{formatDate(row.subscription.start)}</td>
-									<td class="border border-black px-3 py-2">{formatDate(row.subscription.end)}</td>
+									<td class="border border-black px-3 py-2">{formatDate(subscription.start)}</td>
+									<td class="border border-black px-3 py-2">{formatDate(subscription.end)}</td>
 									<td class="border border-black px-3 py-2"
-										>{amountFormat.format(row.subscription.amount)}</td
+										>{amountFormat.format(subscription.amount)}</td
 									>
 								</tr>
-							{:else}
-								<tr class="bg-red-50 text-red-700">
-									<td class="border border-black px-3 py-2">{gapDateFormat.format(row.gap.start)}</td>
-									<td class="border border-black px-3 py-2">{gapDateFormat.format(row.gap.end)}</td>
-									<td class="border border-black px-3 py-2">Non perçu</td>
-								</tr>
-							{/if}
-						{/each}
-						<!-- Belonging to no year, these repeat on every page rather than becoming
-						     unreachable. Both date cells render as "—", so a duplicate is recognisable
-						     as the same row and not mistaken for a second subscription. -->
-						{#each undatedSubscriptions as subscription (`undated-${subscription.id}`)}
-							<tr>
-								<td class="border border-black px-3 py-2">{formatDate(subscription.start)}</td>
-								<td class="border border-black px-3 py-2">{formatDate(subscription.end)}</td>
-								<td class="border border-black px-3 py-2"
-									>{amountFormat.format(subscription.amount)}</td
-								>
-							</tr>
-						{/each}
-						<!-- Can't be the `{:else}` of an `{#each}` any more: emptiness now depends on both
-						     loops, not just the paginated one. -->
-						{#if yearRows.length === 0 && undatedSubscriptions.length === 0}
-							<tr>
-								<td colspan="3" class="border border-black px-3 py-4 text-center text-gray-500">
-									Aucune cotisation enregistrée.
-								</td>
-							</tr>
-						{/if}
-					</tbody>
-				</table>
-			</div>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{:else}
+				<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+					Aucune cotisation enregistrée.
+				</p>
+			{/if}
 
 			{#if hasGapsOnPage}
 				<p class="mt-3 text-sm text-gray-600">

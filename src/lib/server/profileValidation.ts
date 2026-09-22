@@ -1,4 +1,5 @@
-import { PROFILE_ATTRIBUTE_FIELDS } from '$lib/server/authentikAdmin';
+import { MAX_EMERGENCY_CONTACTS, PROFILE_ATTRIBUTE_FIELDS } from '$lib/server/authentikAdmin';
+import type { EmergencyContact } from '$lib/types';
 
 const REQUIRED_MESSAGES: Record<string, string> = {
 	firstName: 'Le prénom ne peut pas être vide.',
@@ -264,4 +265,58 @@ export function validateProfileSubmission(formData: FormData): ProfileValidation
 	// Authentik only has a single `name` field — merge on write, split back on display.
 	const name = `${firstName} ${lastName}`.trim();
 	return { ok: true, name, firstName, lastName, attributes };
+}
+
+export type EmergencyContactsValidationResult =
+	| { ok: true; contacts: EmergencyContact[] }
+	| { ok: false; error: string; contacts: EmergencyContact[] };
+
+// Same strict format as the member's own phoneNumber field below: country code + local number,
+// digits only, no leading '+' or '0' (e.g. 32470000000) — kept consistent between the two fields.
+const CONTACT_PHONE_RE = /^[1-9]\d{7,14}$/;
+
+export function validateEmergencyContactsSubmission(formData: FormData): EmergencyContactsValidationResult {
+	const names = formData.getAll('name[]').map((v) => String(v).trim());
+	const phones = formData.getAll('phone[]').map((v) => String(v).trim());
+	const relations = formData.getAll('relation[]').map((v) => String(v).trim());
+
+	// A row left entirely blank (the empty starting row, or one the member cleared back out) is
+	// simply dropped rather than treated as an error — only a *partially* filled row is a mistake
+	// worth flagging below.
+	const contacts: EmergencyContact[] = names
+		.map((name, i) => ({
+			name,
+			// Normalize away spaces/dashes/parens users naturally type ("32 470 00 00 00"), same as
+			// the profile's own phoneNumber field.
+			phone: (phones[i] ?? '').replace(/[\s().-]/g, ''),
+			relation: relations[i] ?? ''
+		}))
+		.filter((row) => row.name || row.phone || row.relation);
+
+	if (contacts.length > MAX_EMERGENCY_CONTACTS) {
+		return {
+			ok: false,
+			error: `Maximum ${MAX_EMERGENCY_CONTACTS} contacts d'urgence.`,
+			contacts: contacts.slice(0, MAX_EMERGENCY_CONTACTS)
+		};
+	}
+
+	for (const contact of contacts) {
+		if (!contact.name || !contact.phone) {
+			return {
+				ok: false,
+				error: "Chaque contact d'urgence a besoin d'un nom et d'un numéro de téléphone.",
+				contacts
+			};
+		}
+		if (!CONTACT_PHONE_RE.test(contact.phone)) {
+			return {
+				ok: false,
+				error: `Numéro de téléphone invalide pour ${contact.name} (format attendu: 32470000000, sans "+" ni "0" initial).`,
+				contacts
+			};
+		}
+	}
+
+	return { ok: true, contacts };
 }

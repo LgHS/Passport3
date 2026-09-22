@@ -11,10 +11,13 @@ import {
 	listMfaDevices,
 	deleteMfaDevice,
 	getNotificationPreferences,
-	updateNotificationPreferences
+	updateNotificationPreferences,
+	getEmergencyContacts,
+	updateEmergencyContacts,
+	MAX_EMERGENCY_CONTACTS
 } from '$lib/server/authentikAdmin';
 import { lookupMattermostUsername } from '$lib/server/mattermost';
-import { validateProfileSubmission } from '$lib/server/profileValidation';
+import { validateProfileSubmission, validateEmergencyContactsSubmission } from '$lib/server/profileValidation';
 import { clearSessionCookie } from '$lib/server/session';
 import { authentikPk } from '$lib/types';
 
@@ -39,7 +42,7 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		error(500, 'Impossible de récupérer votre profil Authentik.');
 	}
 
-	const [sessions, mfaDevices, mfaEnrollUrls, notificationPreferences, mattermost] =
+	const [sessions, mfaDevices, mfaEnrollUrls, notificationPreferences, mattermost, emergencyContacts] =
 		await Promise.all([
 			listSessions(profile.username),
 			listMfaDevices(pk),
@@ -49,7 +52,8 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 			// same reasoning as the Authentik/Dolibarr .catch()s in +layout.server.ts. Unlike a plain
 			// .catch(() => null), `unavailable` stays distinguishable from "no linked account" — see
 			// feedback_distinguish-fetch-failure-from-empty.
-			lookupMattermostUsername(profile.email)
+			lookupMattermostUsername(profile.email),
+			getEmergencyContacts(pk)
 		]);
 
 	return {
@@ -61,7 +65,9 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		mfaDevices,
 		notificationPreferences,
 		mattermostUsername: mattermost.username,
-		mattermostUnavailable: mattermost.unavailable
+		mattermostUnavailable: mattermost.unavailable,
+		emergencyContacts,
+		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS
 	};
 };
 
@@ -140,5 +146,25 @@ export const actions: Actions = {
 		}
 
 		return { notificationPreferencesSuccess: true, notificationPreferences: prefs };
+	},
+
+	updateEmergencyContacts: async ({ request, locals }) => {
+		const pk = resolvePk(locals);
+		const result = validateEmergencyContactsSubmission(await request.formData());
+
+		if (!result.ok) {
+			return fail(400, { emergencyContactsError: result.error, emergencyContacts: result.contacts });
+		}
+
+		try {
+			await updateEmergencyContacts(pk, result.contacts);
+		} catch {
+			return fail(500, {
+				emergencyContactsError: "La sauvegarde des contacts d'urgence a échoué, réessayez.",
+				emergencyContacts: result.contacts
+			});
+		}
+
+		return { emergencyContactsSuccess: true, emergencyContacts: result.contacts };
 	}
 };
