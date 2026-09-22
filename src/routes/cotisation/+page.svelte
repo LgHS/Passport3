@@ -43,6 +43,18 @@
 
 	const amountFormat = new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' });
 
+	// A visible label, not just the amount's color: red/green alone isn't enough for some forms of
+	// colorblindness, and an abandoned-but-unpaid invoice showing in red would otherwise read as a
+	// normal debt rather than a written-off one.
+	function invoiceStatusLabel(invoice: { paid: boolean; abandoned: boolean }): string {
+		if (invoice.abandoned) return 'Abandonnée';
+		return invoice.paid ? 'Payée' : 'À payer';
+	}
+	function invoiceStatusColor(invoice: { paid: boolean; abandoned: boolean }): string {
+		if (invoice.abandoned) return 'text-gray-500';
+		return invoice.paid ? 'text-green-700' : 'text-red-700';
+	}
+
 	// Dolibarr may return a subscription with either bound missing (see parseDolibarrDate: "", 0 and
 	// "0" all mean "no date"). One that still has a start or an end can be placed on the timeline;
 	// one with neither carries no chronological information at all and is listed apart. Pinning the
@@ -116,7 +128,45 @@
 	const newerYear = $derived(yearIndex > 0 ? availableYears[yearIndex - 1] : null);
 	const yearRows = $derived(cotisationRows.filter((row) => row.year === displayedYear));
 	const hasGapsOnPage = $derived(yearRows.some((row) => row.kind === 'gap'));
+
+	// Separate year pager from the one above, deliberately not shared with it: an invoice doesn't
+	// necessarily fall in a year that has a subscription or gap (see project_invoice-downloads-todo),
+	// so deriving this pager's years from cotisationRows would make those invoices' years
+	// unreachable — never offered as a choice, never shown. Same self-healing pattern otherwise.
+	const datedInvoices = $derived(data.invoices.filter((i) => i.date !== null));
+	const undatedInvoices = $derived(data.invoices.filter((i) => i.date === null));
+	const invoiceYears = $derived(
+		Array.from(new Set(datedInvoices.map((i) => (i.date as Date).getFullYear()))).sort(
+			(a, b) => b - a
+		)
+	);
+	let selectedInvoiceYear = $state<number | null>(null);
+	const displayedInvoiceYear = $derived(
+		selectedInvoiceYear !== null && invoiceYears.includes(selectedInvoiceYear)
+			? selectedInvoiceYear
+			: (invoiceYears[0] ?? new Date().getFullYear())
+	);
+	const invoiceYearIndex = $derived(invoiceYears.indexOf(displayedInvoiceYear));
+	const olderInvoiceYear = $derived(
+		invoiceYearIndex >= 0 && invoiceYearIndex + 1 < invoiceYears.length
+			? invoiceYears[invoiceYearIndex + 1]
+			: null
+	);
+	const newerInvoiceYear = $derived(invoiceYearIndex > 0 ? invoiceYears[invoiceYearIndex - 1] : null);
+	const yearInvoices = $derived(
+		datedInvoices.filter((i) => (i.date as Date).getFullYear() === displayedInvoiceYear)
+	);
+	// Undated invoices belong to no year, so they repeat on every page rather than becoming
+	// unreachable — same reasoning as undatedSubscriptions above.
+	const displayedInvoices = $derived([...yearInvoices, ...undatedInvoices]);
 </script>
+
+{#snippet downloadIcon()}
+	<svg viewBox="0 0 20 20" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.75">
+		<path d="M10 3v10.5m0 0-3.25-3.25M10 13.5l3.25-3.25" stroke-linecap="round" stroke-linejoin="round" />
+		<path d="M4 14.5v1A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5v-1" stroke-linecap="round" stroke-linejoin="round" />
+	</svg>
+{/snippet}
 
 <svelte:head>
 	<title>Ma cotisation — Passport</title>
@@ -126,7 +176,11 @@
 	<section class="w-full md:w-2/3">
 		<h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma cotisation</h1>
 
-		{#if data.status === null}
+		{#if data.unavailable}
+			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+				Service de cotisation temporairement indisponible. Réessayez dans quelques instants.
+			</p>
+		{:else if data.status === null}
 			<CotisationStatusBlock status={null} datefin={null} />
 		{:else}
 			<div class="mb-6">
@@ -240,6 +294,126 @@
 					<a href="mailto:compta@lghs.be">compta@lghs.be</a>.
 				</p>
 			{/if}
+
+			{#if data.invoices.length > 0}
+				<h2 class="mt-8 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">
+					Factures
+				</h2>
+
+				{#if invoiceYears.length > 1}
+					<div class="mb-3 flex items-center justify-between border border-black">
+						<button
+							type="button"
+							onclick={() => (selectedInvoiceYear = olderInvoiceYear)}
+							disabled={olderInvoiceYear === null}
+							class="px-3 py-2 text-sm font-bold uppercase hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-black"
+						>
+							‹ {olderInvoiceYear ?? ''}
+						</button>
+						<span class="text-sm font-bold uppercase">{displayedInvoiceYear}</span>
+						<button
+							type="button"
+							onclick={() => (selectedInvoiceYear = newerInvoiceYear)}
+							disabled={newerInvoiceYear === null}
+							class="px-3 py-2 text-sm font-bold uppercase hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-black"
+						>
+							{newerInvoiceYear ?? ''} ›
+						</button>
+					</div>
+				{/if}
+
+				<!-- Its own table, separate from the subscription one above: an invoice doesn't always
+				     line up with a cotisation period (see project_invoice-downloads-todo), so it can't be
+				     folded into that table as just another column. -->
+				<div class="space-y-2 sm:hidden">
+					{#each displayedInvoices as invoice (invoice.id)}
+						<div class="border border-black p-3 text-sm">
+							<div class="flex items-center justify-between gap-2">
+								<p class="font-bold">{invoice.ref} <span class="text-gray-500">({invoice.type})</span></p>
+								{#if invoice.abandoned}
+									<span
+										title="Facture abandonnée, contactez compta@lghs.be"
+										class="shrink-0 text-gray-400"
+									>
+										{@render downloadIcon()}
+									</span>
+								{:else if invoice.downloadable}
+									<a
+										href="/cotisation/invoice/{invoice.id}"
+										aria-label="Télécharger la facture {invoice.ref}"
+										title="Télécharger"
+										class="no-underline-fx shrink-0 text-gray-600 hover:text-black"
+									>
+										{@render downloadIcon()}
+									</a>
+								{:else}
+									<span title="Document indisponible" class="shrink-0 text-gray-400">
+										{@render downloadIcon()}
+									</span>
+								{/if}
+							</div>
+							<p class="mt-1 text-gray-600">{formatDate(invoice.date)}</p>
+							<p class="mt-1 font-bold {invoiceStatusColor(invoice)}">
+								{amountFormat.format(invoice.amount)} ({invoiceStatusLabel(invoice)})
+							</p>
+						</div>
+					{/each}
+				</div>
+
+				<div class="hidden overflow-x-auto sm:block">
+					<table class="w-full border-collapse text-sm">
+						<thead>
+							<tr class="bg-black text-white uppercase">
+								<th class="border border-black px-3 py-2 text-left">Référence</th>
+								<th class="border border-black px-3 py-2 text-left">Type</th>
+								<th class="border border-black px-3 py-2 text-left">Date</th>
+								<th class="border border-black px-3 py-2 text-left">Montant</th>
+								<th class="border border-black px-3 py-2 text-left"></th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each displayedInvoices as invoice (invoice.id)}
+								<tr>
+									<td class="border border-black px-3 py-2">{invoice.ref}</td>
+									<td class="border border-black px-3 py-2">{invoice.type}</td>
+									<td class="border border-black px-3 py-2">{formatDate(invoice.date)}</td>
+									<td class="border border-black px-3 py-2 font-bold {invoiceStatusColor(invoice)}">
+										{amountFormat.format(invoice.amount)} ({invoiceStatusLabel(invoice)})
+									</td>
+									<td class="border border-black px-3 py-2 text-center">
+										{#if invoice.abandoned}
+											<span
+												title="Facture abandonnée, contactez compta@lghs.be"
+												class="inline-flex text-gray-400"
+											>
+												{@render downloadIcon()}
+											</span>
+										{:else if invoice.downloadable}
+											<a
+												href="/cotisation/invoice/{invoice.id}"
+												aria-label="Télécharger la facture {invoice.ref}"
+												title="Télécharger"
+												class="no-underline-fx inline-flex text-gray-600 hover:text-black"
+											>
+												{@render downloadIcon()}
+											</a>
+										{:else}
+											—
+										{/if}
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+
+				<p class="mt-3 text-sm text-gray-600">
+					Si vous êtes enregistré·e sur le réseau Peppol, la facture vous est également envoyée
+					par ce biais. Si le bouton de téléchargement est inactif, la facture est abandonnée ou
+					dans un état anormal. Pour toute question, contactez
+					<a href="mailto:compta@lghs.be">compta@lghs.be</a>.
+				</p>
+			{/if}
 		{/if}
 	</section>
 
@@ -249,7 +423,11 @@
 			Renseigner vos coordonnées bancaires facilite l'automatisation des tâches de comptabilité.
 		</p>
 
-		{#if data.bankInfo === null}
+		{#if data.unavailable}
+			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-500">
+				Service temporairement indisponible. Réessayez dans quelques instants.
+			</p>
+		{:else if data.bankInfo === null}
 			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-500">
 				Compte introuvable.
 			</p>

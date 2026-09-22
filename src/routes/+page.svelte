@@ -73,12 +73,18 @@
 	<div class="mb-10 flex flex-col gap-8 md:flex-row md:items-start">
 		<section class="w-full md:w-1/2">
 			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma cotisation</h2>
-			<CotisationStatusBlock
-				status={data.cotisation.status}
-				datefin={data.cotisation.datefin}
-				isInactive={data.cotisation.isInactive}
-			/>
-			<a href="/cotisation" class="mt-2 inline-block text-sm">Voir le détail →</a>
+			{#if data.cotisationUnavailable}
+				<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+					Service de cotisation temporairement indisponible. Réessayez dans quelques instants.
+				</p>
+			{:else}
+				<CotisationStatusBlock
+					status={data.cotisation.status}
+					datefin={data.cotisation.datefin}
+					isInactive={data.cotisation.isInactive}
+				/>
+				<a href="/cotisation" class="mt-2 inline-block text-sm">Voir le détail →</a>
+			{/if}
 		</section>
 
 		<section class="w-full md:w-1/2">
