@@ -37,30 +37,16 @@ function pickTemplate(): string {
 	return MESSAGE_TEMPLATES[Math.floor(Math.random() * MESSAGE_TEMPLATES.length)];
 }
 
-// Lazy, idempotent — same pattern as birthdaySettings.ts and auditLog.ts.
-let schemaReady = false;
-function ensureSchema(): void {
-	if (schemaReady) return;
-	getDb().exec(`
-		CREATE TABLE IF NOT EXISTS birthday_sent (
-			member_pk INTEGER NOT NULL,
-			year INTEGER NOT NULL,
-			sent_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-			PRIMARY KEY (member_pk, year)
-		)
-	`);
-	schemaReady = true;
-}
+// The birthday_sent table itself is created by src/lib/server/migrations.ts (run once from
+// db.ts's getDb()) — see that file's migration 2.
 
 function alreadySentThisYear(pk: number, year: number): boolean {
-	ensureSchema();
 	return !!getDb()
 		.prepare('SELECT 1 FROM birthday_sent WHERE member_pk = ? AND year = ?')
 		.get(pk, year);
 }
 
 function markSent(pk: number, year: number): void {
-	ensureSchema();
 	getDb().prepare('INSERT OR IGNORE INTO birthday_sent (member_pk, year) VALUES (?, ?)').run(pk, year);
 }
 
