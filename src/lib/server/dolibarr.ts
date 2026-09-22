@@ -34,6 +34,7 @@ async function dolibarrApiFetch(path: string, init?: RequestInit): Promise<Respo
 	const apiKey = requireEnv('DOLIBARR_API_KEY');
 
 	let res: Response;
+	let body: string | undefined;
 	try {
 		res = await fetch(url, {
 			...init,
@@ -44,14 +45,23 @@ async function dolibarrApiFetch(path: string, init?: RequestInit): Promise<Respo
 				...init?.headers
 			}
 		});
+		// Reading the error body under the same try: the AbortSignal stays armed for the full
+		// exchange, not just until headers arrive, so a body that's still streaming in at T+5s
+		// must be caught here too — otherwise a slow-body timeout surfaces as a raw TimeoutError
+		// instead of DolibarrUnavailableError, defeating the point of this function.
+		if (!res.ok) {
+			body = await res.text();
+		}
 	} catch (err) {
-		// Network failure or the timeout above firing (AbortSignal.timeout rejects with a
-		// TimeoutError DOMException) — Dolibarr never answered at all.
-		throw new DolibarrUnavailableError(`Dolibarr API request to ${path} timed out or failed: ${err}`);
+		// Network failure, or the timeout above firing on either the connection or the body read
+		// (AbortSignal.timeout rejects with a TimeoutError DOMException either way) — Dolibarr
+		// never gave us a complete answer.
+		throw new DolibarrUnavailableError(`Dolibarr API request to ${path} timed out or failed: ${err}`, {
+			cause: err
+		});
 	}
 
 	if (!res.ok) {
-		const body = await res.text();
 		// >=500 is Dolibarr's own server erroring out (down/misconfigured/overloaded) — treat as an
 		// outage. A 4xx is a genuine request problem (bad filter, not found, validation) and should
 		// stay a hard error rather than being retried or shown as "temporarily unavailable".
