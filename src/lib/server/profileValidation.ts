@@ -213,7 +213,10 @@ function validateBirthday(raw: string): { ok: true; value: string } | { ok: fals
 	const month = Number(withYear ? withYear[2] : withoutYear![1]);
 	const day = Number(withYear ? withYear[3] : withoutYear![2]);
 
-	if (year !== null && (year < 1900 || year > new Date().getFullYear())) {
+	const today = new Date();
+	const todayYear = today.getFullYear();
+
+	if (year !== null && (year < 1900 || year > todayYear)) {
 		return { ok: false, error: 'Date de naissance : année invalide.' };
 	}
 	if (month < 1 || month > 12) {
@@ -221,6 +224,16 @@ function validateBirthday(raw: string): { ok: true; value: string } | { ok: fals
 	}
 	if (day < 1 || day > daysInMonth(month, year)) {
 		return { ok: false, error: 'Date de naissance : jour invalide pour ce mois.' };
+	}
+	// The year check above only rejects a year strictly after this one — a full date later this
+	// same year (e.g. 2026-12-31 submitted on 2026-09-22) still needs its month/day compared
+	// against today's, or it'd pass as a "valid" birthdate that hasn't happened yet.
+	if (
+		year === todayYear &&
+		(month > today.getMonth() + 1 ||
+			(month === today.getMonth() + 1 && day > today.getDate()))
+	) {
+		return { ok: false, error: 'Date de naissance : ne peut pas être dans le futur.' };
 	}
 
 	const pad2 = (n: number) => String(n).padStart(2, '0');
