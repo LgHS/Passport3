@@ -491,6 +491,24 @@ export async function listUsers(): Promise<AdminUserSummary[]> {
 		}));
 }
 
+export interface BirthdayAnnounceMember {
+	pk: number;
+	email: string;
+	// Always "MM-DD" or "YYYY-MM-DD" — see validateBirthday() in profileValidation.ts. Left as the
+	// raw string here; matching "is it today" is the caller's job, not this module's.
+	birthday: string;
+}
+
+// Only members who opted in and actually filled in a birthday — the two are independent fields
+// (see PROFILE_ATTRIBUTE_FIELDS above), a member could have one without the other.
+export async function listBirthdayAnnounceMembers(): Promise<BirthdayAnnounceMember[]> {
+	const res = await authentikApiFetch('core/users/?page_size=500');
+	const data = (await res.json()) as { results: AuthentikUserRecord[] };
+	return data.results
+		.filter((u) => u.attributes.birthdayAnnounce === 'true' && !!u.attributes.birthday)
+		.map((u) => ({ pk: u.pk, email: u.email, birthday: String(u.attributes.birthday) }));
+}
+
 export interface DirectoryMember {
 	pk: number;
 	username: string;

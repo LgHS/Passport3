@@ -1,6 +1,11 @@
 import type { Handle } from '@sveltejs/kit';
 import { OidcUnavailableError, verifyIdToken } from '$lib/server/authentik';
 import { clearSessionCookie, SESSION_COOKIE } from '$lib/server/session';
+import { startBirthdayScheduler } from '$lib/server/birthdayScheduler';
+
+// Module scope, not inside `handle` below — runs exactly once per server process, unlike `handle`
+// which runs on every request.
+startBirthdayScheduler();
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const sessionCookie = event.cookies.get(SESSION_COOKIE);
