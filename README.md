@@ -182,6 +182,11 @@ Watchtower-triggered redeploy. **This volume now holds real, non-reconstructible
 be included in whatever backup routine the host already has** — unlike the rest of the container,
 which was previously fully stateless and disposable.
 
+The database runs in WAL mode, so `passport3.db` alone is not a consistent snapshot while the
+container is running — recent transactions can still be sitting in `passport3.db-wal`. Either stop
+the container before copying just the `.db` file, or back up the whole volume (`.db`, `.db-wal`,
+`.db-shm` together) in one atomic snapshot.
+
 ## Contributing
 
 Contributions are welcome.
