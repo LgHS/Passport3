@@ -2,6 +2,9 @@
 FROM node:22-alpine AS base
 WORKDIR /app
 RUN corepack enable
+# better-sqlite3 compiles a native addon at install time (no prebuilt binary for this musl/alpine
+# target) — needed in both the `deps` and `prod-deps` stages below, which both run `pnpm install`.
+RUN apk add --no-cache python3 make g++
 
 # ---- dependencies (full, incl. dev, for building) ----
 FROM base AS deps
@@ -30,6 +33,12 @@ RUN addgroup -S passport && adduser -S passport -G passport
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/build ./build
 COPY package.json ./package.json
+
+# /app/data (see src/lib/server/db.ts's DB_PATH) is where the SQLite file lives — a fresh named
+# volume mounted here is root-owned by default, which would leave `passport` unable to create the
+# database file at all. Created and chowned before switching users, so the mountpoint underneath
+# it is already writable regardless of what Docker sets on the volume itself.
+RUN mkdir -p /app/data && chown -R passport:passport /app/data
 
 USER passport
 EXPOSE 8030

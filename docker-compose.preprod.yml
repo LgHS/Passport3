@@ -6,6 +6,10 @@ services:
       - '8030:8030'
     env_file:
       - .env
+    environment:
+      - DB_PATH=/app/data/passport3.db
+    volumes:
+      - passport3-data:/app/data
     restart: always
     labels:
       - com.centurylinklabs.watchtower.enable=true
@@ -17,3 +21,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     command: --interval 300 --label-enable --cleanup
     restart: always
+
+volumes:
+  passport3-data:

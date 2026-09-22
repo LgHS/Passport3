@@ -147,6 +147,21 @@ Releasing a new version (`git tag vX.Y.Z && git push --tags`, or `gh release cre
 builds and pushes `ghcr.io/lghs/passport3:X.Y.Z` and `ghcr.io/lghs/passport3:preprod` — Watchtower
 picks up the `preprod` tag update within 5 minutes and redeploys automatically.
 
+### Local data storage
+
+Passport3 has a small local SQLite database (`better-sqlite3`) for data that has no home in
+Authentik, Dolibarr, or GitHub — e.g. an audit trail of admin actions. Both `docker-compose.yml`
+and `docker-compose.preprod.yml` mount it on a named volume (`passport3-data`, at `/app/data`), set
+via the `DB_PATH` environment variable, so it survives container recreation — including a
+Watchtower-triggered redeploy. **This volume now holds real, non-reconstructible data and needs to
+be included in whatever backup routine the host already has** — unlike the rest of the container,
+which was previously fully stateless and disposable.
+
+The database runs in WAL mode, so `passport3.db` alone is not a consistent snapshot while the
+container is running — recent transactions can still be sitting in `passport3.db-wal`. Either stop
+the container before copying just the `.db` file, or back up the whole volume (`.db`, `.db-wal`,
+`.db-shm` together) in one atomic snapshot.
+
 ## Contributing
 
 Contributions are welcome.

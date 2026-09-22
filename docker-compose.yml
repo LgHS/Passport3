@@ -8,4 +8,11 @@ services:
       - '8030:8030'
     env_file:
       - .env
+    environment:
+      - DB_PATH=/app/data/passport3.db
+    volumes:
+      - passport3-data:/app/data
     restart: always
+
+volumes:
+  passport3-data:
