@@ -15,7 +15,7 @@ import {
 } from '$lib/server/dolibarr';
 
 const DOLIBARR_UNAVAILABLE_MESSAGE = 'Service temporairement indisponible. Réessayez dans quelques instants.';
-import { validateBankInfoSubmission } from '$lib/server/bankValidation';
+import { validateBankInfoSubmission, normalizeIban } from '$lib/server/bankValidation';
 
 // Auth guard shared by the load and the action below — never trust a client-submitted member/
 // thirdparty id, always re-derive from the authenticated session's email.
@@ -108,12 +108,34 @@ export const actions: Actions = {
 				return fail(400, { error: result.error, ibanPerso: result.ibanPerso, ibanPro: result.ibanPro });
 			}
 
+			// Canonicalized before comparing: `member.ibanPerso`/`currentIbanPro` come straight from
+			// Dolibarr (`string | null`, and not guaranteed to be stored in the same normalized form
+			// validateBankInfoSubmission() already put `result.*` through), while an empty submitted
+			// field is `''` rather than `null`. Comparing the raw values would treat "no IBAN on
+			// either side" as a change (`'' !== null`), and a same IBAN stored with different
+			// spacing as a false difference — both would defeat the point of only touching what
+			// actually changed.
+			const currentIbanPro = member.fkSoc ? await getThirdPartyIbanPro(member.fkSoc) : null;
+			const storedIbanPerso = normalizeIban(member.ibanPerso ?? '');
+			const storedIbanPro = normalizeIban(currentIbanPro ?? '');
+			const ibanPersoChanged = result.ibanPerso !== storedIbanPerso;
+			const ibanProChanged = member.fkSoc !== null && result.ibanPro !== storedIbanPro;
+
 			// Stop a member from entering someone else's IBAN — a same-person perso/pro match (the
-			// "indépendant" case) is fine, anything else isn't.
+			// "indépendant" case) is fine, anything else isn't (findIbanOwnerConflict excludes the
+			// caller's own member id/third-party id for exactly that reason, regardless of which
+			// field is being checked). Only checked for values that actually changed: an unchanged
+			// value was already vetted when it was originally set, so re-checking it here would
+			// only add two full-table Dolibarr scans per field for nothing, and could wrongly block
+			// an edit to the *other* field over a pre-existing, untouched value.
 			const own = { memberId: member.id, fkSoc: member.fkSoc };
 			const conflictChecks = [
-				result.ibanPerso ? findIbanOwnerConflict(result.ibanPerso, own) : Promise.resolve(false),
-				result.ibanPro ? findIbanOwnerConflict(result.ibanPro, own) : Promise.resolve(false)
+				ibanPersoChanged && result.ibanPerso
+					? findIbanOwnerConflict(result.ibanPerso, own)
+					: Promise.resolve(false),
+				ibanProChanged && result.ibanPro
+					? findIbanOwnerConflict(result.ibanPro, own)
+					: Promise.resolve(false)
 			];
 			if ((await Promise.all(conflictChecks)).some(Boolean)) {
 				return fail(400, {
@@ -123,15 +145,20 @@ export const actions: Actions = {
 				});
 			}
 
-			// Only touch what actually changed, and one write at a time rather than in parallel —
-			// if the second one fails, we then know precisely which one landed instead of a bare
-			// "something went wrong" while part of the change may have already gone through.
-			const currentIbanPro = member.fkSoc ? await getThirdPartyIbanPro(member.fkSoc) : null;
-			const ibanPersoChanged = result.ibanPerso !== member.ibanPerso;
-			const ibanProChanged = member.fkSoc !== null && result.ibanPro !== currentIbanPro;
-
+			// One write at a time rather than in parallel — if the second one fails, we then know
+			// precisely which one landed instead of a bare "something went wrong" while part of the
+			// change may have already gone through.
 			if (ibanPersoChanged) {
-				await updateMemberIbanPerso(member.id, result.ibanPerso);
+				try {
+					await updateMemberIbanPerso(member.id, result.ibanPerso);
+				} catch (err) {
+					if (err instanceof DolibarrUnavailableError) throw err;
+					return fail(500, {
+						error: "La mise à jour de l'IBAN personnel a échoué, réessayez.",
+						ibanPerso: result.ibanPerso,
+						ibanPro: result.ibanPro
+					});
+				}
 			}
 			if (ibanProChanged) {
 				try {
