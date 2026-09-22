@@ -8,10 +8,9 @@
 	let showUuid = $state(false);
 	let understood = $state(false);
 	let submitting = $state(false);
-
-	function cancelRegen() {
-		understood = false;
-	}
+	// Captured at submit time, before the action's response replaces `uuid` — decides which
+	// success wording to show ("généré" the first time, "régénéré" after that).
+	let wasEmpty = $state(false);
 </script>
 
 <svelte:head>
@@ -22,97 +21,130 @@
 
 {#if form?.success}
 	<p class="mb-6 border-4 border-black bg-lghs-yellow px-4 py-3 font-bold">
-		Votre (vos) badge(s) a (ont) été régénéré(s).
+		{wasEmpty ? 'Votre badge a été généré.' : 'Votre (vos) badge(s) a (ont) été régénéré(s).'}
 	</p>
 {/if}
 
-<div class="flex flex-col gap-8 md:flex-row md:items-start">
-	<section class="w-full md:w-2/3">
+{#if uuid === null}
+	<section class="mx-auto max-w-2xl text-center">
 		<p class="mb-2 text-sm leading-relaxed">
 			Cet identifiant unique sert à sécuriser votre porte-clé ou votre carte d'accès RFID au
 			hackerspace.
 		</p>
-		<p class="mb-2 text-sm leading-relaxed">
-			Cet identifiant est confidentiel et ne doit pas être communiqué à n'importe qui.
-		</p>
 		<p class="mb-6 text-sm leading-relaxed">
-			Il est possible de le régénérer en cas de doute, de copie ou de perte.
+			Vous n'en avez pas encore, générez-le pour pouvoir l'utiliser.
 		</p>
-
-		<div>
-			<span class="mb-1 block text-sm font-bold uppercase">Identifiant (UUID)</span>
-			<div class="flex items-center gap-2 border border-black bg-gray-100 px-3 py-2">
-				<p class="flex-1 font-mono text-sm">{showUuid ? uuid : '•'.repeat(uuid.length)}</p>
-				<button
-					type="button"
-					onclick={() => (showUuid = !showUuid)}
-					aria-label={showUuid ? "Masquer l'identifiant" : "Afficher l'identifiant"}
-					title={showUuid ? "Masquer l'identifiant" : "Afficher l'identifiant"}
-					class="shrink-0 text-gray-600 hover:text-black"
-				>
-					{#if showUuid}
-						<svg viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5">
-							<path
-								d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6Z"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							/>
-							<circle cx="10" cy="10" r="2.25" />
-						</svg>
-					{:else}
-						<svg viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5">
-							<path
-								d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6Z"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							/>
-							<circle cx="10" cy="10" r="2.25" />
-							<line x1="2" y1="17" x2="18" y2="3" stroke-linecap="round" />
-						</svg>
-					{/if}
-				</button>
-			</div>
-		</div>
+		<form
+			method="POST"
+			action="?/regenerate"
+			use:enhance={() => {
+				wasEmpty = true;
+				submitting = true;
+				return async ({ update }) => {
+					await update();
+					submitting = false;
+				};
+			}}
+		>
+			<button
+				type="submit"
+				disabled={submitting}
+				class="btn-primary px-6 py-3 disabled:cursor-not-allowed disabled:opacity-40"
+			>
+				{submitting ? 'Génération…' : 'Générer mon badge'}
+			</button>
+		</form>
 	</section>
+{:else}
+	<div class="flex flex-col gap-8 md:flex-row md:items-start">
+		<section class="w-full md:w-2/3">
+			<p class="mb-2 text-sm leading-relaxed">
+				Cet identifiant unique sert à sécuriser votre porte-clé ou votre carte d'accès RFID au
+				hackerspace.
+			</p>
+			<p class="mb-2 text-sm leading-relaxed">
+				Cet identifiant est confidentiel et ne doit pas être communiqué à n'importe qui.
+			</p>
+			<p class="mb-6 text-sm leading-relaxed">
+				Il est possible de le régénérer en cas de doute, de copie ou de perte.
+			</p>
 
-	<section class="w-full md:w-1/3">
-		<div class="border-4 border-black">
-			<div class="hazard-stripes h-2"></div>
-			<div class="p-6">
-				<p class="mb-3 text-sm font-bold uppercase">Attention, action irréversible</p>
-				<p class="mb-4 text-sm leading-relaxed">
-					En régénérant votre UUID, votre (vos) badge(s) actuel(s) cessera(ont) de fonctionner
-					immédiatement. Cette opération ne doit être utilisée qu'en cas de perte ou de copie de
-					votre (vos) badge(s).
-				</p>
-				<label class="mb-4 flex items-start gap-2 text-sm">
-					<input type="checkbox" bind:checked={understood} class="mt-1" />
-					J'ai compris que mon (mes) badge(s) actuel(s) ne fonctionnera(ont) plus.
-				</label>
-				<form
-					method="POST"
-					action="?/regenerate"
-					use:enhance={() => {
-						submitting = true;
-						return async ({ update }) => {
-							await update();
-							submitting = false;
-							understood = false;
-						};
-					}}
-				>
-					<div class="flex gap-3 pb-1">
-						<button
-							type="submit"
-							disabled={!understood || submitting}
-							class="btn-primary px-4 py-2 disabled:cursor-not-allowed disabled:opacity-40"
-						>
-							{submitting ? 'Régénération…' : 'Confirmer la régénération'}
-						</button>
-					</div>
-				</form>
+			<div>
+				<span class="mb-1 block text-sm font-bold uppercase">Identifiant (UUID)</span>
+				<div class="flex items-center gap-2 border border-black bg-gray-100 px-3 py-2">
+					<p class="flex-1 font-mono text-sm">{showUuid ? uuid : '•'.repeat(uuid.length)}</p>
+					<button
+						type="button"
+						onclick={() => (showUuid = !showUuid)}
+						aria-label={showUuid ? "Masquer l'identifiant" : "Afficher l'identifiant"}
+						title={showUuid ? "Masquer l'identifiant" : "Afficher l'identifiant"}
+						class="shrink-0 text-gray-600 hover:text-black"
+					>
+						{#if showUuid}
+							<svg viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5">
+								<path
+									d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6Z"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+								<circle cx="10" cy="10" r="2.25" />
+							</svg>
+						{:else}
+							<svg viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5">
+								<path
+									d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6Z"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+								<circle cx="10" cy="10" r="2.25" />
+								<line x1="2" y1="17" x2="18" y2="3" stroke-linecap="round" />
+							</svg>
+						{/if}
+					</button>
+				</div>
 			</div>
-			<div class="hazard-stripes h-2"></div>
-		</div>
-	</section>
-</div>
+		</section>
+
+		<section class="w-full md:w-1/3">
+			<div class="border-4 border-black">
+				<div class="hazard-stripes h-2"></div>
+				<div class="p-6">
+					<p class="mb-3 text-sm font-bold uppercase">Attention, action irréversible</p>
+					<p class="mb-4 text-sm leading-relaxed">
+						En régénérant votre UUID, votre (vos) badge(s) actuel(s) cessera(ont) de fonctionner
+						immédiatement. Cette opération ne doit être utilisée qu'en cas de perte ou de copie de
+						votre (vos) badge(s).
+					</p>
+					<label class="mb-4 flex items-start gap-2 text-sm">
+						<input type="checkbox" bind:checked={understood} class="mt-1" />
+						J'ai compris que mon (mes) badge(s) actuel(s) ne fonctionnera(ont) plus.
+					</label>
+					<form
+						method="POST"
+						action="?/regenerate"
+						use:enhance={() => {
+							wasEmpty = false;
+							submitting = true;
+							return async ({ update }) => {
+								await update();
+								submitting = false;
+								understood = false;
+							};
+						}}
+					>
+						<div class="flex gap-3 pb-1">
+							<button
+								type="submit"
+								disabled={!understood || submitting}
+								class="btn-primary px-4 py-2 disabled:cursor-not-allowed disabled:opacity-40"
+							>
+								{submitting ? 'Régénération…' : 'Confirmer la régénération'}
+							</button>
+						</div>
+					</form>
+				</div>
+				<div class="hazard-stripes h-2"></div>
+			</div>
+		</section>
+	</div>
+{/if}

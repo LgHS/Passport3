@@ -17,9 +17,11 @@ function resolvePk(locals: App.Locals): number {
 export const load: PageServerLoad = async ({ locals }) => {
 	const pk = resolvePk(locals);
 
-	// First visit: no rfid_uid attribute yet on this Authentik user, so provision one now
-	// rather than showing an empty badge identifier.
-	const uuid = (await getRfidUid(pk)) ?? (await regenerateRfidUid(pk));
+	// Pure read — `null` means no badge provisioned yet, left to the page to offer a "Générer mon
+	// badge" action instead of the load() itself writing on a GET. Prefetching (SvelteKit's own
+	// hover/viewport preload) or a crawler hitting this page would otherwise silently mint a badge
+	// nobody asked for.
+	const uuid = await getRfidUid(pk);
 
 	return { uuid };
 };
