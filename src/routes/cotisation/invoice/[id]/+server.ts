@@ -37,7 +37,10 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		return new Response(document.content as BodyInit, {
 			headers: {
 				'Content-Type': document.contentType,
-				'Content-Disposition': `attachment; filename="${document.filename}"`
+				// Escaped defensively even though `filename` comes from Dolibarr's own trusted
+				// response, not directly from user input — cheap insurance against a stray `"` ever
+				// breaking the header.
+				'Content-Disposition': `attachment; filename="${document.filename.replace(/"/g, "'")}"`
 			}
 		});
 	} catch (err) {
