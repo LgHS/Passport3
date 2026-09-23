@@ -13,7 +13,8 @@ import {
 	getThirdPartyIbanPro,
 	deriveCotisationStatus,
 	detectCotisationGaps,
-	parseDolibarrDate
+	parseDolibarrDate,
+	DolibarrUnavailableError
 } from '$lib/server/dolibarr';
 import { authentikPk, type CotisationStatus } from '$lib/types';
 
@@ -35,12 +36,15 @@ export interface DashboardChecklist {
 	mfaConfigured: boolean | null;
 	emergencyContactConfigured: boolean | null;
 	badgeConfigured: boolean | null;
-	ibanPersoConfigured: boolean;
+	// Also null when Dolibarr is unavailable, same reasoning as above — a Dolibarr outage must
+	// never be reported as "IBAN not filled in", which would be actively wrong for a member who
+	// already filled it in.
+	ibanPersoConfigured: boolean | null;
 	// Only meaningful (and only ever rendered) when ibanProApplicable is true — a classic member
 	// has no separate pro IBAN to fill in, see /cotisation's own ibanPersoTooltip for the same
 	// perso/pro distinction.
 	ibanProApplicable: boolean;
-	ibanProConfigured: boolean;
+	ibanProConfigured: boolean | null;
 }
 
 const UNGROUPED_LABEL = 'Autres';
@@ -63,14 +67,22 @@ interface MemberFinancialSummary {
 	ibanPerso: string | null;
 	isPro: boolean;
 	ibanPro: string | null;
+	// Distinct from "no Dolibarr member found" (see feedback_distinguish-fetch-failure-from-empty)
+	// — a member with no Dolibarr record at all and a member Dolibarr couldn't be reached for both
+	// end up with `status: null` above, but only this flag means "we don't actually know, ask again
+	// later" as opposed to "confirmed: nothing to show here".
+	unavailable: boolean;
 }
 
 const NO_FINANCIAL_SUMMARY: MemberFinancialSummary = {
 	cotisation: { status: null, datefin: null, isInactive: false },
 	ibanPerso: null,
 	isPro: false,
-	ibanPro: null
+	ibanPro: null,
+	unavailable: false
 };
+
+const UNAVAILABLE_FINANCIAL_SUMMARY: MemberFinancialSummary = { ...NO_FINANCIAL_SUMMARY, unavailable: true };
 
 // Same shape/logic as /cotisation's own load — this is meant to be the exact same status block
 // and IBAN checks, just surfaced a click earlier on the homepage. One getMemberByEmail lookup
@@ -78,26 +90,34 @@ const NO_FINANCIAL_SUMMARY: MemberFinancialSummary = {
 async function loadMemberFinancialSummary(email: string | undefined): Promise<MemberFinancialSummary> {
 	if (!email) return NO_FINANCIAL_SUMMARY;
 
-	const member = await getMemberByEmail(email);
-	if (!member) return NO_FINANCIAL_SUMMARY;
+	try {
+		const member = await getMemberByEmail(email);
+		if (!member) return NO_FINANCIAL_SUMMARY;
 
-	const [types, subscriptions, ibanPro] = await Promise.all([
-		getMemberTypes(),
-		getMemberSubscriptions(member.id),
-		member.fkSoc ? getThirdPartyIbanPro(member.fkSoc) : Promise.resolve(null)
-	]);
-	const { isInactive } = detectCotisationGaps(subscriptions);
+		const [types, subscriptions, ibanPro] = await Promise.all([
+			getMemberTypes(),
+			getMemberSubscriptions(member.id),
+			member.fkSoc ? getThirdPartyIbanPro(member.fkSoc) : Promise.resolve(null)
+		]);
+		const { isInactive } = detectCotisationGaps(subscriptions);
 
-	return {
-		cotisation: {
-			status: deriveCotisationStatus(member, types),
-			datefin: parseDolibarrDate(member.datefin),
-			isInactive
-		},
-		ibanPerso: member.ibanPerso,
-		isPro: member.fkSoc !== null,
-		ibanPro
-	};
+		return {
+			cotisation: {
+				status: deriveCotisationStatus(member, types),
+				datefin: parseDolibarrDate(member.datefin),
+				isInactive
+			},
+			ibanPerso: member.ibanPerso,
+			isPro: member.fkSoc !== null,
+			ibanPro,
+			unavailable: false
+		};
+	} catch (err) {
+		if (err instanceof DolibarrUnavailableError) {
+			return UNAVAILABLE_FINANCIAL_SUMMARY;
+		}
+		throw err;
+	}
 }
 
 const NO_COTISATION: CotisationSummary = { status: null, datefin: null, isInactive: false };
@@ -133,10 +153,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 		mfaConfigured: mfaDevices === null ? null : mfaDevices.length > 0,
 		emergencyContactConfigured: emergencyContacts === null ? null : emergencyContacts.length > 0,
 		badgeConfigured: rfidUid === undefined ? null : rfidUid !== null,
-		ibanPersoConfigured: !!financial.ibanPerso,
+		ibanPersoConfigured: financial.unavailable ? null : !!financial.ibanPerso,
 		ibanProApplicable: financial.isPro,
-		ibanProConfigured: !!financial.ibanPro
+		ibanProConfigured: financial.unavailable ? null : !!financial.ibanPro
 	};
 
-	return { groups: apps ? groupApps(apps) : null, cotisation: financial.cotisation, checklist };
+	return {
+		groups: apps ? groupApps(apps) : null,
+		cotisation: financial.cotisation,
+		cotisationUnavailable: financial.unavailable,
+		checklist
+	};
 };
