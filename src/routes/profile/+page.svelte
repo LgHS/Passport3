@@ -92,9 +92,14 @@
 	// .no-scrollbar below) native scrollbar. Redirects that vertical delta into the strip's own
 	// horizontal scroll instead of the page's, only while there's actually somewhere left to
 	// scroll to in that direction (otherwise let the page itself scroll normally).
+	//
+	// A trackpad's horizontal swipe already arrives as a real deltaX, which overflow-x-auto
+	// already scrolls to natively — this must stay hands-off whenever deltaX dominates, or it
+	// fights that native handling instead of leaving it alone.
 	function handleTabScrollWheel(event: WheelEvent) {
 		const el = tabScrollEl;
 		if (!el) return;
+		if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
 		if ((event.deltaY < 0 && !canScrollTabsLeft) || (event.deltaY > 0 && !canScrollTabsRight)) {
 			return;
 		}
