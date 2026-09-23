@@ -1,23 +1,12 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import { showToast } from '$lib/stores/toast.svelte';
-	import type { ActionData, PageData } from './$types';
+	import type { PageData } from './$types';
 
 	const PAGE_SIZE = 20;
 
-	let { data, form }: { data: PageData; form: ActionData } = $props();
+	let { data }: { data: PageData } = $props();
 
 	let query = $state('');
 	let page = $state(1);
-	let refreshingMattermostCache = $state(false);
-
-	$effect(() => {
-		if (form?.mattermostCacheRefreshed) {
-			showToast('success', 'Cache Mattermost régénéré.');
-		} else if (form?.mattermostCacheError) {
-			showToast('error', form.mattermostCacheError);
-		}
-	});
 
 	let filteredUsers = $derived(
 		data.users.filter((user) => {
@@ -45,7 +34,17 @@
 </svelte:head>
 
 <section>
-	<h1 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Membres</h1>
+	<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+		<h1 class="bg-black px-4 py-3 text-base font-bold text-white uppercase">Membres</h1>
+		<div class="flex flex-wrap gap-2">
+			<a href="/admin/invite" class="no-underline-fx btn-primary inline-block px-4 py-2">
+				Créer une invitation
+			</a>
+			<a href="/admin/settings" class="no-underline-fx btn-primary inline-block px-4 py-2">
+				Paramètres
+			</a>
+		</div>
+	</div>
 
 	<div class="mb-4 flex flex-wrap items-center gap-4">
 		<input
@@ -55,36 +54,11 @@
 			placeholder="Rechercher par nom, identifiant ou email…"
 			class="min-w-0 flex-1 border border-black px-3 py-2 text-sm"
 		/>
-		<form
-			method="POST"
-			action="?/refreshMattermostCache"
-			use:enhance={() => {
-				refreshingMattermostCache = true;
-				return async ({ update }) => {
-					await update({ reset: false });
-					refreshingMattermostCache = false;
-				};
-			}}
-		>
-			<button
-				type="submit"
-				disabled={refreshingMattermostCache}
-				class="btn-primary shrink-0 px-4 py-2 disabled:opacity-50"
-			>
-				{refreshingMattermostCache ? 'Régénération…' : 'Régénérer le cache Mattermost'}
-			</button>
-		</form>
 		<a
 			href="/admin/audit"
 			class="no-underline-fx inline-block shrink-0 border border-black px-4 py-2 text-sm font-bold uppercase transition-colors hover:bg-black hover:text-white"
 		>
 			Historique d'audit
-		</a>
-		<a
-			href="/admin/invite"
-			class="no-underline-fx btn-primary inline-block shrink-0 px-4 py-2"
-		>
-			Créer une invitation
 		</a>
 	</div>
 

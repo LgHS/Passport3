@@ -83,6 +83,39 @@ const migrations: Migration[] = [
 			db.exec(`ALTER TABLE wishlist_items ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'`);
 			db.exec(`ALTER TABLE wishlist_items ADD COLUMN resolved_at TEXT`);
 		}
+	},
+	{
+		// Renumbered from birthday-scheduler's own 1/2 to continue after audit-log/wishlist's 1-4 —
+		// these were developed on sibling branches that each numbered from 1 independently. See
+		// the migrations backfill TODO in project memory for why this collision was expected.
+		version: 5,
+		name: 'create birthday_settings',
+		up: (db) => {
+			// Single-row settings table (CHECK(id = 1) keeps it that way) rather than a generic
+			// key/value table — there's exactly one setting pair to store today.
+			db.exec(`
+				CREATE TABLE birthday_settings (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					enabled INTEGER NOT NULL DEFAULT 0,
+					hour INTEGER NOT NULL DEFAULT 9
+				)
+			`);
+			db.exec('INSERT INTO birthday_settings (id, enabled, hour) VALUES (1, 0, 9)');
+		}
+	},
+	{
+		version: 6,
+		name: 'create birthday_sent',
+		up: (db) => {
+			db.exec(`
+				CREATE TABLE birthday_sent (
+					member_pk INTEGER NOT NULL,
+					year INTEGER NOT NULL,
+					sent_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+					PRIMARY KEY (member_pk, year)
+				)
+			`);
+		}
 	}
 ];
 
