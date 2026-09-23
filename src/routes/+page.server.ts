@@ -3,6 +3,7 @@ import {
 	listUserApplications,
 	listMfaDevices,
 	getEmergencyContacts,
+	getRfidUid,
 	type UserApplication
 } from '$lib/server/authentikAdmin';
 import {
@@ -34,6 +35,7 @@ export interface DashboardChecklist {
 	// that's actually already fine.
 	mfaConfigured: boolean | null;
 	emergencyContactConfigured: boolean | null;
+	badgeConfigured: boolean | null;
 	// Also null when Dolibarr is unavailable, same reasoning as above — a Dolibarr outage must
 	// never be reported as "IBAN not filled in", which would be actively wrong for a member who
 	// already filled it in.
@@ -122,6 +124,7 @@ const NO_COTISATION: CotisationSummary = { status: null, datefin: null, isInacti
 const NO_CHECKLIST: DashboardChecklist = {
 	mfaConfigured: null,
 	emergencyContactConfigured: null,
+	badgeConfigured: null,
 	ibanPersoConfigured: false,
 	ibanProApplicable: false,
 	ibanProConfigured: false
@@ -134,17 +137,22 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const pk = authentikPk(locals.user);
 
-	const [apps, financial, mfaDevices, emergencyContacts] = await Promise.all([
+	const [apps, financial, mfaDevices, emergencyContacts, rfidUid] = await Promise.all([
 		// Best-effort: a transient Authentik API hiccup shouldn't take down the whole homepage.
 		pk ? listUserApplications(pk).catch((): UserApplication[] | null => null) : Promise.resolve(null),
 		loadMemberFinancialSummary(locals.user.email),
 		pk ? listMfaDevices(pk).catch(() => null) : Promise.resolve(null),
-		pk ? getEmergencyContacts(pk).catch(() => null) : Promise.resolve(null)
+		pk ? getEmergencyContacts(pk).catch(() => null) : Promise.resolve(null),
+		// getRfidUid's own return already uses `null` to mean "no badge yet" — a legitimate,
+		// distinct value from a fetch failure, so the failure case is `undefined` here rather than
+		// reusing `null` and collapsing the two meanings together.
+		pk ? getRfidUid(pk).catch(() => undefined) : Promise.resolve(undefined)
 	]);
 
 	const checklist: DashboardChecklist = {
 		mfaConfigured: mfaDevices === null ? null : mfaDevices.length > 0,
 		emergencyContactConfigured: emergencyContacts === null ? null : emergencyContacts.length > 0,
+		badgeConfigured: rfidUid === undefined ? null : rfidUid !== null,
 		ibanPersoConfigured: financial.unavailable ? null : !!financial.ibanPerso,
 		ibanProApplicable: financial.isPro,
 		ibanProConfigured: financial.unavailable ? null : !!financial.ibanPro
