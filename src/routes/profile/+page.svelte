@@ -86,6 +86,21 @@
 			window.removeEventListener('resize', updateTabScrollFade);
 		};
 	});
+
+	// A plain mouse (no trackpad, no horizontal scroll wheel) only ever produces vertical wheel
+	// deltas — without this, the strip is only reachable by dragging the (hidden, see
+	// .no-scrollbar below) native scrollbar. Redirects that vertical delta into the strip's own
+	// horizontal scroll instead of the page's, only while there's actually somewhere left to
+	// scroll to in that direction (otherwise let the page itself scroll normally).
+	function handleTabScrollWheel(event: WheelEvent) {
+		const el = tabScrollEl;
+		if (!el) return;
+		if ((event.deltaY < 0 && !canScrollTabsLeft) || (event.deltaY > 0 && !canScrollTabsRight)) {
+			return;
+		}
+		event.preventDefault();
+		el.scrollLeft += event.deltaY;
+	}
 </script>
 
 <svelte:window onclick={handleWindowClick} />
@@ -116,6 +131,7 @@
 	     of how many tabs there are. -->
 	<div
 		bind:this={tabScrollEl}
+		onwheel={handleTabScrollWheel}
 		class="no-scrollbar flex flex-nowrap overflow-x-auto border-b-4 border-black text-sm"
 	>
 		<button
