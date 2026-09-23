@@ -1,11 +1,14 @@
 name: PR checks
 
-# Runs on every pull request targeting main — separate from docker-release.yml (triggered by
-# version tags only), never touches main directly and never builds/pushes the Docker image.
+# Runs on every pull request, whatever its target branch — separate from docker-release.yml
+# (triggered by version tags only), never touches main directly and never builds/pushes the
+# Docker image. Not filtered to `branches: main`: this project relies heavily on stacked PRs
+# (a feature branch targeting another feature branch, not main directly), and GitHub evaluates
+# this trigger filter using the workflow file on the repo's default branch regardless of which
+# branch a given PR targets — so a `branches: main` filter here would silently never run at all
+# for any stacked PR, leaving a required check permanently pending instead of just skipped.
 on:
   pull_request:
-    branches:
-      - main
 
 jobs:
   check:
@@ -27,3 +30,10 @@ jobs:
 
       - name: Type-check
         run: pnpm check
+
+      # Catches what type-check alone can't: server-only code leaking into the client bundle,
+      # build-time env vars ($env/static/*), or anything else that only breaks at actual
+      # compilation. No secrets needed — verified locally that `pnpm build` succeeds with an
+      # empty environment.
+      - name: Build
+        run: pnpm build

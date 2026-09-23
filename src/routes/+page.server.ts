@@ -3,6 +3,7 @@ import {
 	listUserApplications,
 	listMfaDevices,
 	getEmergencyContacts,
+	getRfidUid,
 	type UserApplication
 } from '$lib/server/authentikAdmin';
 import {
@@ -12,7 +13,8 @@ import {
 	getThirdPartyIbanPro,
 	deriveCotisationStatus,
 	detectCotisationGaps,
-	parseDolibarrDate
+	parseDolibarrDate,
+	DolibarrUnavailableError
 } from '$lib/server/dolibarr';
 import { authentikPk, type CotisationStatus } from '$lib/types';
 
@@ -33,12 +35,16 @@ export interface DashboardChecklist {
 	// that's actually already fine.
 	mfaConfigured: boolean | null;
 	emergencyContactConfigured: boolean | null;
-	ibanPersoConfigured: boolean;
+	badgeConfigured: boolean | null;
+	// Also null when Dolibarr is unavailable, same reasoning as above — a Dolibarr outage must
+	// never be reported as "IBAN not filled in", which would be actively wrong for a member who
+	// already filled it in.
+	ibanPersoConfigured: boolean | null;
 	// Only meaningful (and only ever rendered) when ibanProApplicable is true — a classic member
 	// has no separate pro IBAN to fill in, see /cotisation's own ibanPersoTooltip for the same
 	// perso/pro distinction.
 	ibanProApplicable: boolean;
-	ibanProConfigured: boolean;
+	ibanProConfigured: boolean | null;
 }
 
 const UNGROUPED_LABEL = 'Autres';
@@ -61,14 +67,22 @@ interface MemberFinancialSummary {
 	ibanPerso: string | null;
 	isPro: boolean;
 	ibanPro: string | null;
+	// Distinct from "no Dolibarr member found" (see feedback_distinguish-fetch-failure-from-empty)
+	// — a member with no Dolibarr record at all and a member Dolibarr couldn't be reached for both
+	// end up with `status: null` above, but only this flag means "we don't actually know, ask again
+	// later" as opposed to "confirmed: nothing to show here".
+	unavailable: boolean;
 }
 
 const NO_FINANCIAL_SUMMARY: MemberFinancialSummary = {
 	cotisation: { status: null, datefin: null, isInactive: false },
 	ibanPerso: null,
 	isPro: false,
-	ibanPro: null
+	ibanPro: null,
+	unavailable: false
 };
+
+const UNAVAILABLE_FINANCIAL_SUMMARY: MemberFinancialSummary = { ...NO_FINANCIAL_SUMMARY, unavailable: true };
 
 // Same shape/logic as /cotisation's own load — this is meant to be the exact same status block
 // and IBAN checks, just surfaced a click earlier on the homepage. One getMemberByEmail lookup
@@ -76,32 +90,41 @@ const NO_FINANCIAL_SUMMARY: MemberFinancialSummary = {
 async function loadMemberFinancialSummary(email: string | undefined): Promise<MemberFinancialSummary> {
 	if (!email) return NO_FINANCIAL_SUMMARY;
 
-	const member = await getMemberByEmail(email);
-	if (!member) return NO_FINANCIAL_SUMMARY;
+	try {
+		const member = await getMemberByEmail(email);
+		if (!member) return NO_FINANCIAL_SUMMARY;
 
-	const [types, subscriptions, ibanPro] = await Promise.all([
-		getMemberTypes(),
-		getMemberSubscriptions(member.id),
-		member.fkSoc ? getThirdPartyIbanPro(member.fkSoc) : Promise.resolve(null)
-	]);
-	const { isInactive } = detectCotisationGaps(subscriptions);
+		const [types, subscriptions, ibanPro] = await Promise.all([
+			getMemberTypes(),
+			getMemberSubscriptions(member.id),
+			member.fkSoc ? getThirdPartyIbanPro(member.fkSoc) : Promise.resolve(null)
+		]);
+		const { isInactive } = detectCotisationGaps(subscriptions);
 
-	return {
-		cotisation: {
-			status: deriveCotisationStatus(member, types),
-			datefin: parseDolibarrDate(member.datefin),
-			isInactive
-		},
-		ibanPerso: member.ibanPerso,
-		isPro: member.fkSoc !== null,
-		ibanPro
-	};
+		return {
+			cotisation: {
+				status: deriveCotisationStatus(member, types),
+				datefin: parseDolibarrDate(member.datefin),
+				isInactive
+			},
+			ibanPerso: member.ibanPerso,
+			isPro: member.fkSoc !== null,
+			ibanPro,
+			unavailable: false
+		};
+	} catch (err) {
+		if (err instanceof DolibarrUnavailableError) {
+			return UNAVAILABLE_FINANCIAL_SUMMARY;
+		}
+		throw err;
+	}
 }
 
 const NO_COTISATION: CotisationSummary = { status: null, datefin: null, isInactive: false };
 const NO_CHECKLIST: DashboardChecklist = {
 	mfaConfigured: null,
 	emergencyContactConfigured: null,
+	badgeConfigured: null,
 	ibanPersoConfigured: false,
 	ibanProApplicable: false,
 	ibanProConfigured: false
@@ -114,21 +137,31 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const pk = authentikPk(locals.user);
 
-	const [apps, financial, mfaDevices, emergencyContacts] = await Promise.all([
+	const [apps, financial, mfaDevices, emergencyContacts, rfidUid] = await Promise.all([
 		// Best-effort: a transient Authentik API hiccup shouldn't take down the whole homepage.
 		pk ? listUserApplications(pk).catch((): UserApplication[] | null => null) : Promise.resolve(null),
 		loadMemberFinancialSummary(locals.user.email),
 		pk ? listMfaDevices(pk).catch(() => null) : Promise.resolve(null),
-		pk ? getEmergencyContacts(pk).catch(() => null) : Promise.resolve(null)
+		pk ? getEmergencyContacts(pk).catch(() => null) : Promise.resolve(null),
+		// getRfidUid's own return already uses `null` to mean "no badge yet" — a legitimate,
+		// distinct value from a fetch failure, so the failure case is `undefined` here rather than
+		// reusing `null` and collapsing the two meanings together.
+		pk ? getRfidUid(pk).catch(() => undefined) : Promise.resolve(undefined)
 	]);
 
 	const checklist: DashboardChecklist = {
 		mfaConfigured: mfaDevices === null ? null : mfaDevices.length > 0,
 		emergencyContactConfigured: emergencyContacts === null ? null : emergencyContacts.length > 0,
-		ibanPersoConfigured: !!financial.ibanPerso,
+		badgeConfigured: rfidUid === undefined ? null : rfidUid !== null,
+		ibanPersoConfigured: financial.unavailable ? null : !!financial.ibanPerso,
 		ibanProApplicable: financial.isPro,
-		ibanProConfigured: !!financial.ibanPro
+		ibanProConfigured: financial.unavailable ? null : !!financial.ibanPro
 	};
 
-	return { groups: apps ? groupApps(apps) : null, cotisation: financial.cotisation, checklist };
+	return {
+		groups: apps ? groupApps(apps) : null,
+		cotisation: financial.cotisation,
+		cotisationUnavailable: financial.unavailable,
+		checklist
+	};
 };

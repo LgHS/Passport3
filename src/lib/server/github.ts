@@ -1,4 +1,5 @@
 import { requireEnv } from '$lib/server/env';
+import { githubApiFetch } from '$lib/server/githubApp';
 
 interface GithubTokenResponse {
 	access_token?: string;
@@ -28,7 +29,7 @@ export function createGithubAuthorizationUrl(state: string): string {
 }
 
 export async function exchangeGithubCode(code: string): Promise<string> {
-	const res = await fetch('https://github.com/login/oauth/access_token', {
+	const res = await githubApiFetch('https://github.com/login/oauth/access_token', {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/x-www-form-urlencoded',
@@ -58,7 +59,7 @@ export async function exchangeGithubCode(code: string): Promise<string> {
 }
 
 export async function getGithubUser(accessToken: string): Promise<GithubUser> {
-	const res = await fetch('https://api.github.com/user', {
+	const res = await githubApiFetch('https://api.github.com/user', {
 		headers: {
 			Authorization: `Bearer ${accessToken}`,
 			Accept: 'application/vnd.github+json',

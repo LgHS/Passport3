@@ -52,7 +52,12 @@
 			GitHub connecté : @{data.githubUsername}
 		</p>
 
-		{#if data.membershipStatus === 'member'}
+		{#if data.githubUnavailable}
+			<p class="mt-6 border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+				Impossible de vérifier votre statut sur l'organisation GitHub pour le moment. Réessayez
+				plus tard.
+			</p>
+		{:else if data.membershipStatus === 'member'}
 			<p class="mt-6 border border-black bg-gray-100 px-4 py-3 text-sm">
 				Vous êtes déjà membre de l'organisation GitHub du Liège Hackerspace.
 			</p>

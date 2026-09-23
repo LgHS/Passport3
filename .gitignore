@@ -29,3 +29,5 @@ vite.config.ts.timestamp-*
 
 # IA 
 .claude
+*.db
+/data
