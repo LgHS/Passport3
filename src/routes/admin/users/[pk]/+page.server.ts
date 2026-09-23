@@ -17,7 +17,7 @@ import {
 	getRfidUid,
 	regenerateRfidUid
 } from '$lib/server/authentikAdmin';
-import { getMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
+import { lookupMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
 import { validateProfileSubmission, validateEmergencyContactsSubmission } from '$lib/server/profileValidation';
 import { requireAdminUser } from '$lib/server/auth';
 import { logAuditEvent } from '$lib/server/auditLog';
@@ -56,12 +56,12 @@ export const load: PageServerLoad = async ({ params }) => {
 		error(404, 'Membre introuvable.');
 	}
 
-	// Admin-only: shown regardless of the member's own "Pseudo Chat" opt-in on the trombinoscope —
-	// this is an internal tool to reach a member for oral/email requests, not the public directory,
-	// so it isn't gated by the same consent. Needs profile.email, so it can't join the Promise.all
-	// above (which is what resolves profile in the first place).
-	const mattermostUsername = await getMattermostUsername(profile.email).catch(() => null);
-	const mattermostDmUrl = mattermostUsername ? buildMattermostDmUrl(mattermostUsername) : null;
+	// Admin-only: shown regardless of the member's own "Pseudo Chat" opt-in on the
+	// trombinoscope — this is an internal tool to reach a member for oral/email requests, not
+	// the public directory, so it isn't gated by the same consent. `unavailable` stays
+	// distinguishable from "no linked account" — see feedback_distinguish-fetch-failure-from-empty.
+	const mattermost = await lookupMattermostUsername(profile.email);
+	const mattermostDmUrl = mattermost.username ? buildMattermostDmUrl(mattermost.username) : null;
 
 	return {
 		pk,
@@ -69,7 +69,8 @@ export const load: PageServerLoad = async ({ params }) => {
 		fields: PROFILE_ATTRIBUTE_FIELDS,
 		optin,
 		tag,
-		mattermostUsername,
+		mattermostUsername: mattermost.username,
+		mattermostUnavailable: mattermost.unavailable,
 		mattermostDmUrl,
 		groups,
 		emergencyContacts,

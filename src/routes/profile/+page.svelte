@@ -18,6 +18,26 @@
 			showToast('success', 'Session révoquée.');
 		} else if (form?.mfaDeviceDeleted) {
 			showToast('success', 'Appareil MFA supprimé.');
+		} else if (form?.notificationPreferencesSuccess) {
+			showToast('success', 'Préférences de notification enregistrées.');
+		} else if (form?.notificationPreferencesError) {
+			showToast('error', form.notificationPreferencesError);
+		}
+	});
+
+	let submittingNotificationPreferences = $state(false);
+	// svelte-ignore state_referenced_locally
+	let mattermostDm = $state(
+		form?.notificationPreferences?.mattermostDm ?? data.notificationPreferences.mattermostDm
+	);
+
+	// Resyncs the toggle to the canonical value after every submission, success or failure — the
+	// action echoes back the *saved* value on success and the *reverted* value on failure (see its
+	// own comment), so this is never fighting the user's own in-flight click, only correcting the
+	// toggle once the server has actually had the last word.
+	$effect(() => {
+		if (form?.notificationPreferences) {
+			mattermostDm = form.notificationPreferences.mattermostDm;
 		}
 	});
 
@@ -26,8 +46,8 @@
 		return dateFormat.format(new Date(iso));
 	}
 
-	type Tab = 'info' | 'sessions' | 'mfa' | 'emergency' | 'audit';
-	const VALID_TABS: Tab[] = ['info', 'emergency', 'mfa', 'sessions', 'audit'];
+	type Tab = 'info' | 'emergency' | 'mfa' | 'sessions' | 'notifications' | 'audit';
+	const VALID_TABS: Tab[] = ['info', 'emergency', 'mfa', 'sessions', 'notifications', 'audit'];
 	const initialTab = page.url.searchParams.get('tab');
 	let activeTab = $state<Tab>(
 		VALID_TABS.includes(initialTab as Tab) ? (initialTab as Tab) : 'info'
@@ -127,6 +147,16 @@
 				: 'hover:bg-black hover:text-white'}"
 		>
 			Mes Appareils MFA ({data.mfaDevices.length})
+		</button>
+		<button
+			type="button"
+			onclick={() => (activeTab = 'notifications')}
+			class="shrink-0 px-4 py-2 font-bold whitespace-nowrap uppercase transition-colors {activeTab ===
+			'notifications'
+				? 'bg-black text-white'
+				: 'hover:bg-black hover:text-white'}"
+		>
+			Notifications
 		</button>
 		<button
 			type="button"
@@ -376,6 +406,61 @@
 			maxContacts={data.maxEmergencyContacts}
 			{form}
 		/>
+	</section>
+{:else if activeTab === 'notifications'}
+	<section class="w-full">
+		<div class="mx-auto max-w-2xl">
+			{#if data.mattermostUnavailable}
+				<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+					Impossible de vérifier votre compte Mattermost pour le moment. Réessayez plus tard.
+				</p>
+			{:else if data.mattermostUsername}
+				<form
+					method="POST"
+					action="?/updateNotificationPreferences"
+					use:enhance={() => {
+						submittingNotificationPreferences = true;
+						return async ({ update }) => {
+							await update({ reset: false });
+							submittingNotificationPreferences = false;
+						};
+					}}
+				>
+					<label class="flex w-fit cursor-pointer items-center gap-3 text-sm">
+						<span
+							class="relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors {mattermostDm
+								? 'bg-black'
+								: 'bg-gray-300'}"
+						>
+							<input
+								type="checkbox"
+								name="mattermostDm"
+								bind:checked={mattermostDm}
+								disabled={submittingNotificationPreferences}
+								onchange={(e) => e.currentTarget.form?.requestSubmit()}
+								class="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait"
+							/>
+							<span
+								class="pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform {mattermostDm
+									? 'translate-x-5'
+									: ''}"
+							></span>
+						</span>
+						Recevoir un message sur Mattermost pour les événements liés à mon compte
+					</label>
+					<p class="mt-2 text-xs text-gray-500">
+						Toutes les modifications majeures apportées à votre compte envoient un message privé
+						sur Mattermost. Activé par défaut, désactivable à tout moment. Compte lié :
+						<span class="font-bold">@{data.mattermostUsername}</span>.
+					</p>
+				</form>
+			{:else}
+				<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+					Aucun compte Mattermost lié à votre adresse email — rien à envoyer pour l'instant.
+					Cette option apparaîtra dès qu'un compte sera relié.
+				</p>
+			{/if}
+		</div>
 	</section>
 {:else if activeTab === 'audit'}
 	<section class="w-full">

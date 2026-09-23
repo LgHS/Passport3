@@ -102,9 +102,31 @@ async function getEmailToUsernameMap(): Promise<Map<string, string>> {
 // Matches by email against the member's own Authentik email — same identity key already used to
 // link other services (see the "non éditable" note on /profile). Returns null if the member has
 // no active Mattermost account under that email, or uses a different email on each service.
+// Throws if the lookup itself couldn't be performed (Mattermost unreachable) — see
+// lookupMattermostUsername() below for the caller-friendly, never-throwing version of this
+// distinction.
 export async function getMattermostUsername(email: string): Promise<string | null> {
 	const map = await getEmailToUsernameMap();
 	return map.get(email.toLowerCase().trim()) ?? null;
+}
+
+export interface MattermostLookup {
+	username: string | null;
+	// true when the lookup itself failed (Mattermost unreachable, etc.) — must stay distinguishable
+	// from `username: null`, which means the lookup succeeded and simply found no linked account.
+	// A caller that collapses both into the same "no account" state would tell a member Mattermost
+	// notifications aren't available to them when the truth is just that we couldn't check.
+	unavailable: boolean;
+}
+
+// Best-effort wrapper around getMattermostUsername() for callers (page loads) that need to keep
+// rendering even when Mattermost is down, without conflating "down" and "not linked".
+export async function lookupMattermostUsername(email: string): Promise<MattermostLookup> {
+	try {
+		return { username: await getMattermostUsername(email), unavailable: false };
+	} catch {
+		return { username: null, unavailable: true };
+	}
 }
 
 // Lets an admin force a refresh (new Mattermost signup, account renamed, etc.) rather than wait
