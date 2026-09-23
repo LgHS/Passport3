@@ -11,7 +11,11 @@ export const ACTION_LABELS: Record<string, string> = {
 	'session.revoke': 'Session révoquée',
 	'mfaDevice.delete': 'Appareil MFA supprimé',
 	'bankInfo.update': 'Coordonnées bancaires modifiées',
-	'badge.regenerate': 'Badge RFID régénéré'
+	'badge.regenerate': 'Badge RFID régénéré',
+	'wishlist.create': 'Proposition wishlist créée',
+	'wishlist.edit': 'Proposition wishlist modifiée',
+	'wishlist.delete': 'Proposition wishlist supprimée',
+	'wishlist.resolve': 'Statut de la proposition wishlist changé'
 };
 
 export function actionLabel(action: string): string {
