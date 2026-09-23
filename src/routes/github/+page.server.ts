@@ -1,8 +1,9 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { getGithubUsername, setGithubUsername } from '$lib/server/authentikAdmin';
-import { getGithubOrgMembershipStatus, inviteToGithubOrg } from '$lib/server/githubApp';
-import { authentikPk } from '$lib/types';
+import { getGithubOrgMembershipStatus, inviteToGithubOrg, GithubUnavailableError } from '$lib/server/githubApp';
+import { logAuditEvent } from '$lib/server/auditLog';
+import { authentikPk, displayName } from '$lib/types';
 
 // Same auth guard shape as the rest of the app.
 function resolvePk(locals: App.Locals): number {
@@ -19,15 +20,31 @@ function resolvePk(locals: App.Locals): number {
 export const load: PageServerLoad = async ({ locals }) => {
 	const pk = resolvePk(locals);
 	const githubUsername = await getGithubUsername(pk);
-	const membershipStatus = githubUsername
-		? await getGithubOrgMembershipStatus(githubUsername)
-		: null;
-	return { githubUsername, membershipStatus };
+
+	if (!githubUsername) {
+		return { githubUsername: null, membershipStatus: null, githubUnavailable: false };
+	}
+
+	try {
+		const membershipStatus = await getGithubOrgMembershipStatus(githubUsername);
+		return { githubUsername, membershipStatus, githubUnavailable: false };
+	} catch (err) {
+		if (err instanceof GithubUnavailableError) {
+			// Distinct from `membershipStatus === null` meaning "no linked account" — this member
+			// *is* linked, we just can't tell their status right now. The page must not fall
+			// through to the invite button while that's unknown (see feedback_distinguish-fetch-
+			// failure-from-empty), it would risk a redundant invite attempt against a status we
+			// never actually confirmed.
+			return { githubUsername, membershipStatus: null, githubUnavailable: true };
+		}
+		throw err;
+	}
 };
 
 export const actions: Actions = {
 	invite: async ({ locals }) => {
 		const pk = resolvePk(locals);
+		const user = locals.user!;
 
 		// Re-read from Authentik rather than trust anything the client could submit — the verified
 		// username is only ever set by the OAuth callback, never hand-typed into this form.
@@ -41,6 +58,14 @@ export const actions: Actions = {
 			return fail(400, { error: result.error });
 		}
 
+		logAuditEvent(
+			{ sub: user.sub, label: displayName(user) },
+			'user',
+			'github.invite',
+			{ pk },
+			{ githubUsername }
+		);
+
 		return { success: true };
 	},
 
@@ -49,7 +74,19 @@ export const actions: Actions = {
 	// deliberately resetting first, rather than /github/connect allowing a silent account swap.
 	disconnect: async ({ locals }) => {
 		const pk = resolvePk(locals);
+		const user = locals.user!;
+
+		const before = await getGithubUsername(pk);
 		await setGithubUsername(pk, '');
+
+		logAuditEvent(
+			{ sub: user.sub, label: displayName(user) },
+			'user',
+			'github.disconnect',
+			{ pk },
+			{ before: { githubUsername: before }, after: { githubUsername: null } }
+		);
+
 		return { success: true, disconnected: true };
 	}
 };

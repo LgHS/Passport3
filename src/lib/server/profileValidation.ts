@@ -1,4 +1,5 @@
-import { PROFILE_ATTRIBUTE_FIELDS } from '$lib/server/authentikAdmin';
+import { MAX_EMERGENCY_CONTACTS, PROFILE_ATTRIBUTE_FIELDS } from '$lib/server/authentikAdmin';
+import type { EmergencyContact } from '$lib/types';
 
 const REQUIRED_MESSAGES: Record<string, string> = {
 	firstName: 'Le prénom ne peut pas être vide.',
@@ -188,6 +189,59 @@ function validateMatrixId(raw: string): { ok: true; value: string } | { ok: fals
 	return { ok: true, value };
 }
 
+// Format stocké : "YYYY-MM-DD" si l'année est donnée, "MM-DD" sinon — un membre peut vouloir
+// partager son anniversaire (jour/mois) sans révéler son âge. Les deux parties sont combinées
+// côté client dans un champ caché avant l'envoi (voir ProfileForm.svelte), mais revalidées ici
+// plutôt que de faire confiance à cette combinaison — même principe que Matrix.
+function daysInMonth(month: number, year: number | null): number {
+	// Année inconnue : on autorise le 29 février par défaut plutôt que de forcer un choix — un
+	// membre qui donne juste jour/mois n'a pas à savoir si son année de naissance était bissextile.
+	const isLeap = year === null || (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0));
+	return [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+}
+
+function validateBirthday(raw: string): { ok: true; value: string } | { ok: false; error: string } {
+	const trimmed = raw.trim();
+	if (!trimmed) return { ok: true, value: '' };
+
+	const withYear = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+	const withoutYear = trimmed.match(/^(\d{2})-(\d{2})$/);
+	if (!withYear && !withoutYear) {
+		return { ok: false, error: 'Date de naissance : jour et mois sont obligatoires si vous la renseignez.' };
+	}
+
+	const year = withYear ? Number(withYear[1]) : null;
+	const month = Number(withYear ? withYear[2] : withoutYear![1]);
+	const day = Number(withYear ? withYear[3] : withoutYear![2]);
+
+	const today = new Date();
+	const todayYear = today.getFullYear();
+
+	if (year !== null && (year < 1900 || year > todayYear)) {
+		return { ok: false, error: 'Date de naissance : année invalide.' };
+	}
+	if (month < 1 || month > 12) {
+		return { ok: false, error: 'Date de naissance : mois invalide.' };
+	}
+	if (day < 1 || day > daysInMonth(month, year)) {
+		return { ok: false, error: 'Date de naissance : jour invalide pour ce mois.' };
+	}
+	// The year check above only rejects a year strictly after this one — a full date later this
+	// same year (e.g. 2026-12-31 submitted on 2026-09-22) still needs its month/day compared
+	// against today's, or it'd pass as a "valid" birthdate that hasn't happened yet.
+	if (
+		year === todayYear &&
+		(month > today.getMonth() + 1 ||
+			(month === today.getMonth() + 1 && day > today.getDate()))
+	) {
+		return { ok: false, error: 'Date de naissance : ne peut pas être dans le futur.' };
+	}
+
+	const pad2 = (n: number) => String(n).padStart(2, '0');
+	const value = year !== null ? `${year}-${pad2(month)}-${pad2(day)}` : `${pad2(month)}-${pad2(day)}`;
+	return { ok: true, value };
+}
+
 export type ProfileValidationResult =
 	| {
 			ok: true;
@@ -207,13 +261,26 @@ export type ProfileValidationResult =
 export function validateProfileSubmission(formData: FormData): ProfileValidationResult {
 	const firstName = String(formData.get('firstName') ?? '').trim();
 	const lastName = String(formData.get('lastName') ?? '').trim();
+
+	// Only include a key when its input was actually present in the submission — the "Divers"
+	// panel (signal/telegram/discord/matrix) can be collapsed, in which case those inputs never
+	// render into the DOM at all. formData.has() lets us tell "not submitted" apart from
+	// "submitted empty", which matters because updateUserProfile's merge only overwrites a key
+	// that's present in `attributes` — treating an absent field as `''` here would wipe it there.
 	const attributes: Record<string, string> = {};
 	for (const { key } of PROFILE_ATTRIBUTE_FIELDS) {
-		attributes[key] = String(formData.get(key) ?? '').trim();
+		if (formData.has(key)) {
+			attributes[key] = String(formData.get(key) ?? '').trim();
+		}
 	}
 	// Normalize away spaces/dashes/parens users naturally type ("32 470 00 00 00") so the
-	// stored value matches the plain-digits format the field asks for.
+	// stored value matches the plain-digits format the field asks for. Always present: phoneNumber
+	// is required and rendered unconditionally, unlike the optional social fields below.
 	attributes.phoneNumber = attributes.phoneNumber.replace(/[\s().-]/g, '');
+	// Checkbox, not free text — formData.get() only returns a value when checked (browser default
+	// "on"), and nothing at all when unchecked, so the generic loop above needs overriding here to
+	// get an explicit "true"/"false" string rather than "on"/"".
+	attributes.birthdayAnnounce = formData.has('birthdayAnnounce') ? 'true' : 'false';
 
 	if (!firstName) {
 		return { ok: false, error: REQUIRED_MESSAGES.firstName, firstName, lastName, attributes };
@@ -237,31 +304,99 @@ export function validateProfileSubmission(formData: FormData): ProfileValidation
 		};
 	}
 
-	const signalResult = validateSignalUsername(attributes.signal ?? '');
-	if (!signalResult.ok) {
-		return { ok: false, error: signalResult.error, firstName, lastName, attributes };
+	if ('signal' in attributes) {
+		const signalResult = validateSignalUsername(attributes.signal);
+		if (!signalResult.ok) {
+			return { ok: false, error: signalResult.error, firstName, lastName, attributes };
+		}
+		attributes.signal = signalResult.value;
 	}
-	attributes.signal = signalResult.value;
 
-	const telegramResult = validateTelegramUsername(attributes.telegram ?? '');
-	if (!telegramResult.ok) {
-		return { ok: false, error: telegramResult.error, firstName, lastName, attributes };
+	if ('telegram' in attributes) {
+		const telegramResult = validateTelegramUsername(attributes.telegram);
+		if (!telegramResult.ok) {
+			return { ok: false, error: telegramResult.error, firstName, lastName, attributes };
+		}
+		attributes.telegram = telegramResult.value;
 	}
-	attributes.telegram = telegramResult.value;
 
-	const discordResult = validateDiscordUsername(attributes.discord ?? '');
-	if (!discordResult.ok) {
-		return { ok: false, error: discordResult.error, firstName, lastName, attributes };
+	if ('discord' in attributes) {
+		const discordResult = validateDiscordUsername(attributes.discord);
+		if (!discordResult.ok) {
+			return { ok: false, error: discordResult.error, firstName, lastName, attributes };
+		}
+		attributes.discord = discordResult.value;
 	}
-	attributes.discord = discordResult.value;
 
-	const matrixResult = validateMatrixId(attributes.matrix ?? '');
-	if (!matrixResult.ok) {
-		return { ok: false, error: matrixResult.error, firstName, lastName, attributes };
+	if ('matrix' in attributes) {
+		const matrixResult = validateMatrixId(attributes.matrix);
+		if (!matrixResult.ok) {
+			return { ok: false, error: matrixResult.error, firstName, lastName, attributes };
+		}
+		attributes.matrix = matrixResult.value;
 	}
-	attributes.matrix = matrixResult.value;
+
+	const birthdayResult = validateBirthday(attributes.birthday ?? '');
+	if (!birthdayResult.ok) {
+		return { ok: false, error: birthdayResult.error, firstName, lastName, attributes };
+	}
+	attributes.birthday = birthdayResult.value;
 
 	// Authentik only has a single `name` field — merge on write, split back on display.
 	const name = `${firstName} ${lastName}`.trim();
 	return { ok: true, name, firstName, lastName, attributes };
+}
+
+export type EmergencyContactsValidationResult =
+	| { ok: true; contacts: EmergencyContact[] }
+	| { ok: false; error: string; contacts: EmergencyContact[] };
+
+// Same strict format as the member's own phoneNumber field below: country code + local number,
+// digits only, no leading '+' or '0' (e.g. 32470000000) — kept consistent between the two fields.
+const CONTACT_PHONE_RE = /^[1-9]\d{7,14}$/;
+
+export function validateEmergencyContactsSubmission(formData: FormData): EmergencyContactsValidationResult {
+	const names = formData.getAll('name[]').map((v) => String(v).trim());
+	const phones = formData.getAll('phone[]').map((v) => String(v).trim());
+	const relations = formData.getAll('relation[]').map((v) => String(v).trim());
+
+	// A row left entirely blank (the empty starting row, or one the member cleared back out) is
+	// simply dropped rather than treated as an error — only a *partially* filled row is a mistake
+	// worth flagging below.
+	const contacts: EmergencyContact[] = names
+		.map((name, i) => ({
+			name,
+			// Normalize away spaces/dashes/parens users naturally type ("32 470 00 00 00"), same as
+			// the profile's own phoneNumber field.
+			phone: (phones[i] ?? '').replace(/[\s().-]/g, ''),
+			relation: relations[i] ?? ''
+		}))
+		.filter((row) => row.name || row.phone || row.relation);
+
+	if (contacts.length > MAX_EMERGENCY_CONTACTS) {
+		return {
+			ok: false,
+			error: `Maximum ${MAX_EMERGENCY_CONTACTS} contacts d'urgence.`,
+			contacts: contacts.slice(0, MAX_EMERGENCY_CONTACTS)
+		};
+	}
+
+	for (const contact of contacts) {
+		if (!contact.name || !contact.phone) {
+			return {
+				ok: false,
+				error: "Chaque contact d'urgence a besoin d'un nom et d'un numéro de téléphone.",
+				contacts
+			};
+		}
+		if (!CONTACT_PHONE_RE.test(contact.phone)) {
+			return {
+				ok: false,
+				error: `Numéro de téléphone invalide pour ${contact.name} (format attendu: 32470000000, sans "+" ni "0" initial).`,
+				contacts
+			};
+		}
+	}
+
+	return { ok: true, contacts };
 }

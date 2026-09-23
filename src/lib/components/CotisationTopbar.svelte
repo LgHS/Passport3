@@ -6,7 +6,7 @@
 
 <a
 	href="/cotisation"
-	class="no-underline-fx absolute top-1 right-4 z-10 flex items-center gap-2 text-sm text-gray-600 hover:text-black"
+	class="no-underline-fx flex items-center gap-2 text-sm text-gray-600 hover:text-black"
 >
 	<span
 		class="status-dot"

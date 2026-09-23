@@ -14,6 +14,8 @@ Passport3 acts as a custom frontend for several internal services, including:
 - **Access control systems** for physical access to the hackerspace
 - Additional community and member-management services
 
+![Passport3 member dashboard](docs/screenshots/passportv3.jpg)
+
 ## Goals
 
 Passport3 aims to provide members with one central place to:
@@ -24,9 +26,12 @@ Passport3 aims to provide members with one central place to:
 - [x] Manage authentication and security settings (active sessions, MFA devices)
 - [x] Manage badges or access credentials (RFID badge UUID)
 - [x] Request access to the hackerspace's GitHub organization
+- [x] Choose which information is visible to other members
+- [x] Access the member directory and phonebook
+- [x] Manage emergency contacts
+- [x] View their own permissions and group memberships
+- [x] View a history of actions taken on their account, by themselves or by an admin
 - [ ] Access payment and accounting information
-- [ ] Access the member directory and phonebook
-- [ ] Choose which information is visible to other members
 - [ ] View their physical access permissions
 - Access future hackerspace services through a unified interface
 
@@ -93,18 +98,42 @@ A restricted admin panel (gated behind an Authentik group) lets designated membe
 
 - List and search member accounts
 - Edit a member's profile on their behalf
+- Edit a member's trombinoscope visibility and displayed role on their behalf
+- Manage a member's emergency contacts on their behalf
+- Regenerate a member's RFID badge on their behalf
 - Create onboarding invitations for new members
+- View a full audit history of admin and member actions
+
+### Audit log
+
+Passport3 keeps a log of actions taken through the app, both by admins (editing a member's
+profile, creating an invitation) and by members on their own account (updating their profile,
+revoking a session, changing bank info). Each entry records who did what, when, and the before/after
+values where relevant.
+
+- Admins can browse the log at `/admin/audit`, searchable and paginated, with a diff view showing
+  exactly what changed — v1 only covers the 200 most recent events across the whole app, not the
+  full history
+- Members can see their own account's history on `/profile`, including changes made by an admin on
+  their behalf, for transparency
+- Some fields are deliberately never recorded even as history — emergency contacts (third-party
+  personal data) and the badge RFID UUID (a physical-access credential) are logged as "changed", never
+  with their actual value
+- Actions performed directly in another system (e.g. an IBAN edited straight in Dolibarr) aren't
+  captured — only what goes through Passport3 itself
+- Writing an entry is best-effort: an already-successful action is never failed just because the
+  log write itself failed. This is an informational log for transparency, not a compliance-grade
+  audit trail with retry/alerting guarantees
+- Bank IBANs are logged with their real before/after value (the flagship case this feature exists
+  for), viewable the same way as any other entry — by admins in `/admin/audit`, and by the member
+  themselves in their own `/profile` history. There is no retention limit or purge policy yet
 
 ## Planned Features
 
-- Online subscription renewal
 - Payment history
 - Invoice and document downloads
 - Physical access management
-- Member directory and phonebook, with per-member, per-field visibility control
-- Emergency contact management
 - Notification preferences
-- Audit history
 - API for other hackerspace services
 
 ## Privacy
@@ -144,6 +173,25 @@ Releasing a new version (`git tag vX.Y.Z && git push --tags`, or `gh release cre
 builds and pushes `ghcr.io/lghs/passport3:X.Y.Z` and `ghcr.io/lghs/passport3:preprod` — Watchtower
 picks up the `preprod` tag update within 5 minutes and redeploys automatically.
 
+### Local data storage
+
+Passport3 has a small local SQLite database (`better-sqlite3`) for data that has no home in
+Authentik, Dolibarr, or GitHub — e.g. the audit trail of admin and member actions. Both `docker-compose.yml`
+and `docker-compose.preprod.yml` mount it on a named volume (`passport3-data`, at `/app/data`), set
+via the `DB_PATH` environment variable, so it survives container recreation — including a
+Watchtower-triggered redeploy. **This volume now holds real, non-reconstructible data and needs to
+be included in whatever backup routine the host already has** — unlike the rest of the container,
+which was previously fully stateless and disposable.
+
+The database runs in WAL mode, so `passport3.db` alone is not a consistent snapshot while the
+container is running — recent transactions can still be sitting in `passport3.db-wal`. Either stop
+the container before copying just the `.db` file, or back up the whole volume (`.db`, `.db-wal`,
+`.db-shm` together) in one atomic snapshot.
+
+Tables are created by numbered, append-only migrations in `src/lib/server/migrations.ts` (run
+automatically on first connection) rather than by each feature module creating its own table ad
+hoc — add a new entry there for a new table instead of a local `CREATE TABLE IF NOT EXISTS`.
+
 ## Contributing
 
 Contributions are welcome.
@@ -151,6 +199,8 @@ Contributions are welcome.
 Passport3 is developed for the Liège Hackerspace community. Issues, suggestions, and pull requests can be submitted through the project repository.
 
 Please do not include personal member data, credentials, API keys, or production configuration in issues or contributions.
+
+Any new feature that mutates a member's account or admin-side data should call `logAuditEvent()` (`src/lib/server/auditLog.ts`), the same way every existing action does — see the [Audit log](#audit-log) section above.
 
 ## Project Name
 

@@ -5,18 +5,70 @@ function apiBase(): string {
 	return `${requireEnv('DOLIBARR_URL').replace(/\/+$/, '')}/api/index.php/`;
 }
 
+const FETCH_TIMEOUT_MS = 5_000;
+
+// Thrown specifically when Dolibarr is unreachable or erroring server-side (down, restarting,
+// network blip) — as opposed to a genuinely invalid request (bad IBAN format rejected with a 4xx,
+// member not found, etc.). Mirrors OidcUnavailableError in authentik.ts, so an outage here can be
+// told apart from an application bug the same way a login-time Authentik outage already is.
+export class DolibarrUnavailableError extends Error {}
+
+// Carries the real HTTP status for a genuine 4xx (never thrown for >=500, see dolibarrApiFetch
+// below — those become DolibarrUnavailableError instead). Lets a caller distinguish a real 404
+// from e.g. a 403/401 permissions/auth misconfiguration, which a bare Error couldn't — see
+// getOwnedInvoiceDocument()'s use of it below.
+export class DolibarrApiError extends Error {
+	constructor(
+		public readonly status: number,
+		message: string
+	) {
+		super(message);
+	}
+}
+
 async function dolibarrApiFetch(path: string, init?: RequestInit): Promise<Response> {
-	const res = await fetch(new URL(path, apiBase()), {
-		...init,
-		headers: {
-			DOLAPIKEY: requireEnv('DOLIBARR_API_KEY'),
-			'Content-Type': 'application/json',
-			...init?.headers
+	// Deliberately outside the try below: a missing/invalid DOLIBARR_URL or DOLIBARR_API_KEY is a
+	// persistent configuration error, not an outage — letting it fall into the network catch would
+	// mislabel it as "temporarily unavailable" and hide the real, non-retriable cause.
+	const url = new URL(path, apiBase());
+	const apiKey = requireEnv('DOLIBARR_API_KEY');
+
+	let res: Response;
+	let body: string | undefined;
+	try {
+		res = await fetch(url, {
+			...init,
+			signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+			headers: {
+				DOLAPIKEY: apiKey,
+				'Content-Type': 'application/json',
+				...init?.headers
+			}
+		});
+		// Reading the error body under the same try: the AbortSignal stays armed for the full
+		// exchange, not just until headers arrive, so a body that's still streaming in at T+5s
+		// must be caught here too — otherwise a slow-body timeout surfaces as a raw TimeoutError
+		// instead of DolibarrUnavailableError, defeating the point of this function.
+		if (!res.ok) {
+			body = await res.text();
 		}
-	});
+	} catch (err) {
+		// Network failure, or the timeout above firing on either the connection or the body read
+		// (AbortSignal.timeout rejects with a TimeoutError DOMException either way) — Dolibarr
+		// never gave us a complete answer.
+		throw new DolibarrUnavailableError(`Dolibarr API request to ${path} timed out or failed: ${err}`, {
+			cause: err
+		});
+	}
 
 	if (!res.ok) {
-		throw new Error(`Dolibarr API request to ${path} failed (${res.status}): ${await res.text()}`);
+		// >=500 is Dolibarr's own server erroring out (down/misconfigured/overloaded) — treat as an
+		// outage. A 4xx is a genuine request problem (bad filter, not found, validation) and should
+		// stay a hard error rather than being retried or shown as "temporarily unavailable".
+		if (res.status >= 500) {
+			throw new DolibarrUnavailableError(`Dolibarr API request to ${path} failed (${res.status}): ${body}`);
+		}
+		throw new DolibarrApiError(res.status, `Dolibarr API request to ${path} failed (${res.status}): ${body}`);
 	}
 
 	return res;
@@ -420,4 +472,164 @@ export async function getCotisationStatus(email: string): Promise<CotisationStat
 
 	const types = await getMemberTypes();
 	return deriveCotisationStatus(member, types);
+}
+
+export interface DolibarrInvoice {
+	id: number;
+	ref: string;
+	date: Date | null;
+	amount: number;
+	paid: boolean;
+	// True for a facture classée statut 3 ("abandonnée"/cancelled in Dolibarr's own terms) — kept
+	// visible for the record, but never downloadable: the document may no longer reflect anything
+	// actually owed, and the source of truth for what happened to it is compta, not this PDF.
+	// `close_code` (fetched below) could distinguish *why* it was cancelled, but isn't used here —
+	// every statut-3 invoice is treated the same way for Passport's purposes.
+	abandoned: boolean;
+	// French label for Dolibarr's invoice `type` field — see INVOICE_TYPE_LABELS below.
+	type: string;
+	// Whether a document actually exists to download — never the raw Dolibarr-internal path
+	// itself (see downloadDocument()'s own resolution via getOwnedInvoiceDocument), so nothing
+	// about Dolibarr's storage layout leaks into the page data sent to the browser.
+	downloadable: boolean;
+}
+
+interface RawInvoiceRecord {
+	id: string | number;
+	ref: string;
+	date?: string | number | null;
+	total_ttc?: string | number;
+	paye?: string | number;
+	// Dolibarr's FactureStatique status, confirmé empiriquement sur l'instance réelle : 0 =
+	// brouillon, 1 = validée, 2 = classée payée, 3 = classée abandonnée. Même champ que
+	// `statut`/`fk_adherent_type` ailleurs dans ce fichier — deux noms exposés pour la même valeur
+	// selon la version.
+	statut?: string | number;
+	status?: string | number;
+	close_code?: string | null;
+	// Type de facture Dolibarr — seul `0` (standard) est confirmé empiriquement sur cette
+	// instance (aucun avoir/acompte encore émis), les autres valeurs viennent des constantes
+	// stables de la classe Facture, pas d'un test réel.
+	type?: string | number;
+	socid?: string | number;
+	last_main_doc?: string | null;
+}
+
+const INVOICE_STATUS_DRAFT = 0;
+const INVOICE_STATUS_ABANDONED = 3;
+
+const INVOICE_TYPE_LABELS: Record<number, string> = {
+	0: 'Facture',
+	1: 'Remplacement',
+	2: 'Avoir',
+	3: 'Acompte',
+	4: 'Proforma',
+	5: 'Situation'
+};
+
+// Factures liées au tiers de facturation d'un adhérent pro — pas au membre lui-même. Confirmé
+// empiriquement contre l'instance réelle que `thirdparty_ids` filtre bien côté serveur (pas besoin
+// du contournement limit=0 utilisé par findIbanOwnerConflict, cette colonne n'est pas un extrafield).
+//
+// `limit=0` : Dolibarr's REST API defaults to `limit=100` (confirmed against
+// api_invoices.class.php's own signature) — without this, a thirdparty crossing 100 invoices
+// would silently lose its most recent ones, since the default sort is oldest-first. The results
+// are re-sorted below regardless, so no server-side sortfield/sortorder is needed on top of this.
+//
+// Les brouillons sont exclus : leur montant peut encore changer avant validation, et Dolibarr ne
+// génère leur PDF qu'à la validation — les montrer inviterait à télécharger un document qui
+// n'existe pas encore, pour une facture qui n'est pas encore définitive.
+export async function getThirdPartyInvoices(thirdPartyId: number): Promise<DolibarrInvoice[]> {
+	const res = await dolibarrApiFetch(`invoices?thirdparty_ids=${thirdPartyId}&limit=0`);
+	const results = (await res.json()) as RawInvoiceRecord[];
+	return results
+		.filter((r) => Number(r.statut ?? r.status) !== INVOICE_STATUS_DRAFT)
+		.map((r) => ({
+			id: Number(r.id),
+			ref: r.ref,
+			date: parseDolibarrDate(r.date ?? null),
+			amount: Number(r.total_ttc ?? 0),
+			paid: String(r.paye) === '1',
+			abandoned: Number(r.statut ?? r.status) === INVOICE_STATUS_ABANDONED,
+			type: INVOICE_TYPE_LABELS[Number(r.type)] ?? 'Autre',
+			downloadable:
+				!!r.last_main_doc && Number(r.statut ?? r.status) !== INVOICE_STATUS_ABANDONED
+		}))
+		.sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0));
+}
+
+export interface DolibarrDocument {
+	filename: string;
+	contentType: string;
+	content: Uint8Array;
+}
+
+interface RawDocumentDownload {
+	filename: string;
+	'content-type': string;
+	content: string; // base64, decoded below
+}
+
+// `last_main_doc` includes a leading `facture/` module-folder segment (e.g.
+// `facture/IN2601-0001/IN2601-0001.pdf`), but `documents/download` with `modulepart=facture`
+// already scopes `original_file` inside that folder — passing the segment again 404s. Confirmed
+// empirically: the exact same path succeeds without the prefix and fails with it.
+function stripModuleFolder(documentPath: string): string {
+	return documentPath.replace(/^facture\//, '');
+}
+
+async function downloadDocument(documentPath: string): Promise<DolibarrDocument> {
+	const res = await dolibarrApiFetch(
+		`documents/download?modulepart=facture&original_file=${encodeURIComponent(stripModuleFolder(documentPath))}`
+	);
+	const record = (await res.json()) as RawDocumentDownload;
+	return {
+		filename: record.filename,
+		contentType: record['content-type'],
+		content: Buffer.from(record.content, 'base64')
+	};
+}
+
+// Re-fetches the invoice from Dolibarr itself to confirm `thirdPartyId` really owns it before
+// downloading anything — never trust a client-supplied invoice id on its own, an authenticated
+// member could otherwise guess another member's invoice id and read their document. Returns null
+// for "not found or not yours" (a plain 404 to the caller). DolibarrUnavailableError propagates as
+// before; a genuine non-404 DolibarrApiError (401/403/400 — a permissions or config problem, not
+// a missing invoice) also propagates rather than being silently reported as "not found", so it
+// actually gets noticed instead of looking identical to a routine 404.
+export async function getOwnedInvoiceDocument(
+	thirdPartyId: number,
+	invoiceId: number
+): Promise<DolibarrDocument | null> {
+	let record: RawInvoiceRecord;
+	try {
+		const res = await dolibarrApiFetch(`invoices/${invoiceId}`);
+		record = (await res.json()) as RawInvoiceRecord;
+	} catch (err) {
+		if (err instanceof DolibarrUnavailableError) throw err;
+		if (err instanceof DolibarrApiError && err.status === 404) return null;
+		throw err;
+	}
+
+	const status = Number(record.statut ?? record.status);
+	if (
+		Number(record.socid) !== thirdPartyId ||
+		!record.last_main_doc ||
+		status === INVOICE_STATUS_DRAFT ||
+		status === INVOICE_STATUS_ABANDONED
+	) {
+		return null;
+	}
+
+	try {
+		return await downloadDocument(record.last_main_doc);
+	} catch (err) {
+		// The invoice record pointed to a document that's since gone missing on Dolibarr's side
+		// (moved/deleted on disk while the DB path stayed) — same "not found" outcome as above from
+		// the caller's point of view, not a Passport3 bug or an outage. Same 404-only carve-out as
+		// above for anything else.
+		if (err instanceof DolibarrUnavailableError) throw err;
+		if (err instanceof DolibarrApiError && err.status === 404) return null;
+		throw err;
+	}
 }

@@ -1,9 +1,9 @@
 import { requireEnv } from '$lib/server/env';
 import { getCachedProfile, setCachedProfile } from '$lib/server/profileCache';
 import { getMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
-import type { ProfileAttributeField, UserProfile } from '$lib/types';
+import type { EmergencyContact, ProfileAttributeField, UserProfile } from '$lib/types';
 
-export type { ProfileAttributeField, UserProfile };
+export type { EmergencyContact, ProfileAttributeField, UserProfile };
 
 // Whitelist that also acts as the merge boundary for updateUserProfile: only these keys are
 // ever read from or written into the user's Authentik `attributes` blob.
@@ -13,6 +13,13 @@ export const PROFILE_ATTRIBUTE_FIELDS: ProfileAttributeField[] = [
 	{ key: 'postal_code', label: 'Code postal', required: true },
 	{ key: 'locality', label: 'Localité', required: true },
 	{ key: 'country', label: 'Pays', required: true },
+	{ key: 'birthday', label: 'Date de naissance', required: false },
+	// Boolean stored as the string "true"/"false" (see validateProfileSubmission's special-case
+	// normalization) rather than a free value. Checked by default in the UI (ProfileForm.svelte) —
+	// confirmed with the user despite this being a public disclosure (unlike the opt-out-by-default
+	// NotificationPreferences, which is a private DM setting) — a never-set value reads as "on",
+	// only an explicit "false" (member unchecked and saved) turns it off.
+	{ key: 'birthdayAnnounce', label: 'Annonce anniversaire sur Mattermost', required: false },
 	// Réseaux sociaux — optionnels, affichés dans un panneau replié sur /profile ("Divers
 	// (facultatifs)"). D'autres réseaux pourront suivre ce même schéma (key + label +
 	// required: false, plus un validateur dédié dans profileValidation.ts si le format doit être
@@ -39,6 +46,14 @@ function authentikOrigin(): string {
 function apiBase(): string {
 	return `${authentikOrigin()}/api/v3/`;
 }
+
+const FETCH_TIMEOUT_MS = 5_000;
+
+// Thrown when the Authentik admin API is unreachable or erroring server-side (down, restarting,
+// network blip) — as opposed to a genuinely invalid request (bad payload, 404, etc.). Mirrors
+// OidcUnavailableError in authentik.ts, so an outage here can be told apart from an application
+// bug the same way that one already is.
+export class AuthentikUnavailableError extends Error {}
 
 export function getAuthentikAccountUrl(): string {
 	return `${authentikOrigin()}/if/user/`;
@@ -84,17 +99,49 @@ export async function getMfaEnrollUrls(): Promise<{ totp: string; static: string
 }
 
 async function authentikApiFetch(path: string, init?: RequestInit): Promise<Response> {
-	const res = await fetch(new URL(path, apiBase()), {
-		...init,
-		headers: {
-			Authorization: `Bearer ${requireEnv('AUTHENTIK_API_TOKEN')}`,
-			'Content-Type': 'application/json',
-			...init?.headers
+	// Outside the try below: a missing/invalid AUTHENTIK_ISSUER or AUTHENTIK_API_TOKEN is a
+	// persistent configuration error, not an outage.
+	const url = new URL(path, apiBase());
+	const token = requireEnv('AUTHENTIK_API_TOKEN');
+
+	let res: Response;
+	let body: string | undefined;
+	try {
+		res = await fetch(url, {
+			...init,
+			// NB: placed after `...init`, so it silently wins over a caller-supplied `init.signal`
+			// rather than the other way round. Harmless today (no caller passes one — 32 call
+			// sites, none with a signal), but worth revisiting if one ever needs to.
+			signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+			headers: {
+				Authorization: `Bearer ${token}`,
+				'Content-Type': 'application/json',
+				...init?.headers
+			}
+		});
+		// Reading the error body under the same try: the AbortSignal above stays armed for the
+		// full exchange, not just until headers arrive, so a body that's still streaming in at
+		// T+5s must be caught here too — otherwise a slow-body timeout would surface as a raw
+		// TimeoutError instead of AuthentikUnavailableError, defeating the point of this function.
+		if (!res.ok) {
+			body = await res.text();
 		}
-	});
+	} catch (err) {
+		// Network failure, or the timeout above firing on either the connection or the body read
+		// (AbortSignal.timeout rejects with a TimeoutError DOMException either way) — Authentik
+		// never gave us a complete answer.
+		throw new AuthentikUnavailableError(`Authentik API request to ${path} timed out or failed: ${err}`, {
+			cause: err
+		});
+	}
 
 	if (!res.ok) {
-		throw new Error(`Authentik API request to ${path} failed (${res.status}): ${await res.text()}`);
+		// >=500 is Authentik's own server erroring out (down/misconfigured/overloaded) — treat as
+		// an outage. A 4xx is a genuine request problem and should stay a hard error.
+		if (res.status >= 500) {
+			throw new AuthentikUnavailableError(`Authentik API request to ${path} failed (${res.status}): ${body}`);
+		}
+		throw new Error(`Authentik API request to ${path} failed (${res.status}): ${body}`);
 	}
 
 	return res;
@@ -129,12 +176,22 @@ export async function getUserProfile(pk: number): Promise<UserProfile> {
 	return profile;
 }
 
-// Returns whether anything actually changed (and was written), so callers can skip telling the
-// user "saved" when they just re-submitted the same values.
+export interface ProfileMutationResult {
+	// Whether anything actually changed (and was written), so callers can skip telling the user
+	// "saved" when they just re-submitted the same values, and skip logging a no-op audit event.
+	changed: boolean;
+	// Sourced from the same read used for the merge/PATCH below, not from getUserProfile()'s
+	// cache — a caller reading its own "before" via getUserProfile() first can get a stale value
+	// if the cache hasn't expired yet, which would make the audit trail lie about what changed and
+	// when. See feedback_recheck-must-verify-usage-not-just-types and PR #45's review.
+	before: { name: string; attributes: Record<string, string> };
+	after: { name: string; attributes: Record<string, string> };
+}
+
 export async function updateUserProfile(
 	pk: number,
 	update: { name: string; attributes: Record<string, string> }
-): Promise<boolean> {
+): Promise<ProfileMutationResult> {
 	// Read-merge-write: `attributes` is an opaque JSON blob on the Authentik side, and a PATCH
 	// replaces it wholesale — so we must merge into the current value rather than send ours alone,
 	// or we'd silently wipe out attributes this app doesn't know about.
@@ -148,13 +205,16 @@ export async function updateUserProfile(
 		}
 	}
 
+	const before = { name: currentUser.name, attributes: pickAttributes(currentUser.attributes) };
+	const after = { name: update.name, attributes: pickAttributes(mergedAttributes) };
+
 	const nameChanged = update.name !== currentUser.name;
 	const attributesChanged = PROFILE_ATTRIBUTE_FIELDS.some(
 		({ key }) => (currentUser.attributes[key] ?? '') !== (mergedAttributes[key] ?? '')
 	);
 
 	if (!nameChanged && !attributesChanged) {
-		return false;
+		return { changed: false, before, after: before };
 	}
 
 	await authentikApiFetch(`core/users/${pk}/`, {
@@ -173,12 +233,42 @@ export async function updateUserProfile(
 		attributes: pickAttributes(mergedAttributes)
 	});
 
-	return true;
+	return { changed: true, before, after };
 }
 
 // Not part of PROFILE_ATTRIBUTE_FIELDS: that whitelist is specifically the merge boundary for
 // the member-editable profile form, whereas rfid_uid is provisioned by us and never user-entered.
 const RFID_UID_ATTRIBUTE = 'rfid_uid';
+
+export interface UserGroup {
+	name: string;
+	isSuperuser: boolean;
+	// From the group's own `attributes.notes`, if set (Directory -> Groups -> [group] -> Edit ->
+	// Attributes, in Authentik's admin UI). Most groups won't have one.
+	note: string | null;
+}
+
+interface AuthentikUserRecordWithGroups extends AuthentikUserRecord {
+	groups_obj: { name: string; is_superuser: boolean; attributes: Record<string, unknown> }[];
+}
+
+// Full group objects (name, is_superuser, attributes) — unlike the plain group name list already
+// carried in the member's own OIDC session (`profile` scope's `groups` claim, group names only),
+// this needs the privileged service token: group attributes are never exposed via the ID token.
+export async function getUserGroups(pk: number): Promise<UserGroup[]> {
+	const res = await authentikApiFetch(`core/users/${pk}/`);
+	const user = (await res.json()) as AuthentikUserRecordWithGroups;
+	// Defensive: this is a cast, not a runtime-validated schema — don't assume the field is always
+	// present in whatever shape a future Authentik version (or a differently-scoped token) returns.
+	return (user.groups_obj ?? []).map((g) => {
+		const note = g.attributes.notes;
+		return {
+			name: g.name,
+			isSuperuser: g.is_superuser,
+			note: typeof note === 'string' && note.trim() ? note : null
+		};
+	});
+}
 
 export async function getRfidUid(pk: number): Promise<string | null> {
 	const res = await authentikApiFetch(`core/users/${pk}/`);
@@ -238,7 +328,11 @@ export interface TrombinoscopeOptin {
 
 const TROMBINOSCOPE_DEFAULTS: TrombinoscopeOptin = {
 	visible: false,
-	showAvatar: false,
+	// showAvatar/showChat default to true, unlike every other field here — a deliberate choice,
+	// applies retroactively to members who opted into the trombinoscope before these fields
+	// existed (their stored attribute has no such key, so this default fills it in on next read
+	// either way).
+	showAvatar: true,
 	showChat: true,
 	showFirstname: false,
 	showLastname: false,
@@ -250,13 +344,27 @@ const TROMBINOSCOPE_DEFAULTS: TrombinoscopeOptin = {
 // field edited through the generic profile form, it's a structured on/off blob with its own form.
 const TROMBINOSCOPE_ATTRIBUTE = 'trombinoscope';
 
+// The `trombinoscope` attribute also holds `tag`/`tagc` (see TrombinoscopeTag below) in that same
+// object — a plain spread of the raw value over TROMBINOSCOPE_DEFAULTS would silently carry those
+// along too despite the TrombinoscopeOptin type claiming only these 7 fields. That bit both
+// getTrombinoscopeOptin() and the audit trail below: a member merely toggling their visibility got
+// tag/tagc showing up as "removed" in the diff, since `after` (a clean TrombinoscopeOptin) never
+// had them in the first place. Whitelisting explicitly, same spirit as pickAttributes() above.
+function pickTrombinoscopeOptin(raw: unknown): TrombinoscopeOptin {
+	const source = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+	const optin = { ...TROMBINOSCOPE_DEFAULTS };
+	for (const key of Object.keys(TROMBINOSCOPE_DEFAULTS) as (keyof TrombinoscopeOptin)[]) {
+		if (typeof source[key] === 'boolean') {
+			optin[key] = source[key] as boolean;
+		}
+	}
+	return optin;
+}
+
 export async function getTrombinoscopeOptin(pk: number): Promise<TrombinoscopeOptin> {
 	const res = await authentikApiFetch(`core/users/${pk}/`);
 	const user = (await res.json()) as AuthentikUserRecord;
-	const value = user.attributes[TROMBINOSCOPE_ATTRIBUTE];
-	return typeof value === 'object' && value !== null
-		? { ...TROMBINOSCOPE_DEFAULTS, ...(value as Partial<TrombinoscopeOptin>) }
-		: TROMBINOSCOPE_DEFAULTS;
+	return pickTrombinoscopeOptin(user.attributes[TROMBINOSCOPE_ATTRIBUTE]);
 }
 
 // Unchecked checkboxes simply aren't present in FormData — absence means false, same convention
@@ -274,21 +382,42 @@ export function optinFromFormData(formData: FormData): TrombinoscopeOptin {
 	};
 }
 
+export interface TrombinoscopeOptinMutationResult {
+	// Sourced from this same call's own read, not a separate getTrombinoscopeOptin() call made by
+	// the caller beforehand — two independent reads leave a window where the value could change
+	// between them, which would make the audit trail's "before" not actually be the state this
+	// PATCH was based on. See ProfileMutationResult above and PR #45's review.
+	before: TrombinoscopeOptin;
+	after: TrombinoscopeOptin;
+}
+
 // Read-merge-write, same reasoning as updateUserProfile/regenerateRfidUid — but two levels deep
 // here: not just `attributes` as a whole, but also the `trombinoscope` value inside it. Fields
 // like `tag`/`tagc` (admin-assigned role labels) live in that same object outside of what this
 // member-facing form ever submits — replacing it wholesale would silently wipe them out the next
 // time a member just toggles their own visibility.
-export async function updateTrombinoscopeOptin(pk: number, optin: TrombinoscopeOptin): Promise<void> {
+export async function updateTrombinoscopeOptin(
+	pk: number,
+	optin: TrombinoscopeOptin
+): Promise<TrombinoscopeOptinMutationResult> {
 	const current = await authentikApiFetch(`core/users/${pk}/`);
 	const currentUser = (await current.json()) as AuthentikUserRecord;
 	const currentTrombinoscope = currentUser.attributes[TROMBINOSCOPE_ATTRIBUTE];
-	const mergedTrombinoscope = {
-		...(typeof currentTrombinoscope === 'object' && currentTrombinoscope !== null
+	const currentTrombinoscopeObj =
+		typeof currentTrombinoscope === 'object' && currentTrombinoscope !== null
 			? currentTrombinoscope
-			: {}),
-		...optin
-	};
+			: {};
+	const before = pickTrombinoscopeOptin(currentTrombinoscope);
+
+	// Hiding the profile must only flip `visible`: the member-facing form removes the other
+	// checkboxes from the DOM entirely while hidden (see /trombinoscope's
+	// `{#if wantsToBeDisplayed}`), so an absent checkbox in that submission means "not shown right
+	// now", not "turn this off for good". Applying it as a real change would silently wipe every
+	// other preference the moment someone hides their profile, resetting them all by the time they
+	// show it again.
+	const mergedTrombinoscope = optin.visible
+		? { ...currentTrombinoscopeObj, ...optin }
+		: { ...currentTrombinoscopeObj, visible: false };
 
 	await authentikApiFetch(`core/users/${pk}/`, {
 		method: 'PATCH',
@@ -296,6 +425,8 @@ export async function updateTrombinoscopeOptin(pk: number, optin: TrombinoscopeO
 			attributes: { ...currentUser.attributes, [TROMBINOSCOPE_ATTRIBUTE]: mergedTrombinoscope }
 		})
 	});
+
+	return { before, after: pickTrombinoscopeOptin(mergedTrombinoscope) };
 }
 
 // `tag`/`tagc` — an admin-assigned role label (e.g. "Prés. CA") and its badge color — live in the
@@ -320,17 +451,37 @@ export async function getTrombinoscopeTag(pk: number): Promise<TrombinoscopeTag>
 	};
 }
 
+export interface TrombinoscopeTagMutationResult {
+	// Same freshness reasoning as TrombinoscopeOptinMutationResult above.
+	before: TrombinoscopeTag;
+	after: TrombinoscopeTag;
+}
+
 // Same read-merge-write shape as updateTrombinoscopeOptin, kept as its own function rather than
 // folded into it: the two are edited from different forms (this one only exists in the admin UI)
 // and have independent validation (tagColor is a hex string, not a checkbox).
-export async function updateTrombinoscopeTag(pk: number, tag: TrombinoscopeTag): Promise<void> {
+export async function updateTrombinoscopeTag(
+	pk: number,
+	tag: TrombinoscopeTag
+): Promise<TrombinoscopeTagMutationResult> {
 	const current = await authentikApiFetch(`core/users/${pk}/`);
 	const currentUser = (await current.json()) as AuthentikUserRecord;
 	const currentTrombinoscope = currentUser.attributes[TROMBINOSCOPE_ATTRIBUTE];
+	const rawTrombi =
+		typeof currentTrombinoscope === 'object' && currentTrombinoscope !== null
+			? (currentTrombinoscope as Record<string, unknown>)
+			: {};
+	const beforeTagValue = rawTrombi.tag;
+	const beforeTagColorValue = rawTrombi.tagc;
+	const before: TrombinoscopeTag = {
+		tag: typeof beforeTagValue === 'string' && beforeTagValue.trim() ? beforeTagValue : null,
+		tagColor:
+			typeof beforeTagColorValue === 'string' && HEX_COLOR_RE.test(beforeTagColorValue)
+				? beforeTagColorValue
+				: null
+	};
 	const mergedTrombinoscope = {
-		...(typeof currentTrombinoscope === 'object' && currentTrombinoscope !== null
-			? currentTrombinoscope
-			: {}),
+		...rawTrombi,
 		tag: tag.tag ?? '',
 		tagc: tag.tagColor ?? ''
 	};
@@ -341,6 +492,74 @@ export async function updateTrombinoscopeTag(pk: number, tag: TrombinoscopeTag):
 			attributes: { ...currentUser.attributes, [TROMBINOSCOPE_ATTRIBUTE]: mergedTrombinoscope }
 		})
 	});
+
+	return { before, after: tag };
+}
+
+// One-directional, sensitive data: a member records who to contact in case of an accident at the
+// hackerspace, only ever read by an admin (or the member themselves) — never opt-in-public, never
+// shown in the trombinoscope. A structured list rather than a single string, so it lives in its
+// own attribute outside PROFILE_ATTRIBUTE_FIELDS, same reasoning as `trombinoscope`.
+const EMERGENCY_CONTACTS_ATTRIBUTE = 'emergencyContacts';
+export const MAX_EMERGENCY_CONTACTS = 3;
+
+function isEmergencyContact(value: unknown): value is EmergencyContact {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		typeof (value as EmergencyContact).name === 'string' &&
+		typeof (value as EmergencyContact).phone === 'string'
+	);
+}
+
+export async function getEmergencyContacts(pk: number): Promise<EmergencyContact[]> {
+	const res = await authentikApiFetch(`core/users/${pk}/`);
+	const user = (await res.json()) as AuthentikUserRecord;
+	const value = user.attributes[EMERGENCY_CONTACTS_ATTRIBUTE];
+	if (!Array.isArray(value)) return [];
+	return value
+		.filter(isEmergencyContact)
+		.slice(0, MAX_EMERGENCY_CONTACTS)
+		.map((c) => ({ name: c.name, phone: c.phone, relation: typeof c.relation === 'string' ? c.relation : '' }));
+}
+
+export interface EmergencyContactsMutationResult {
+	// Same freshness reasoning as ProfileMutationResult above — also incidentally more reliable
+	// than the previous caller-side getEmergencyContacts(pk).catch(() => null): that read could
+	// fail independently of the mutation and log a misleading `null` "before", whereas this one
+	// can't fail without the mutation itself failing too.
+	before: EmergencyContact[];
+	after: EmergencyContact[];
+}
+
+// Read-merge-write, same reasoning as updateUserProfile: `attributes` is replaced wholesale by a
+// PATCH, so the rest of the blob must be preserved rather than overwritten.
+export async function updateEmergencyContacts(
+	pk: number,
+	contacts: EmergencyContact[]
+): Promise<EmergencyContactsMutationResult> {
+	const current = await authentikApiFetch(`core/users/${pk}/`);
+	const currentUser = (await current.json()) as AuthentikUserRecord;
+	const beforeValue = currentUser.attributes[EMERGENCY_CONTACTS_ATTRIBUTE];
+	const before = Array.isArray(beforeValue)
+		? beforeValue
+				.filter(isEmergencyContact)
+				.slice(0, MAX_EMERGENCY_CONTACTS)
+				.map((c) => ({
+					name: c.name,
+					phone: c.phone,
+					relation: typeof c.relation === 'string' ? c.relation : ''
+				}))
+		: [];
+
+	await authentikApiFetch(`core/users/${pk}/`, {
+		method: 'PATCH',
+		body: JSON.stringify({
+			attributes: { ...currentUser.attributes, [EMERGENCY_CONTACTS_ATTRIBUTE]: contacts }
+		})
+	});
+
+	return { before, after: contacts };
 }
 
 export interface AdminUserSummary {
@@ -683,12 +902,18 @@ interface ApplicationRecord {
 // privileged) service account — so this only ever returns what they'd actually see in Authentik's
 // own application library, not every app that exists. That same endpoint already excludes
 // meta_hide apps server-side, so there's no need to filter those out again here.
+//
+// Passport itself is excluded by name below rather than marked "hide" in Authentik, per the
+// member's choice — fragile if that application gets renamed there, but a one-line fix if so.
+const SELF_APPLICATION_NAME = 'Passport (Members)';
+
 export async function listUserApplications(pk: number): Promise<UserApplication[]> {
 	const res = await authentikApiFetch(`core/applications/?for_user=${pk}&page_size=200`);
 	const data = (await res.json()) as { results: ApplicationRecord[] };
 	return data.results
-		// No launch_url means there's nothing for a link to point to.
-		.filter((a) => a.launch_url)
+		// No launch_url means there's nothing for a link to point to. Also drop Passport's own
+		// entry — a member looking at this list is, by definition, already on Passport.
+		.filter((a) => a.launch_url && a.name !== SELF_APPLICATION_NAME)
 		.map((a) => ({
 			name: a.name,
 			slug: a.slug,

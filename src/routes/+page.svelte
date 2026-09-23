@@ -1,8 +1,80 @@
 <script lang="ts">
 	import { displayName } from '$lib/types';
+	import CotisationStatusBlock from '$lib/components/CotisationStatusBlock.svelte';
 
 	let { data } = $props();
+
+	interface ChecklistEntry {
+		href: string;
+		done: boolean | null;
+		doneLabel: string;
+		todoLabel: string;
+	}
+
+	// Completed items sink to the bottom — what still needs attention (or couldn't be verified)
+	// stays visible first, instead of getting buried under items already taken care of.
+	let checklistItems = $derived<ChecklistEntry[]>(
+		[
+			{
+				href: '/profile?tab=mfa',
+				done: data.checklist.mfaConfigured,
+				doneLabel: 'MFA configuré',
+				todoLabel: 'Configurer un MFA'
+			},
+			{
+				href: '/profile?tab=emergency',
+				done: data.checklist.emergencyContactConfigured,
+				doneLabel: 'Contact "d’urgence" renseigné',
+				todoLabel: 'Renseigner au moins un contact "d’urgence"'
+			},
+			{
+				href: '/badge',
+				done: data.checklist.badgeConfigured,
+				doneLabel: 'Badge RFID généré',
+				todoLabel: 'Générer mon UUID (badge) RFID'
+			},
+			{
+				href: '/cotisation',
+				done: data.checklist.ibanPersoConfigured,
+				doneLabel: 'IBAN personnel renseigné',
+				todoLabel: 'Renseigner un IBAN personnel'
+			},
+			...(data.checklist.ibanProApplicable
+				? [
+						{
+							href: '/cotisation',
+							done: data.checklist.ibanProConfigured,
+							doneLabel: 'IBAN professionnel renseigné',
+							todoLabel: 'Renseigner un IBAN professionnel'
+						}
+					]
+				: [])
+		].sort((a, b) => (a.done === true ? 1 : 0) - (b.done === true ? 1 : 0))
+	);
 </script>
+
+{#snippet checklistItem(href: string, done: boolean | null, doneLabel: string, todoLabel: string)}
+	<a
+		{href}
+		class="no-underline-fx flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-gray-50"
+	>
+		<span
+			class="flex h-5 w-5 shrink-0 items-center justify-center border text-xs font-bold {done
+				? 'border-black bg-black text-white'
+				: 'border-gray-400 text-transparent'}"
+			aria-hidden="true"
+		>
+			✓
+		</span>
+		{#if done === null}
+			<span class="text-gray-500">Impossible de vérifier pour le moment</span>
+		{:else if done}
+			<span>{doneLabel}</span>
+		{:else}
+			<span class="font-bold">{todoLabel}</span>
+		{/if}
+	</a>
+{/snippet}
 
 <svelte:head>
 	<title>Passport</title>
@@ -46,6 +118,33 @@
 </section>
 
 {#if data.user}
+	<div class="mb-10 flex flex-col gap-8 md:flex-row md:items-start">
+		<section class="w-full md:w-1/2">
+			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma cotisation</h2>
+			{#if data.cotisationUnavailable}
+				<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+					Service de cotisation temporairement indisponible. Réessayez dans quelques instants.
+				</p>
+			{:else}
+				<CotisationStatusBlock
+					status={data.cotisation.status}
+					datefin={data.cotisation.datefin}
+					isInactive={data.cotisation.isInactive}
+				/>
+				<a href="/cotisation" class="mt-2 inline-block text-sm">Voir le détail →</a>
+			{/if}
+		</section>
+
+		<section class="w-full md:w-1/2">
+			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma check-list</h2>
+			<div class="divide-y divide-black border border-black">
+				{#each checklistItems as item, i (i)}
+					{@render checklistItem(item.href, item.done, item.doneLabel, item.todoLabel)}
+				{/each}
+			</div>
+		</section>
+	</div>
+
 	{#if data.groups === null || data.groups.length === 0}
 		<section>
 			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Mes apps</h2>

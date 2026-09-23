@@ -45,98 +45,120 @@
 </svelte:head>
 
 <section>
-	<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-		<h1 class="bg-black px-4 py-3 text-base font-bold text-white uppercase">Membres</h1>
-		<div class="flex flex-wrap gap-2">
-			<form
-				method="POST"
-				action="?/refreshMattermostCache"
-				use:enhance={() => {
-					refreshingMattermostCache = true;
-					return async ({ update }) => {
-						await update({ reset: false });
-						refreshingMattermostCache = false;
-					};
-				}}
+	<h1 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Membres</h1>
+
+	<div class="mb-4 flex flex-wrap items-center gap-4">
+		<input
+			type="search"
+			value={query}
+			oninput={(e) => onSearch(e.currentTarget.value)}
+			placeholder="Rechercher par nom, identifiant ou email…"
+			class="min-w-0 flex-1 border border-black px-3 py-2 text-sm"
+		/>
+		<form
+			method="POST"
+			action="?/refreshMattermostCache"
+			use:enhance={() => {
+				refreshingMattermostCache = true;
+				return async ({ update }) => {
+					await update({ reset: false });
+					refreshingMattermostCache = false;
+				};
+			}}
+		>
+			<button
+				type="submit"
+				disabled={refreshingMattermostCache}
+				class="btn-primary shrink-0 px-4 py-2 disabled:opacity-50"
 			>
-				<button
-					type="submit"
-					disabled={refreshingMattermostCache}
-					class="btn-primary px-4 py-2 disabled:opacity-50"
+				{refreshingMattermostCache ? 'Régénération…' : 'Régénérer le cache Mattermost'}
+			</button>
+		</form>
+		<a
+			href="/admin/audit"
+			class="no-underline-fx inline-block shrink-0 border border-black px-4 py-2 text-sm font-bold uppercase transition-colors hover:bg-black hover:text-white"
+		>
+			Historique d'audit
+		</a>
+		<a
+			href="/admin/invite"
+			class="no-underline-fx btn-primary inline-block shrink-0 px-4 py-2"
+		>
+			Créer une invitation
+		</a>
+	</div>
+
+	{#if pagedUsers.length > 0}
+		<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->
+		<div class="space-y-2 sm:hidden">
+			{#each pagedUsers as user (user.pk)}
+				<a
+					href="/admin/users/{user.pk}"
+					class="no-underline-fx block border border-black p-3 text-sm transition-colors hover:bg-black hover:text-white"
 				>
-					{refreshingMattermostCache ? 'Régénération…' : 'Régénérer le cache Mattermost'}
-				</button>
-			</form>
-			<a href="/admin/invite" class="no-underline-fx btn-primary inline-block px-4 py-2">
-				Créer une invitation
-			</a>
+					<p class="font-bold">{user.name}</p>
+					<p class="mt-1 opacity-70">{user.username}</p>
+					<p class="mt-1 opacity-70">{user.email}</p>
+					<p class="mt-1 text-xs font-bold uppercase">{user.is_active ? 'Actif' : 'Inactif'}</p>
+				</a>
+			{/each}
 		</div>
-	</div>
 
-	<input
-		type="search"
-		value={query}
-		oninput={(e) => onSearch(e.currentTarget.value)}
-		placeholder="Rechercher par nom, identifiant ou email…"
-		class="mb-4 w-full border border-black px-3 py-2 text-sm"
-	/>
-
-	<div class="overflow-x-auto">
-		<table class="w-full border-collapse text-sm">
-			<thead>
-				<tr class="bg-black text-white uppercase">
-					<th class="border border-black px-3 py-2 text-left">Nom</th>
-					<th class="border border-black px-3 py-2 text-left">Identifiant</th>
-					<th class="border border-black px-3 py-2 text-left">Email</th>
-					<th class="border border-black px-3 py-2 text-left">Statut</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each pagedUsers as user (user.pk)}
-					<tr class="group">
-						<td class="border border-black p-0">
-							<a
-								href="/admin/users/{user.pk}"
-								class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
-							>
-								{user.name}
-							</a>
-						</td>
-						<td class="border border-black p-0">
-							<a
-								href="/admin/users/{user.pk}"
-								class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
-							>
-								{user.username}
-							</a>
-						</td>
-						<td class="border border-black p-0">
-							<a
-								href="/admin/users/{user.pk}"
-								class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
-							>
-								{user.email}
-							</a>
-						</td>
-						<td class="border border-black p-0">
-							<a
-								href="/admin/users/{user.pk}"
-								class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
-							>
-								{user.is_active ? 'Actif' : 'Inactif'}
-							</a>
-						</td>
+		<div class="hidden overflow-x-auto sm:block">
+			<table class="w-full border-collapse text-sm">
+				<thead>
+					<tr class="bg-black text-white uppercase">
+						<th class="border border-black px-3 py-2 text-left">Nom</th>
+						<th class="border border-black px-3 py-2 text-left">Identifiant</th>
+						<th class="border border-black px-3 py-2 text-left">Email</th>
+						<th class="border border-black px-3 py-2 text-left">Statut</th>
 					</tr>
-				{:else}
-					<tr>
-						<td colspan="4" class="border border-black px-3 py-4 text-center text-gray-500">
-							Aucun résultat.
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
+				</thead>
+				<tbody>
+					{#each pagedUsers as user (user.pk)}
+						<tr class="group">
+							<td class="border border-black p-0">
+								<a
+									href="/admin/users/{user.pk}"
+									class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
+								>
+									{user.name}
+								</a>
+							</td>
+							<td class="border border-black p-0">
+								<a
+									href="/admin/users/{user.pk}"
+									class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
+								>
+									{user.username}
+								</a>
+							</td>
+							<td class="border border-black p-0">
+								<a
+									href="/admin/users/{user.pk}"
+									class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
+								>
+									{user.email}
+								</a>
+							</td>
+							<td class="border border-black p-0">
+								<a
+									href="/admin/users/{user.pk}"
+									class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
+								>
+									{user.is_active ? 'Actif' : 'Inactif'}
+								</a>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	{:else}
+		<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+			Aucun résultat.
+		</p>
+	{/if}
 
 	{#if pageCount > 1}
 		<div class="mt-4 flex items-center justify-between gap-4 text-sm">
