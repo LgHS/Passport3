@@ -2,6 +2,7 @@
 
 *[Lire en français](README.fr.md)*
 
+
 Passport3 is the member portal of the [Liège Hackerspace](https://lghs.be).
 
 It provides a single, user-friendly interface for members to manage their identity, membership, subscriptions, access rights, and other information related to the hackerspace.
