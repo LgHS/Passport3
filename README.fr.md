@@ -135,6 +135,12 @@ docker compose -f docker-compose.preprod.yml up -d
 
 Publier une nouvelle version (`git tag vX.Y.Z && git push --tags`, ou `gh release create vX.Y.Z`) construit et pousse `ghcr.io/lghs/passport3:X.Y.Z` et `ghcr.io/lghs/passport3:preprod` — Watchtower détecte la mise à jour du tag `preprod` dans les 5 minutes et redéploie automatiquement.
 
+### Stockage de données local
+
+Passport3 a une petite base SQLite locale (`better-sqlite3`) pour les données qui n'ont pas leur place dans Authentik, Dolibarr ou GitHub — par exemple un historique d'audit des actions admin. `docker-compose.yml` et `docker-compose.preprod.yml` la montent sur un volume nommé (`passport3-data`, sur `/app/data`), défini via la variable d'environnement `DB_PATH`, pour qu'elle survive à la recréation du conteneur — y compris un redéploiement déclenché par Watchtower. **Ce volume contient désormais de la donnée réelle et non reconstructible, à inclure dans la routine de sauvegarde de l'hôte** — contrairement au reste du conteneur, jusqu'ici entièrement stateless et jetable.
+
+La base tourne en mode WAL, donc `passport3.db` seul n'est pas un instantané cohérent tant que le conteneur tourne : des transactions récentes peuvent encore se trouver dans `passport3.db-wal`. Soit arrêter le conteneur avant de copier uniquement le fichier `.db`, soit sauvegarder tout le volume (`.db`, `.db-wal`, `.db-shm` ensemble) en un seul instantané atomique.
+
 ## Contribuer
 
 Les contributions sont les bienvenues.
