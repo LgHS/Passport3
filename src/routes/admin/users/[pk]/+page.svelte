@@ -13,6 +13,7 @@
 	let tagSectionOpen = $state(false);
 	let permissionsSectionOpen = $state(false);
 	let emergencyContactsSectionOpen = $state(false);
+	let rfidSectionOpen = $state(false);
 
 	let submittingOptin = $state(false);
 
@@ -81,6 +82,20 @@
 	$effect(() => {
 		if (form?.emergencyContactsError) {
 			emergencyContactsSectionOpen = true;
+		}
+	});
+
+	let submittingRfid = $state(false);
+	let rfidUnderstood = $state(false);
+	let showRfidUid = $state(false);
+
+	$effect(() => {
+		if (form?.rfidRegenerated) {
+			showToast('success', 'Badge RFID régénéré.');
+			rfidUnderstood = false;
+		} else if (form?.rfidError) {
+			showToast('error', form.rfidError);
+			rfidSectionOpen = true;
 		}
 	});
 </script>
@@ -344,5 +359,97 @@
 				adminView
 			/>
 		{/if}
+	{/if}
+
+	{@render accordionHeader('Badge RFID', rfidSectionOpen, () => (rfidSectionOpen = !rfidSectionOpen))}
+	{#if rfidSectionOpen}
+		<div class="mt-3 mb-4">
+			<span class="mb-1 block text-sm font-bold uppercase">Identifiant (UUID)</span>
+			{#if data.rfidUid === undefined}
+				<div class="border border-black bg-gray-100 px-3 py-2 text-sm text-gray-500">
+					Impossible de charger le badge pour le moment, réessayez plus tard.
+				</div>
+			{:else if data.rfidUid === null}
+				<div class="border border-black bg-gray-100 px-3 py-2 text-sm text-gray-500">
+					Aucun badge assigné.
+				</div>
+			{:else}
+				<div class="flex items-center gap-2 border border-black bg-gray-100 px-3 py-2">
+					<p class="flex-1 font-mono text-sm">
+						{showRfidUid ? data.rfidUid : '•'.repeat(data.rfidUid.length)}
+					</p>
+					<button
+						type="button"
+						onclick={() => (showRfidUid = !showRfidUid)}
+						aria-label={showRfidUid ? "Masquer l'identifiant" : "Afficher l'identifiant"}
+						title={showRfidUid ? "Masquer l'identifiant" : "Afficher l'identifiant"}
+						class="shrink-0 text-gray-600 hover:text-black"
+					>
+						{#if showRfidUid}
+							<svg viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5">
+								<path
+									d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6Z"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+								<circle cx="10" cy="10" r="2.25" />
+							</svg>
+						{:else}
+							<svg viewBox="0 0 20 20" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5">
+								<path
+									d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6Z"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+								<circle cx="10" cy="10" r="2.25" />
+								<line x1="2" y1="17" x2="18" y2="3" stroke-linecap="round" />
+							</svg>
+						{/if}
+					</button>
+				</div>
+			{/if}
+		</div>
+		<div class="border-4 border-black">
+			<div class="hazard-stripes h-2"></div>
+			<div class="p-6">
+				<p class="mb-3 text-sm font-bold uppercase">Attention, action irréversible</p>
+				<p class="mb-4 text-sm leading-relaxed">
+					En régénérant l'UUID de ce membre, son (ses) badge(s) actuel(s) cessera(ont) de
+					fonctionner immédiatement. À n'utiliser qu'à sa demande explicite (badge perdu ou
+					copié), jamais par précaution.
+				</p>
+				<form
+					method="POST"
+					action="?/regenerateRfid"
+					use:enhance={() => {
+						submittingRfid = true;
+						return async ({ update }) => {
+							await update();
+							submittingRfid = false;
+						};
+					}}
+				>
+					<label class="mb-4 flex items-start gap-2 text-sm">
+						<input
+							type="checkbox"
+							name="confirmRegenerate"
+							value="yes"
+							bind:checked={rfidUnderstood}
+							class="mt-1"
+						/>
+						J'ai confirmé avec le membre que son (ses) badge(s) actuel(s) doit (doivent) être
+						régénéré(s).
+					</label>
+					<button
+						type="submit"
+						disabled={!rfidUnderstood || submittingRfid}
+						class="btn-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+					>
+						{submittingRfid ? 'Régénération…' : 'Confirmer la régénération'}
+					</button>
+				</form>
+			</div>
+			<div class="hazard-stripes h-2"></div>
+		</div>
 	{/if}
 </section>

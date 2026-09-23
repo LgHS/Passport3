@@ -13,7 +13,9 @@ import {
 	HEX_COLOR_RE,
 	getEmergencyContacts,
 	updateEmergencyContacts,
-	MAX_EMERGENCY_CONTACTS
+	MAX_EMERGENCY_CONTACTS,
+	getRfidUid,
+	regenerateRfidUid
 } from '$lib/server/authentikAdmin';
 import { validateProfileSubmission, validateEmergencyContactsSubmission } from '$lib/server/profileValidation';
 import { requireAdminUser } from '$lib/server/auth';
@@ -31,7 +33,7 @@ function resolvePk(paramPk: string): number {
 export const load: PageServerLoad = async ({ params }) => {
 	const pk = resolvePk(params.pk);
 
-	const [profile, optin, tag, groups, emergencyContacts] = await Promise.all([
+	const [profile, optin, tag, groups, emergencyContacts, rfidUid] = await Promise.all([
 		getUserProfile(pk).catch(() => null),
 		getTrombinoscopeOptin(pk),
 		getTrombinoscopeTag(pk),
@@ -43,7 +45,11 @@ export const load: PageServerLoad = async ({ params }) => {
 		getUserGroups(pk).catch(() => null),
 		// Same reasoning — an admin seeing "aucun contact" during an actual emergency must never be
 		// a fetch hiccup in disguise, see feedback_distinguish-fetch-failure-from-empty.
-		getEmergencyContacts(pk).catch(() => null)
+		getEmergencyContacts(pk).catch(() => null),
+		// getRfidUid's own return already uses `null` to mean "no badge assigned" — that's a
+		// legitimate, distinct value from a fetch failure, so the failure case is `undefined` here
+		// rather than reusing `null` and collapsing the two meanings together.
+		getRfidUid(pk).catch(() => undefined)
 	]);
 	if (!profile) {
 		error(404, 'Membre introuvable.');
@@ -57,7 +63,8 @@ export const load: PageServerLoad = async ({ params }) => {
 		tag,
 		groups,
 		emergencyContacts,
-		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS
+		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
+		rfidUid
 	};
 };
 
@@ -200,5 +207,28 @@ export const actions: Actions = {
 		);
 
 		return { emergencyContactsSuccess: true, emergencyContacts: result.contacts };
+	},
+
+	// Lets an admin force-regenerate a member's badge on their behalf (lost/stolen/unreachable
+	// member) — the confirmation checkbox is enforced here, not just on the client: an admin
+	// action invalidating someone else's physical-access credential is higher-stakes than the
+	// member's own /badge regenerate (which exempts a first-ever badge, nothing to lose there —
+	// this page always shows the warning, so it's always required here too).
+	regenerateRfid: async ({ request, params, locals }) => {
+		const admin = requireAdminUser(locals);
+		const pk = resolvePk(params.pk);
+
+		const formData = await request.formData();
+		if (!formData.has('confirmRegenerate')) {
+			return fail(400, { rfidError: 'Confirmation requise.' });
+		}
+
+		await regenerateRfidUid(pk);
+
+		// Deliberately no UUID in `details` — same posture as the member's own /badge regenerate
+		// action: a live physical-access credential is too sensitive to duplicate into the log.
+		logAuditEvent({ sub: admin.sub, label: displayName(admin) }, 'admin', 'badge.regenerate', { pk });
+
+		return { rfidRegenerated: true };
 	}
 };
