@@ -189,6 +189,59 @@ function validateMatrixId(raw: string): { ok: true; value: string } | { ok: fals
 	return { ok: true, value };
 }
 
+// Format stocké : "YYYY-MM-DD" si l'année est donnée, "MM-DD" sinon — un membre peut vouloir
+// partager son anniversaire (jour/mois) sans révéler son âge. Les deux parties sont combinées
+// côté client dans un champ caché avant l'envoi (voir ProfileForm.svelte), mais revalidées ici
+// plutôt que de faire confiance à cette combinaison — même principe que Matrix.
+function daysInMonth(month: number, year: number | null): number {
+	// Année inconnue : on autorise le 29 février par défaut plutôt que de forcer un choix — un
+	// membre qui donne juste jour/mois n'a pas à savoir si son année de naissance était bissextile.
+	const isLeap = year === null || (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0));
+	return [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+}
+
+function validateBirthday(raw: string): { ok: true; value: string } | { ok: false; error: string } {
+	const trimmed = raw.trim();
+	if (!trimmed) return { ok: true, value: '' };
+
+	const withYear = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+	const withoutYear = trimmed.match(/^(\d{2})-(\d{2})$/);
+	if (!withYear && !withoutYear) {
+		return { ok: false, error: 'Date de naissance : jour et mois sont obligatoires si vous la renseignez.' };
+	}
+
+	const year = withYear ? Number(withYear[1]) : null;
+	const month = Number(withYear ? withYear[2] : withoutYear![1]);
+	const day = Number(withYear ? withYear[3] : withoutYear![2]);
+
+	const today = new Date();
+	const todayYear = today.getFullYear();
+
+	if (year !== null && (year < 1900 || year > todayYear)) {
+		return { ok: false, error: 'Date de naissance : année invalide.' };
+	}
+	if (month < 1 || month > 12) {
+		return { ok: false, error: 'Date de naissance : mois invalide.' };
+	}
+	if (day < 1 || day > daysInMonth(month, year)) {
+		return { ok: false, error: 'Date de naissance : jour invalide pour ce mois.' };
+	}
+	// The year check above only rejects a year strictly after this one — a full date later this
+	// same year (e.g. 2026-12-31 submitted on 2026-09-22) still needs its month/day compared
+	// against today's, or it'd pass as a "valid" birthdate that hasn't happened yet.
+	if (
+		year === todayYear &&
+		(month > today.getMonth() + 1 ||
+			(month === today.getMonth() + 1 && day > today.getDate()))
+	) {
+		return { ok: false, error: 'Date de naissance : ne peut pas être dans le futur.' };
+	}
+
+	const pad2 = (n: number) => String(n).padStart(2, '0');
+	const value = year !== null ? `${year}-${pad2(month)}-${pad2(day)}` : `${pad2(month)}-${pad2(day)}`;
+	return { ok: true, value };
+}
+
 export type ProfileValidationResult =
 	| {
 			ok: true;
@@ -224,6 +277,10 @@ export function validateProfileSubmission(formData: FormData): ProfileValidation
 	// stored value matches the plain-digits format the field asks for. Always present: phoneNumber
 	// is required and rendered unconditionally, unlike the optional social fields below.
 	attributes.phoneNumber = attributes.phoneNumber.replace(/[\s().-]/g, '');
+	// Checkbox, not free text — formData.get() only returns a value when checked (browser default
+	// "on"), and nothing at all when unchecked, so the generic loop above needs overriding here to
+	// get an explicit "true"/"false" string rather than "on"/"".
+	attributes.birthdayAnnounce = formData.has('birthdayAnnounce') ? 'true' : 'false';
 
 	if (!firstName) {
 		return { ok: false, error: REQUIRED_MESSAGES.firstName, firstName, lastName, attributes };
@@ -278,6 +335,12 @@ export function validateProfileSubmission(formData: FormData): ProfileValidation
 		}
 		attributes.matrix = matrixResult.value;
 	}
+
+	const birthdayResult = validateBirthday(attributes.birthday ?? '');
+	if (!birthdayResult.ok) {
+		return { ok: false, error: birthdayResult.error, firstName, lastName, attributes };
+	}
+	attributes.birthday = birthdayResult.value;
 
 	// Authentik only has a single `name` field — merge on write, split back on display.
 	const name = `${firstName} ${lastName}`.trim();

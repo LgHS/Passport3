@@ -12,12 +12,15 @@ import {
 	deleteMfaDevice,
 	getEmergencyContacts,
 	updateEmergencyContacts,
-	MAX_EMERGENCY_CONTACTS
+	MAX_EMERGENCY_CONTACTS,
+	AuthentikUnavailableError
 } from '$lib/server/authentikAdmin';
 import { validateProfileSubmission, validateEmergencyContactsSubmission } from '$lib/server/profileValidation';
 import { clearSessionCookie } from '$lib/server/session';
 import { logAuditEvent, listAuditEventsForTarget } from '$lib/server/auditLog';
 import { authentikPk, displayName } from '$lib/types';
+
+const AUTHENTIK_UNAVAILABLE_MESSAGE = 'Service temporairement indisponible. Réessayez dans quelques instants.';
 
 function resolvePk(locals: App.Locals): number {
 	if (!locals.user) {
@@ -40,12 +43,20 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		error(500, 'Impossible de récupérer votre profil Authentik.');
 	}
 
-	const [sessions, mfaDevices, mfaEnrollUrls, emergencyContacts] = await Promise.all([
-		listSessions(profile.username),
-		listMfaDevices(pk),
-		getMfaEnrollUrls(),
-		getEmergencyContacts(pk)
-	]);
+	let sessions, mfaDevices, mfaEnrollUrls, emergencyContacts;
+	try {
+		[sessions, mfaDevices, mfaEnrollUrls, emergencyContacts] = await Promise.all([
+			listSessions(profile.username),
+			listMfaDevices(pk),
+			getMfaEnrollUrls(),
+			getEmergencyContacts(pk)
+		]);
+	} catch (err) {
+		if (err instanceof AuthentikUnavailableError) {
+			error(503, AUTHENTIK_UNAVAILABLE_MESSAGE);
+		}
+		throw err;
+	}
 
 	// Synchronous (better-sqlite3), and cheap at this scale — no need to bundle into the
 	// Promise.all above with the actual network calls.
