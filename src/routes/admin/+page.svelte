@@ -1,12 +1,23 @@
 <script lang="ts">
-	import type { PageData } from './$types';
+	import { enhance } from '$app/forms';
+	import { showToast } from '$lib/stores/toast.svelte';
+	import type { ActionData, PageData } from './$types';
 
 	const PAGE_SIZE = 20;
 
-	let { data }: { data: PageData } = $props();
+	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let query = $state('');
 	let page = $state(1);
+	let refreshingMattermostCache = $state(false);
+
+	$effect(() => {
+		if (form?.mattermostCacheRefreshed) {
+			showToast('success', 'Cache Mattermost régénéré.');
+		} else if (form?.mattermostCacheError) {
+			showToast('error', form.mattermostCacheError);
+		}
+	});
 
 	let filteredUsers = $derived(
 		data.users.filter((user) => {
@@ -44,6 +55,25 @@
 			placeholder="Rechercher par nom, identifiant ou email…"
 			class="min-w-0 flex-1 border border-black px-3 py-2 text-sm"
 		/>
+		<form
+			method="POST"
+			action="?/refreshMattermostCache"
+			use:enhance={() => {
+				refreshingMattermostCache = true;
+				return async ({ update }) => {
+					await update({ reset: false });
+					refreshingMattermostCache = false;
+				};
+			}}
+		>
+			<button
+				type="submit"
+				disabled={refreshingMattermostCache}
+				class="btn-primary shrink-0 px-4 py-2 disabled:opacity-50"
+			>
+				{refreshingMattermostCache ? 'Régénération…' : 'Régénérer le cache Mattermost'}
+			</button>
+		</form>
 		<a
 			href="/admin/audit"
 			class="no-underline-fx inline-block shrink-0 border border-black px-4 py-2 text-sm font-bold uppercase transition-colors hover:bg-black hover:text-white"

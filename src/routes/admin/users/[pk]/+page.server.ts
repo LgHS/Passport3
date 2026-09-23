@@ -17,6 +17,7 @@ import {
 	getRfidUid,
 	regenerateRfidUid
 } from '$lib/server/authentikAdmin';
+import { getMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
 import { validateProfileSubmission, validateEmergencyContactsSubmission } from '$lib/server/profileValidation';
 import { requireAdminUser } from '$lib/server/auth';
 import { logAuditEvent } from '$lib/server/auditLog';
@@ -55,12 +56,21 @@ export const load: PageServerLoad = async ({ params }) => {
 		error(404, 'Membre introuvable.');
 	}
 
+	// Admin-only: shown regardless of the member's own "Pseudo Chat" opt-in on the trombinoscope —
+	// this is an internal tool to reach a member for oral/email requests, not the public directory,
+	// so it isn't gated by the same consent. Needs profile.email, so it can't join the Promise.all
+	// above (which is what resolves profile in the first place).
+	const mattermostUsername = await getMattermostUsername(profile.email).catch(() => null);
+	const mattermostDmUrl = mattermostUsername ? buildMattermostDmUrl(mattermostUsername) : null;
+
 	return {
 		pk,
 		profile,
 		fields: PROFILE_ATTRIBUTE_FIELDS,
 		optin,
 		tag,
+		mattermostUsername,
+		mattermostDmUrl,
 		groups,
 		emergencyContacts,
 		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
