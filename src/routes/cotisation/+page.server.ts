@@ -14,9 +14,11 @@ import {
 	getThirdPartyInvoices,
 	DolibarrUnavailableError
 } from '$lib/server/dolibarr';
+import { validateBankInfoSubmission, maskIban, normalizeIban } from '$lib/server/bankValidation';
+import { logAuditEvent } from '$lib/server/auditLog';
+import { authentikPk, displayName } from '$lib/types';
 
 const DOLIBARR_UNAVAILABLE_MESSAGE = 'Service temporairement indisponible. Réessayez dans quelques instants.';
-import { validateBankInfoSubmission, normalizeIban } from '$lib/server/bankValidation';
 
 // Auth guard shared by the load and the action below — never trust a client-submitted member/
 // thirdparty id, always re-derive from the authenticated session's email.
@@ -101,6 +103,11 @@ export const actions: Actions = {
 			if (!member) {
 				error(404, 'Aucun adhérent Dolibarr trouvé pour votre adresse email.');
 			}
+			const user = locals.user!;
+			// Dolibarr's member.id (used everywhere else in this file) and Authentik's pk are two
+			// different id spaces — the audit trail is keyed on the latter, same as every other
+			// action, so it resolves separately here even though the rest of this action never needs it.
+			const pk = authentikPk(user);
 
 			const formData = await request.formData();
 			// The pro IBAN only exists for members linked to a billing third-party — strip it before
@@ -121,7 +128,8 @@ export const actions: Actions = {
 			// field is `''` rather than `null`. Comparing the raw values would treat "no IBAN on
 			// either side" as a change (`'' !== null`), and a same IBAN stored with different
 			// spacing as a false difference — both would defeat the point of only touching what
-			// actually changed.
+			// actually changed. Also doubles as the audit trail's "before" value below, rather than
+			// fetching the same third-party IBAN from Dolibarr a second time.
 			const currentIbanPro = member.fkSoc ? await getThirdPartyIbanPro(member.fkSoc) : null;
 			const storedIbanPerso = normalizeIban(member.ibanPerso ?? '');
 			const storedIbanPro = normalizeIban(currentIbanPro ?? '');
@@ -184,6 +192,20 @@ export const actions: Actions = {
 					});
 				}
 			}
+
+			// Masked to the last 4 digits — this is the flagship case an audit trail exists for
+			// (knowing who changed a payout IBAN, for fraud prevention), but the full number doesn't
+			// need to live a second time at rest here just to serve that purpose.
+			logAuditEvent(
+				{ sub: user.sub, label: displayName(user) },
+				'user',
+				'bankInfo.update',
+				pk ? { pk } : { email: user.email },
+				{
+					before: { ibanPerso: maskIban(member.ibanPerso ?? ''), ibanPro: maskIban(currentIbanPro ?? '') },
+					after: { ibanPerso: maskIban(result.ibanPerso), ibanPro: maskIban(result.ibanPro) }
+				}
+			);
 
 			return { success: true, ibanPerso: result.ibanPerso, ibanPro: result.ibanPro };
 		} catch (err) {

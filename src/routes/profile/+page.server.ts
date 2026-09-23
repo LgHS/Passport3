@@ -17,7 +17,8 @@ import {
 } from '$lib/server/authentikAdmin';
 import { validateProfileSubmission, validateEmergencyContactsSubmission } from '$lib/server/profileValidation';
 import { clearSessionCookie } from '$lib/server/session';
-import { authentikPk } from '$lib/types';
+import { logAuditEvent, listAuditEventsForTarget } from '$lib/server/auditLog';
+import { authentikPk, displayName } from '$lib/types';
 
 const AUTHENTIK_UNAVAILABLE_MESSAGE = 'Service temporairement indisponible. Réessayez dans quelques instants.';
 
@@ -57,6 +58,10 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		throw err;
 	}
 
+	// Synchronous (better-sqlite3), and cheap at this scale — no need to bundle into the
+	// Promise.all above with the actual network calls.
+	const auditEvents = listAuditEventsForTarget(pk);
+
 	return {
 		profile,
 		fields: PROFILE_ATTRIBUTE_FIELDS,
@@ -65,13 +70,15 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		sessions,
 		mfaDevices,
 		emergencyContacts,
-		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS
+		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
+		auditEvents
 	};
 };
 
 export const actions: Actions = {
 	updateProfile: async ({ request, locals }) => {
 		const pk = resolvePk(locals);
+		const user = locals.user!;
 		const result = validateProfileSubmission(await request.formData());
 
 		if (!result.ok) {
@@ -83,11 +90,24 @@ export const actions: Actions = {
 			});
 		}
 
-		const changed = await updateUserProfile(pk, { name: result.name, attributes: result.attributes });
+		// before/after come from updateUserProfile()'s own internal read, not a separate call here
+		// — that read is the one the merge/PATCH was actually based on, so the audit trail can't
+		// drift from what was truly written (see ProfileMutationResult in authentikAdmin.ts).
+		const mutation = await updateUserProfile(pk, { name: result.name, attributes: result.attributes });
+
+		if (mutation.changed) {
+			logAuditEvent(
+				{ sub: user.sub, label: displayName(user) },
+				'user',
+				'profile.update',
+				{ pk },
+				{ before: mutation.before, after: mutation.after }
+			);
+		}
 
 		return {
 			success: true,
-			changed,
+			changed: mutation.changed,
 			firstName: result.firstName,
 			lastName: result.lastName,
 			attributes: result.attributes
@@ -96,10 +116,19 @@ export const actions: Actions = {
 
 	revokeSession: async ({ request, locals, cookies }) => {
 		const pk = resolvePk(locals);
+		const user = locals.user!;
 		const profile = await getUserProfile(pk);
 		const formData = await request.formData();
 		const uuid = String(formData.get('uuid') ?? '');
 		await revokeSession(profile.username, uuid);
+
+		logAuditEvent(
+			{ sub: user.sub, label: displayName(user) },
+			'user',
+			'session.revoke',
+			{ pk },
+			{ sessionUuid: uuid }
+		);
 
 		// If that was the last Authentik session, bring Passport3's own session in line rather
 		// than leaving the member logged in here with nothing left on Authentik's side.
@@ -118,29 +147,50 @@ export const actions: Actions = {
 
 	deleteMfaDevice: async ({ request, locals }) => {
 		const pk = resolvePk(locals);
+		const user = locals.user!;
 		const formData = await request.formData();
 		const devicePk = String(formData.get('pk') ?? '');
 		await deleteMfaDevice(pk, devicePk);
+
+		logAuditEvent(
+			{ sub: user.sub, label: displayName(user) },
+			'user',
+			'mfaDevice.delete',
+			{ pk },
+			{ devicePk }
+		);
+
 		// Same reasoning as revokeSession above — kept distinct from `success` on purpose.
 		return { mfaDeviceDeleted: true };
 	},
 
 	updateEmergencyContacts: async ({ request, locals }) => {
 		const pk = resolvePk(locals);
+		const user = locals.user!;
 		const result = validateEmergencyContactsSubmission(await request.formData());
 
 		if (!result.ok) {
 			return fail(400, { emergencyContactsError: result.error, emergencyContacts: result.contacts });
 		}
 
+		let mutation;
 		try {
-			await updateEmergencyContacts(pk, result.contacts);
+			mutation = await updateEmergencyContacts(pk, result.contacts);
 		} catch {
 			return fail(500, {
 				emergencyContactsError: "La sauvegarde des contacts d'urgence a échoué, réessayez.",
 				emergencyContacts: result.contacts
 			});
 		}
+
+		// Same privacy posture as the admin version — count only, never the actual contacts.
+		logAuditEvent(
+			{ sub: user.sub, label: displayName(user) },
+			'user',
+			'emergencyContacts.update',
+			{ pk },
+			{ before: { contactCount: mutation.before.length }, after: { contactCount: mutation.after.length } }
+		);
 
 		return { emergencyContactsSuccess: true, emergencyContacts: result.contacts };
 	}

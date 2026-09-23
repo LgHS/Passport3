@@ -1,7 +1,8 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { getRfidUid, regenerateRfidUid, AuthentikUnavailableError } from '$lib/server/authentikAdmin';
-import { authentikPk } from '$lib/types';
+import { logAuditEvent } from '$lib/server/auditLog';
+import { authentikPk, displayName } from '$lib/types';
 
 const AUTHENTIK_UNAVAILABLE_MESSAGE = 'Service temporairement indisponible. Réessayez dans quelques instants.';
 
@@ -37,6 +38,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 export const actions: Actions = {
 	regenerate: async ({ request, locals }) => {
 		const pk = resolvePk(locals);
+		const user = locals.user!;
 
 		// The client only disables the button until the checkbox is checked — that's UI, not
 		// enforcement. A badge already exists here is a real, irreversible credential
@@ -55,6 +57,12 @@ export const actions: Actions = {
 		}
 
 		const uuid = await regenerateRfidUid(pk);
+
+		// Deliberately no `details` — the badge UUID is a live physical-access credential, not
+		// something to duplicate into the audit log even as a "before" value. Just the fact that a
+		// regeneration happened, same posture as emergency contacts elsewhere in this feature.
+		logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'badge.regenerate', { pk });
+
 		return { success: true, uuid };
 	}
 };
