@@ -136,6 +136,14 @@
 		if (!day || !month) return `${month ? pad2(month) : ''}-${day ? pad2(day) : ''}`;
 		return year ? `${year}-${pad2(month)}-${pad2(day)}` : `${pad2(month)}-${pad2(day)}`;
 	});
+
+	// Announcing a birthday that isn't actually set is meaningless — nothing downstream crashes on
+	// it (the scheduler independently requires a real birthday value too), but there's no reason to
+	// let that inconsistent state exist at all. Disabled rather than forced false: a disabled
+	// checkbox is never submitted regardless of its checked value, so the default-checked opt-out
+	// state survives intact for the moment a date does get filled in, instead of an effect
+	// permanently stomping it to false the instant the component mounts with no date yet.
+	let hasBirthdayDate = $derived(birthdayDay.trim() !== '' && birthdayMonth.trim() !== '');
 </script>
 
 {#snippet textField(
@@ -279,7 +287,14 @@
 								class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-300"
 							/>
 						</div>
-						<label class="flex w-full cursor-pointer items-center gap-3 text-sm md:w-fit">
+						<label
+							class="flex w-full items-center gap-3 text-sm md:w-fit {hasBirthdayDate
+								? 'cursor-pointer'
+								: 'cursor-not-allowed opacity-50'}"
+							title={hasBirthdayDate
+								? ''
+								: 'Renseignez au moins le jour et le mois pour activer cette option'}
+						>
 							<span
 								class="relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors {birthdayAnnounce
 									? 'bg-black'
@@ -289,7 +304,8 @@
 									type="checkbox"
 									name="birthdayAnnounce"
 									bind:checked={birthdayAnnounce}
-									class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+									disabled={!hasBirthdayDate}
+									class="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
 								/>
 								<span
 									class="pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform {birthdayAnnounce

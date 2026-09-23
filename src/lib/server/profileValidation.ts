@@ -214,7 +214,10 @@ function validateBirthday(raw: string): { ok: true; value: string } | { ok: fals
 	const month = Number(withYear ? withYear[2] : withoutYear![1]);
 	const day = Number(withYear ? withYear[3] : withoutYear![2]);
 
-	if (year !== null && (year < 1900 || year > new Date().getFullYear())) {
+	const today = new Date();
+	const todayYear = today.getFullYear();
+
+	if (year !== null && (year < 1900 || year > todayYear)) {
 		return { ok: false, error: 'Date de naissance : année invalide.' };
 	}
 	if (month < 1 || month > 12) {
@@ -222,6 +225,16 @@ function validateBirthday(raw: string): { ok: true; value: string } | { ok: fals
 	}
 	if (day < 1 || day > daysInMonth(month, year)) {
 		return { ok: false, error: 'Date de naissance : jour invalide pour ce mois.' };
+	}
+	// The year check above only rejects a year strictly after this one — a full date later this
+	// same year (e.g. 2026-12-31 submitted on 2026-09-22) still needs its month/day compared
+	// against today's, or it'd pass as a "valid" birthdate that hasn't happened yet.
+	if (
+		year === todayYear &&
+		(month > today.getMonth() + 1 ||
+			(month === today.getMonth() + 1 && day > today.getDate()))
+	) {
+		return { ok: false, error: 'Date de naissance : ne peut pas être dans le futur.' };
 	}
 
 	const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -248,12 +261,21 @@ export type ProfileValidationResult =
 export function validateProfileSubmission(formData: FormData): ProfileValidationResult {
 	const firstName = String(formData.get('firstName') ?? '').trim();
 	const lastName = String(formData.get('lastName') ?? '').trim();
+
+	// Only include a key when its input was actually present in the submission — the "Divers"
+	// panel (signal/telegram/discord/matrix) can be collapsed, in which case those inputs never
+	// render into the DOM at all. formData.has() lets us tell "not submitted" apart from
+	// "submitted empty", which matters because updateUserProfile's merge only overwrites a key
+	// that's present in `attributes` — treating an absent field as `''` here would wipe it there.
 	const attributes: Record<string, string> = {};
 	for (const { key } of PROFILE_ATTRIBUTE_FIELDS) {
-		attributes[key] = String(formData.get(key) ?? '').trim();
+		if (formData.has(key)) {
+			attributes[key] = String(formData.get(key) ?? '').trim();
+		}
 	}
 	// Normalize away spaces/dashes/parens users naturally type ("32 470 00 00 00") so the
-	// stored value matches the plain-digits format the field asks for.
+	// stored value matches the plain-digits format the field asks for. Always present: phoneNumber
+	// is required and rendered unconditionally, unlike the optional social fields below.
 	attributes.phoneNumber = attributes.phoneNumber.replace(/[\s().-]/g, '');
 	// Checkbox, not free text — formData.get() only returns a value when checked (browser default
 	// "on"), and nothing at all when unchecked, so the generic loop above needs overriding here to
@@ -282,29 +304,37 @@ export function validateProfileSubmission(formData: FormData): ProfileValidation
 		};
 	}
 
-	const signalResult = validateSignalUsername(attributes.signal ?? '');
-	if (!signalResult.ok) {
-		return { ok: false, error: signalResult.error, firstName, lastName, attributes };
+	if ('signal' in attributes) {
+		const signalResult = validateSignalUsername(attributes.signal);
+		if (!signalResult.ok) {
+			return { ok: false, error: signalResult.error, firstName, lastName, attributes };
+		}
+		attributes.signal = signalResult.value;
 	}
-	attributes.signal = signalResult.value;
 
-	const telegramResult = validateTelegramUsername(attributes.telegram ?? '');
-	if (!telegramResult.ok) {
-		return { ok: false, error: telegramResult.error, firstName, lastName, attributes };
+	if ('telegram' in attributes) {
+		const telegramResult = validateTelegramUsername(attributes.telegram);
+		if (!telegramResult.ok) {
+			return { ok: false, error: telegramResult.error, firstName, lastName, attributes };
+		}
+		attributes.telegram = telegramResult.value;
 	}
-	attributes.telegram = telegramResult.value;
 
-	const discordResult = validateDiscordUsername(attributes.discord ?? '');
-	if (!discordResult.ok) {
-		return { ok: false, error: discordResult.error, firstName, lastName, attributes };
+	if ('discord' in attributes) {
+		const discordResult = validateDiscordUsername(attributes.discord);
+		if (!discordResult.ok) {
+			return { ok: false, error: discordResult.error, firstName, lastName, attributes };
+		}
+		attributes.discord = discordResult.value;
 	}
-	attributes.discord = discordResult.value;
 
-	const matrixResult = validateMatrixId(attributes.matrix ?? '');
-	if (!matrixResult.ok) {
-		return { ok: false, error: matrixResult.error, firstName, lastName, attributes };
+	if ('matrix' in attributes) {
+		const matrixResult = validateMatrixId(attributes.matrix);
+		if (!matrixResult.ok) {
+			return { ok: false, error: matrixResult.error, firstName, lastName, attributes };
+		}
+		attributes.matrix = matrixResult.value;
 	}
-	attributes.matrix = matrixResult.value;
 
 	const birthdayResult = validateBirthday(attributes.birthday ?? '');
 	if (!birthdayResult.ok) {
