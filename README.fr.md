@@ -95,6 +95,7 @@ Un panneau d'administration restreint (réservé à un groupe Authentik dédié)
 - Modifier le profil d'un membre en son nom
 - Modifier la visibilité trombinoscope et le rôle affiché d'un membre en son nom
 - Gérer les contacts d'urgence d'un membre en son nom
+- Régénérer le badge RFID d'un membre en son nom
 - Créer des invitations d'inscription pour de nouveaux membres
 - Consulter l'historique complet des actions admin et membres
 

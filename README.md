@@ -2,7 +2,6 @@
 
 *[Lire en français](README.fr.md)*
 
-
 Passport3 is the member portal of the [Liège Hackerspace](https://lghs.be).
 
 It provides a single, user-friendly interface for members to manage their identity, membership, subscriptions, access rights, and other information related to the hackerspace.
@@ -101,6 +100,7 @@ A restricted admin panel (gated behind an Authentik group) lets designated membe
 - Edit a member's profile on their behalf
 - Edit a member's trombinoscope visibility and displayed role on their behalf
 - Manage a member's emergency contacts on their behalf
+- Regenerate a member's RFID badge on their behalf
 - Create onboarding invitations for new members
 - View a full audit history of admin and member actions
 
