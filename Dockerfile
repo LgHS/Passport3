@@ -30,6 +30,12 @@ ENV PORT=8030
 ENV HOST=0.0.0.0
 
 RUN addgroup -S passport && adduser -S passport -G passport
+
+# The runtime only ever runs `node build/index.js` — the npm/corepack bundled with the base image
+# are dead weight here, and they carry their own vulnerable dependencies (flagged by the Trivy scan
+# in pr-check.yml), so drop them from the final image.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+	/usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/build ./build
 COPY package.json ./package.json
