@@ -100,8 +100,12 @@
 {:else}
 	<section class="mb-12">
 		<h1 class="mb-2 text-3xl font-bold uppercase">Passport</h1>
-		<p class="mb-2 max-w-2xl text-lg font-bold">Bienvenue, {displayName(data.user)} sur Passport,</p>
-		<p class="leading-relaxed">il centralise les informations et les services liés à votre adhésion afin de vous permettre de gérer facilement votre compte et vos accès au hackerspace. En cas de souci : noc@lghs.be</p>
+		<p class="mb-2 max-w-2xl text-lg font-bold">Bienvenue sur Passport, {displayName(data.user)} !</p>
+		<p class="leading-relaxed">
+			Il centralise les informations et les services liés à votre adhésion afin de vous permettre
+			de gérer facilement votre compte et vos accès au hackerspace. En cas de souci :
+			<a href="mailto:noc@lghs.be">noc@lghs.be</a>
+		</p>
 	</section>
 {/if}
 

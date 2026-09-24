@@ -26,8 +26,8 @@
 	   lghs.be that's masked by their header's generous 48px padding, but Passport's header sits
 	   much closer to the top (the cotisation badge especially), so without this the strip visually
 	   glues itself to whatever's underneath. This used to live on `body` as padding-top, but the
-	   app shell (+layout.svelte) is now a fixed `h-screen` element with its own internal scroll
-	   regions — any extra height on `body` beyond exactly 100vh creates a separate, tiny page-level
+	   app shell (+layout.svelte) is now a fixed `h-dvh` element with its own internal scroll
+	   regions — any extra height on `body` beyond exactly 100dvh creates a separate, tiny page-level
 	   scroll range that fights the strip's position and the app shell's own scrolling. The app
 	   shell reserves this same space itself instead (border-box padding doesn't add to its height).
 	   */
@@ -37,7 +37,7 @@
 	}
 
 	body {
-		height: 100vh;
+		height: 100dvh;
 		overflow: hidden;
 	}
 

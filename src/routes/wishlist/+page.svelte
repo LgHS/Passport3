@@ -155,7 +155,7 @@
 		setTimeout(() => {
 			justVotedKeys.delete(key);
 			justVotedKeys = new Set(justVotedKeys);
-		}, 300);
+		}, 500);
 	}
 
 	$effect(() => {

@@ -86,7 +86,24 @@
 	function closeOverlay() {
 		overlayOpen = false;
 	}
+
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape' && overlayOpen) {
+			closeOverlay();
+		}
+	}
+
+	// Moves focus onto the drawer's own close button as soon as it opens, so keyboard users land
+	// somewhere inside it instead of on whatever was focused on the page underneath.
+	let closeButtonEl = $state<HTMLButtonElement | null>(null);
+	$effect(() => {
+		if (overlayOpen) {
+			closeButtonEl?.focus();
+		}
+	});
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <!-- The identity block + nav list + logout are identical between the permanent desktop sidebar
      and the temporary overlay drawer (mobile, or desktop while collapsed) — shared here as a
@@ -299,7 +316,8 @@
      backdrop, rather than pushing it, since there's no room to permanently reserve on mobile.
      Closes on backdrop click, on any nav link/logout click (this layout persists across
      client-side navigation, so those need their own `onclick` rather than relying on the drawer
-     unmounting), or the close button in the drawer's own header. -->
+     unmounting), the close button in the drawer's own header, or Escape — which also receives
+     focus as soon as the drawer opens, so keyboard users land inside it. -->
 {#if overlayOpen}
 	<div
 		class="fixed inset-0 z-30 bg-black/50"
@@ -316,6 +334,7 @@
 				<img src="/logo.svg" alt="Liège Hackerspace" class="h-10 w-auto" />
 			</a>
 			<button
+				bind:this={closeButtonEl}
 				type="button"
 				onclick={closeOverlay}
 				aria-label="Fermer le menu"

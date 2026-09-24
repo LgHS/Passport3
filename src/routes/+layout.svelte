@@ -29,7 +29,7 @@
 </svelte:head>
 
 {#if data.user}
-	<div class="flex h-screen flex-col overflow-hidden pt-[5px] font-sans">
+	<div class="flex h-dvh flex-col overflow-hidden pt-[5px] font-sans">
 		<div class="flex flex-1 flex-col overflow-hidden md:flex-row">
 			<Sidebar
 				bind:collapsed={sidebarCollapsed}
@@ -52,7 +52,7 @@
 	     requires a user or is a server-only redirect with no page of its own, e.g. /login), so
 	     there's no sidebar/header chrome to show — just the centered welcome content and the
 	     footer, no menu of any kind. -->
-	<div class="flex h-screen flex-col overflow-y-auto pt-[5px] font-sans">
+	<div class="flex h-dvh flex-col overflow-y-auto pt-[5px] font-sans">
 		<main class="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-4 pt-10 pb-10 text-center">
 			{@render children()}
 		</main>
