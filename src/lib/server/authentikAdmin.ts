@@ -767,7 +767,29 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 			})
 	);
 
-	return members.filter((m): m is DirectoryMember => m !== null);
+	return members
+		.filter((m): m is DirectoryMember => m !== null)
+		.sort(
+			(a, b) =>
+				directoryGroupRank(a.tag) - directoryGroupRank(b.tag) ||
+				a.username.localeCompare(b.username, 'fr', { sensitivity: 'base' })
+		);
+}
+
+// Trombinoscope display order: these tags first, in this order, then members with any other tag,
+// then members without one — alphabetical by username inside each group. Matched on the whole tag,
+// ignoring case and accents, since tags are free text typed by admins.
+const DIRECTORY_TAG_ORDER = ['bureau', 'effectif', 'support'];
+
+function directoryGroupRank(tag: string | null): number {
+	if (!tag) return DIRECTORY_TAG_ORDER.length + 1;
+	const normalized = tag
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '')
+		.trim()
+		.toLowerCase();
+	const index = DIRECTORY_TAG_ORDER.indexOf(normalized);
+	return index === -1 ? DIRECTORY_TAG_ORDER.length : index;
 }
 
 interface FlowRecord {
