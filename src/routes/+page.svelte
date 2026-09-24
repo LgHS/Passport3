@@ -125,7 +125,7 @@
 
 		<section class="w-full md:w-1/2">
 			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma check-list</h2>
-			<div class="divide-y divide-black border border-black">
+			<div class="border border-black">
 				{#each checklistItems as item, i (i)}
 					{@render checklistItem(item.href, item.done, item.doneLabel, item.todoLabel)}
 				{/each}
