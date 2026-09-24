@@ -65,6 +65,15 @@
 					<p class="mt-1 opacity-70">{user.username}</p>
 					<p class="mt-1 opacity-70">{user.email}</p>
 					<p class="mt-1 text-xs font-bold uppercase">{user.is_active ? 'Actif' : 'Inactif'}</p>
+					<p class="mt-1 flex items-center gap-1.5 text-xs font-bold uppercase">
+						<span
+							class="inline-block h-2 w-2 shrink-0 rounded-full {user.trombinoscopeVisible
+								? 'bg-green-600'
+								: 'bg-gray-400'}"
+							aria-hidden="true"
+						></span>
+						Trombinoscope {user.trombinoscopeVisible ? 'visible' : 'masqué'}
+					</p>
 				</a>
 			{/each}
 		</div>
@@ -73,10 +82,11 @@
 			<table class="w-full border-collapse text-sm">
 				<thead>
 					<tr class="bg-black text-white uppercase">
-						<th class="border border-black px-3 py-2 text-left">Nom</th>
-						<th class="border border-black px-3 py-2 text-left">Identifiant</th>
-						<th class="border border-black px-3 py-2 text-left">Email</th>
-						<th class="border border-black px-3 py-2 text-left">Statut</th>
+						<th class="border border-black px-3 py-2 text-center">Nom</th>
+						<th class="border border-black px-3 py-2 text-center">Identifiant</th>
+						<th class="border border-black px-3 py-2 text-center">Email</th>
+						<th class="border border-black px-3 py-2 text-center">Statut</th>
+						<th class="border border-black px-3 py-2 text-center">Trombi</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -85,7 +95,7 @@
 							<td class="border border-black p-0">
 								<a
 									href="/admin/users/{user.pk}"
-									class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
+									class="no-underline-fx block px-3 py-2 text-center transition-colors group-hover:bg-black group-hover:text-white"
 								>
 									{user.name}
 								</a>
@@ -93,7 +103,7 @@
 							<td class="border border-black p-0">
 								<a
 									href="/admin/users/{user.pk}"
-									class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
+									class="no-underline-fx block px-3 py-2 text-center transition-colors group-hover:bg-black group-hover:text-white"
 								>
 									{user.username}
 								</a>
@@ -101,7 +111,7 @@
 							<td class="border border-black p-0">
 								<a
 									href="/admin/users/{user.pk}"
-									class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
+									class="no-underline-fx block px-3 py-2 text-center transition-colors group-hover:bg-black group-hover:text-white"
 								>
 									{user.email}
 								</a>
@@ -109,9 +119,23 @@
 							<td class="border border-black p-0">
 								<a
 									href="/admin/users/{user.pk}"
-									class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
+									class="no-underline-fx block px-3 py-2 text-center transition-colors group-hover:bg-black group-hover:text-white"
 								>
 									{user.is_active ? 'Actif' : 'Inactif'}
+								</a>
+							</td>
+							<td class="relative border border-black p-0">
+								<a
+									href="/admin/users/{user.pk}"
+									aria-label="Trombinoscope {user.trombinoscopeVisible ? 'visible' : 'masqué'}"
+									class="no-underline-fx absolute inset-0 flex items-center justify-center transition-colors group-hover:bg-black group-hover:text-white"
+								>
+									<span
+										class="inline-block h-2 w-2 shrink-0 rounded-full {user.trombinoscopeVisible
+											? 'bg-green-600'
+											: 'bg-gray-400'}"
+										aria-hidden="true"
+									></span>
 								</a>
 							</td>
 						</tr>

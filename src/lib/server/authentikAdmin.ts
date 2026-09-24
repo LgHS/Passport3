@@ -610,6 +610,11 @@ export interface AdminUserSummary {
 	name: string;
 	email: string;
 	is_active: boolean;
+	// Whether this member currently opted into being shown on the trombinoscope at all — read
+	// straight off the same bulk `core/users/` response listUsers() already fetches, no extra
+	// per-member API call needed (see pickTrombinoscopeOptin()'s own defaulting for how a member
+	// who never touched this setting resolves to `false`, same as everywhere else it's read).
+	trombinoscopeVisible: boolean;
 }
 
 // Not real members: Authentik's own outpost/internal service accounts, plus the break-glass
@@ -625,12 +630,13 @@ export async function listUsers(): Promise<AdminUserSummary[]> {
 	};
 	return data.results
 		.filter((u) => !EXCLUDED_USERNAMES.has(u.username) && !EXCLUDED_TYPES.has(u.type))
-		.map(({ pk, username, name, email, is_active }) => ({
+		.map(({ pk, username, name, email, is_active, attributes }) => ({
 			pk,
 			username,
 			name,
 			email,
-			is_active
+			is_active,
+			trombinoscopeVisible: pickTrombinoscopeOptin(attributes[TROMBINOSCOPE_ATTRIBUTE]).visible
 		}));
 }
 
