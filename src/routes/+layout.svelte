@@ -15,6 +15,10 @@
 	// footprint once the sidebar collapses (it goes to zero width then, so the content column
 	// would otherwise render underneath the still-visible fixed logo).
 	let sidebarCollapsed = $state(false);
+
+	// Shared with Header's mobile menu button so both it and Sidebar's own collapse toggle open
+	// the same overlay drawer, instead of Header keeping a separate dropdown.
+	let menuOverlayOpen = $state(false);
 </script>
 
 <svelte:head>
@@ -28,6 +32,7 @@
 	<div class="flex flex-1 flex-col overflow-hidden md:flex-row">
 		<Sidebar
 			bind:collapsed={sidebarCollapsed}
+			bind:overlayOpen={menuOverlayOpen}
 			user={data.user}
 			avatarUrl={data.avatarUrl}
 			cotisationStatus={data.cotisationStatus}
@@ -35,7 +40,7 @@
 		<div
 			class="flex min-w-0 flex-1 flex-col overflow-y-auto {sidebarCollapsed ? 'md:pt-28' : ''}"
 		>
-			<Header user={data.user} avatarUrl={data.avatarUrl} cotisationStatus={data.cotisationStatus} />
+			<Header user={data.user} onOpenMenu={() => (menuOverlayOpen = true)} />
 			<main class="mx-auto w-full max-w-5xl flex-1 px-4 pt-10 pb-10">
 				{@render children()}
 			</main>

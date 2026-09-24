@@ -62,6 +62,20 @@
 		};
 	});
 
+	// Same wheel/trackpad redirect as /profile's tab strip — a plain mouse's vertical wheel delta
+	// scrolls this strip horizontally instead of the page, and a trackpad's own horizontal swipe
+	// (arrives as deltaX) is left untouched since overflow-x-auto already handles it natively.
+	function handleFilterScrollWheel(event: WheelEvent) {
+		const el = filterScrollEl;
+		if (!el) return;
+		if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+		if ((event.deltaY < 0 && !canScrollFiltersLeft) || (event.deltaY > 0 && !canScrollFiltersRight)) {
+			return;
+		}
+		event.preventDefault();
+		el.scrollLeft += event.deltaY;
+	}
+
 	const dateFormat = new Intl.DateTimeFormat('fr-BE', { dateStyle: 'medium' });
 	function formatDate(iso: string): string {
 		return dateFormat.format(new Date(iso));
@@ -273,6 +287,7 @@
 	<div class="relative min-w-0 flex-1">
 		<div
 			bind:this={filterScrollEl}
+			onwheel={handleFilterScrollWheel}
 			class="no-scrollbar flex flex-nowrap gap-2 overflow-x-auto text-sm"
 		>
 			<button

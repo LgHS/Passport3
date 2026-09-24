@@ -1,173 +1,47 @@
 <script lang="ts">
-	import { displayName, isAdmin, type AppUser, type CotisationStatus } from '$lib/types';
-	import CotisationTopbar from '$lib/components/CotisationTopbar.svelte';
+	import type { AppUser } from '$lib/types';
 
 	let {
 		user,
-		avatarUrl,
-		cotisationStatus
-	}: { user: AppUser | null; avatarUrl: string | null; cotisationStatus: CotisationStatus | null } =
-		$props();
-
-	let menuOpen = $state(false);
-
-	function initials(u: AppUser): string {
-		return displayName(u)
-			.trim()
-			.split(/\s+/)
-			.map((part) => part[0])
-			.slice(0, 2)
-			.join('')
-			.toUpperCase();
-	}
-
-	function handleWindowClick(event: MouseEvent) {
-		if (!(event.target as HTMLElement).closest('[data-user-menu]')) {
-			menuOpen = false;
-		}
-	}
+		onOpenMenu
+	}: {
+		user: AppUser | null;
+		onOpenMenu: () => void;
+	} = $props();
 </script>
 
-<svelte:window onclick={handleWindowClick} />
-
+<!-- Mobile only (below md) — desktop nav lives in Sidebar.svelte instead. Accueil/Trombinoscope/
+     Wishlist and the cotisation badge used to also show here, but they're already in the menu
+     overlay (name, avatar and cotisation status are right at its top), so keeping them here too
+     was redundant. Menu button on the left, matching the drawer it opens sliding in from the
+     left. -->
 <header class="border-b-4 border-black md:hidden">
-	<div class="relative mx-auto max-w-5xl px-4 py-3">
-		<!-- Mobile only (below md) — desktop nav lives in Sidebar.svelte instead. Tightened two-row
-		     layout: smaller logo, cotisation badge in normal flow instead of absolute (would float
-		     disconnected once this wraps), "Mon compte" instead of the full name so Accueil +
-		     Trombinoscope + the account button fit one line without wrapping. -->
-		<div class="flex items-center justify-between gap-4">
-			<a href="/" title="Passport" class="no-underline-fx block shrink-0">
-				<img src="/logo.svg" alt="Liège Hackerspace" class="h-10 w-auto" />
+	<div class="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3">
+		{#if user}
+			<button
+				type="button"
+				onclick={onOpenMenu}
+				aria-label="Ouvrir le menu"
+				class="flex h-10 w-10 shrink-0 items-center justify-center transition-colors hover:bg-black hover:text-white"
+			>
+				<svg viewBox="0 0 20 20" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5">
+					<path d="M3 5 H17 M3 10 H17 M3 15 H17" stroke-linecap="round" />
+				</svg>
+			</button>
+		{/if}
+
+		<a href="/" title="Passport" class="no-underline-fx block shrink-0">
+			<img src="/logo.svg" alt="Liège Hackerspace" class="h-12 w-auto" />
+		</a>
+
+		{#if !user}
+			<a
+				href="/login"
+				data-sveltekit-preload-data="off"
+				class="no-underline-fx btn-primary ml-auto inline-block px-3 py-2"
+			>
+				Connexion
 			</a>
-			{#if cotisationStatus}
-				<CotisationTopbar status={cotisationStatus} />
-			{/if}
-		</div>
-
-		<nav class="mt-3 flex flex-nowrap items-center gap-1 text-sm">
-				<a
-					href="/"
-					class="no-underline-fx inline-block px-2 py-2 font-bold uppercase transition-colors hover:bg-black hover:text-white"
-				>
-					Accueil
-				</a>
-
-				{#if user}
-					<a
-						href="/trombinoscope"
-						class="no-underline-fx inline-block px-2 py-2 font-bold uppercase transition-colors hover:bg-black hover:text-white"
-					>
-						Trombinoscope
-					</a>
-					<a
-						href="/wishlist"
-						class="no-underline-fx inline-block px-2 py-2 font-bold uppercase transition-colors hover:bg-black hover:text-white"
-					>
-						Wishlist
-					</a>
-
-					<div class="relative ml-auto" data-user-menu>
-						<button
-							type="button"
-							onclick={() => (menuOpen = !menuOpen)}
-							class="flex items-center gap-2 px-2 py-2 font-bold uppercase transition-colors hover:bg-black hover:text-white"
-							aria-expanded={menuOpen}
-							aria-haspopup="menu"
-						>
-							{#if avatarUrl}
-								<img src={avatarUrl} alt="" class="h-8 w-8 object-cover" />
-							{:else}
-								<span class="flex h-8 w-8 items-center justify-center bg-black text-sm text-white">
-									{initials(user)}
-								</span>
-							{/if}
-							Mon compte
-							<svg
-								viewBox="0 0 12 8"
-								class="h-2.5 w-2.5 fill-current transition-transform {menuOpen ? 'rotate-180' : ''}"
-								aria-hidden="true"
-							>
-								<path d="M0 0 L12 0 L6 8 Z" />
-							</svg>
-						</button>
-
-						{#if menuOpen}
-							<div
-								role="menu"
-								class="absolute right-0 z-10 mt-1 w-48 border-4 border-black bg-white text-black"
-							>
-								<a
-									href="/profile"
-									role="menuitem"
-									onclick={() => (menuOpen = false)}
-									class="no-underline-fx menu-item"
-								>
-									Mon profil
-								</a>
-								<a
-									href="/permissions"
-									role="menuitem"
-									onclick={() => (menuOpen = false)}
-									class="no-underline-fx menu-item"
-								>
-									Permissions
-								</a>
-								<a
-									href="/cotisation"
-									role="menuitem"
-									onclick={() => (menuOpen = false)}
-									class="no-underline-fx menu-item"
-								>
-									Cotisation
-								</a>
-								<a
-									href="/badge"
-									role="menuitem"
-									onclick={() => (menuOpen = false)}
-									class="no-underline-fx menu-item"
-								>
-									Badge
-								</a>
-								<a
-									href="/github"
-									role="menuitem"
-									onclick={() => (menuOpen = false)}
-									class="no-underline-fx menu-item"
-								>
-									GitHub
-								</a>
-								{#if isAdmin(user)}
-									<a
-										href="/admin"
-										role="menuitem"
-										onclick={() => (menuOpen = false)}
-										class="no-underline-fx menu-item"
-									>
-										Admin
-									</a>
-								{/if}
-								<form method="POST" action="/logout">
-									<button
-										type="submit"
-										role="menuitem"
-										class="menu-item w-full cursor-pointer text-left"
-									>
-										Se déconnecter
-									</button>
-								</form>
-							</div>
-						{/if}
-					</div>
-				{:else}
-					<a
-						href="/login"
-						data-sveltekit-preload-data="off"
-						class="no-underline-fx btn-primary ml-auto inline-block px-3 py-2"
-					>
-						Connexion
-					</a>
-				{/if}
-		</nav>
+		{/if}
 	</div>
 </header>
