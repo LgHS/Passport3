@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 FROM node:25-alpine AS base
 WORKDIR /app
-RUN corepack enable
+# Node 25+ no longer bundles corepack, so it's installed from npm first. `--force` because the image
+# still ships a standalone /usr/local/bin/yarn that npm would otherwise refuse to overwrite (EEXIST).
+RUN npm install -g --force corepack && corepack enable
 # better-sqlite3 compiles a native addon at install time (no prebuilt binary for this musl/alpine
 # target) — needed in both the `deps` and `prod-deps` stages below, which both run `pnpm install`.
 RUN apk add --no-cache python3 make g++
