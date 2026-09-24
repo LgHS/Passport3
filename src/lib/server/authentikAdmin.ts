@@ -1,3 +1,4 @@
+import { env } from '$env/dynamic/private';
 import { requireEnv } from '$lib/server/env';
 import { getCachedProfile, setCachedProfile } from '$lib/server/profileCache';
 import { getMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
@@ -809,6 +810,41 @@ function invitationNameFromEmail(email: string): string {
 	return `${email.replace(/[^a-zA-Z0-9_-]/g, '-')}-${Date.now()}`;
 }
 
+// Let Authentik send the actual invite email — it already owns SMTP config, no need to build our
+// own email sending here. send_email never goes through the enrollment flow's own Email stage (that
+// one is the post-signup address verification, a different email), so the only way to get the
+// custom LGHS invitation template is to name it on this request.
+//
+// An earlier version of this code saw a 405 when passing `template` on this instance, but its
+// 2026.5.6 OpenAPI schema does declare the field — so it's tried first, with a retry on
+// Authentik's default template if the override is rejected, rather than failing the whole
+// invitation over a cosmetic choice. The invitation itself already exists at this point.
+async function sendInvitationEmail(invitationPk: string, email: string): Promise<void> {
+	const path = `stages/invitation/invitations/${invitationPk}/send_email/`;
+	const template = env.AUTHENTIK_INVITATION_EMAIL_TEMPLATE?.trim();
+
+	if (template) {
+		try {
+			await authentikApiFetch(path, {
+				method: 'POST',
+				body: JSON.stringify({ email_addresses: [email], template })
+			});
+			return;
+		} catch (err) {
+			if (err instanceof AuthentikUnavailableError) throw err;
+			console.error(
+				`[createInvitation] send_email rejected template "${template}", falling back to Authentik's default:`,
+				err
+			);
+		}
+	}
+
+	await authentikApiFetch(path, {
+		method: 'POST',
+		body: JSON.stringify({ email_addresses: [email] })
+	});
+}
+
 export async function createInvitation(opts: {
 	email: string;
 	singleUse: boolean;
@@ -835,20 +871,7 @@ export async function createInvitation(opts: {
 	});
 	const invitation = (await invitationRes.json()) as InvitationRecord;
 
-	// Let Authentik send the actual invite email — it already owns SMTP/template config, no
-	// need to build our own email sending here.
-	//
-	// Deliberately NOT passing `template` here: on this Authentik instance (2026.5.6) including
-	// it in the request body makes send_email fail with a 405, confirmed by direct testing —
-	// the `template` override on this endpoint isn't supported by this version's API yet (it's
-	// present in newer/dev Authentik's OpenAPI schema, which is what this was first built
-	// against). The custom LGHS template should instead be set as the *default* template on the
-	// Email stage bound to the invitation flow, in Authentik's own admin UI — that applies
-	// whenever a request (like this one) doesn't override it.
-	await authentikApiFetch(`stages/invitation/invitations/${invitation.pk}/send_email/`, {
-		method: 'POST',
-		body: JSON.stringify({ email_addresses: [opts.email] })
-	});
+	await sendInvitationEmail(invitation.pk, opts.email);
 
 	return {
 		inviteUrl: `${authentikOrigin()}/if/flow/${slug}/?itoken=${invitation.pk}`
