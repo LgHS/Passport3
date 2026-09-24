@@ -56,7 +56,7 @@
 {#snippet checklistItem(href: string, done: boolean | null, doneLabel: string, todoLabel: string)}
 	<a
 		{href}
-		class="no-underline-fx flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-gray-50"
+		class="no-underline-fx flex items-center gap-3 px-4 py-2 text-sm transition-colors hover:bg-gray-50"
 	>
 		<span
 			class="flex h-5 w-5 shrink-0 items-center justify-center border text-xs font-bold {done
