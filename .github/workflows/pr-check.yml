@@ -83,10 +83,15 @@ jobs:
 
       # Only fails on HIGH/CRITICAL vulnerabilities that already have a fix available — an
       # unfixable CVE in the base image would otherwise block every PR with nothing to act on.
+      # The global node_modules (the npm bundled with the Node base image, plus corepack installed
+      # from it) is skipped: the app never runs them, and their CVEs can only be fixed upstream by
+      # a new Node image — Dependabot's docker updates bring those in. The app's own dependencies
+      # under /app/node_modules are still scanned.
       - name: Scan image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: passport3:ci
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          skip-dirs: /usr/local/lib/node_modules
           exit-code: '1'
