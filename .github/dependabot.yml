@@ -1,0 +1,25 @@
+version: 2
+updates:
+  # Minor/patch bumps grouped into a single weekly PR to keep the noise down — majors still come
+  # one PR each, since those are the ones that actually need reading.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+
+  # Workflows pin actions by commit SHA — Dependabot keeps the SHA and its `# vX.Y.Z` comment in sync.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
