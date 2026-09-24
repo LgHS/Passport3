@@ -13,9 +13,14 @@
 	let {
 		user,
 		avatarUrl,
-		cotisationStatus
-	}: { user: AppUser | null; avatarUrl: string | null; cotisationStatus: CotisationStatus | null } =
-		$props();
+		cotisationStatus,
+		collapsed = $bindable(false)
+	}: {
+		user: AppUser | null;
+		avatarUrl: string | null;
+		cotisationStatus: CotisationStatus | null;
+		collapsed?: boolean;
+	} = $props();
 
 	function initials(u: AppUser): string {
 		return displayName(u)
@@ -41,11 +46,13 @@
 
 	const COLLAPSED_STORAGE_KEY = 'sidebar-collapsed';
 
-	// Defaults to expanded on every render, including the very first client-side one — reading
-	// localStorage during initialization would break server-side rendering (no `localStorage`
-	// there). $effect only runs client-side after mount, so this corrects it right after, before
-	// the user has a chance to see it flash open on a device where they'd left it collapsed.
-	let collapsed = $state(false);
+	// `collapsed` is bindable so +layout.svelte can reserve top padding for the fixed logo on the
+	// content column once <aside> is hidden (it takes zero width then, so the content column
+	// would otherwise render underneath the logo). Defaults to expanded on every render, including
+	// the very first client-side one — reading localStorage during initialization would break
+	// server-side rendering (no `localStorage` there). $effect only runs client-side after mount,
+	// so this corrects it right after, before the user has a chance to see it flash open on a
+	// device where they'd left it collapsed.
 	$effect(() => {
 		try {
 			collapsed = localStorage.getItem(COLLAPSED_STORAGE_KEY) === 'true';
@@ -95,12 +102,12 @@
 </a>
 
 <aside
-	class="h-full w-56 shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-white pt-28 pb-6 {collapsed
+	class="h-full w-56 shrink-0 flex-col border-r border-gray-200 bg-white pt-28 {collapsed
 		? 'hidden'
 		: 'hidden md:flex'}"
 >
 	{#if user}
-		<div class="mb-6 flex items-center gap-2 px-4">
+		<div class="mb-6 flex shrink-0 items-center gap-2 px-4">
 			{#if avatarUrl}
 				<img src={avatarSize(avatarUrl, 64)} alt="" class="h-8 w-8 shrink-0 rounded-full object-cover" />
 			{:else}
@@ -128,7 +135,7 @@
 			</div>
 		</div>
 
-		<nav class="flex flex-col gap-0.5 px-2">
+		<nav class="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2">
 			<a href="/" class="{itemClass} {itemStateClass('/')}">
 				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
 					<path d="M3 10 L10 3.5 L17 10" stroke-linecap="round" stroke-linejoin="round" />
@@ -217,7 +224,7 @@
 			{/if}
 		</nav>
 
-		<form method="POST" action="/logout" class="mt-6 px-2">
+		<form method="POST" action="/logout" class="mt-6 mb-6 shrink-0 px-2">
 			<button
 				type="submit"
 				class="{itemClass} w-full cursor-pointer text-gray-600 hover:bg-gray-100 hover:text-black"
