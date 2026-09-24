@@ -31,6 +31,10 @@ ENV NODE_ENV=production
 ENV PORT=8030
 ENV HOST=0.0.0.0
 
+# The Node base image is only rebuilt every so often, so its Alpine packages (e.g. OpenSSL) can lag
+# behind fixes already published in the Alpine repos — pull those in at build time.
+RUN apk upgrade --no-cache
+
 RUN addgroup -S passport && adduser -S passport -G passport
 
 COPY --from=prod-deps /app/node_modules ./node_modules
