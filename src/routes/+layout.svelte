@@ -28,25 +28,38 @@
 	<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
 </svelte:head>
 
-<div class="flex h-screen flex-col overflow-hidden pt-[5px] font-sans">
-	<div class="flex flex-1 flex-col overflow-hidden md:flex-row">
-		<Sidebar
-			bind:collapsed={sidebarCollapsed}
-			bind:overlayOpen={menuOverlayOpen}
-			user={data.user}
-			avatarUrl={data.avatarUrl}
-			cotisationStatus={data.cotisationStatus}
-		/>
-		<div
-			class="flex min-w-0 flex-1 flex-col overflow-y-auto {sidebarCollapsed ? 'md:pt-28' : ''}"
-		>
-			<Header user={data.user} onOpenMenu={() => (menuOverlayOpen = true)} />
-			<main class="mx-auto w-full max-w-5xl flex-1 px-4 pt-10 pb-10">
-				{@render children()}
-			</main>
-			<Footer status={data.systemStatus} mattermostCacheStatus={data.mattermostCacheStatus} />
+{#if data.user}
+	<div class="flex h-screen flex-col overflow-hidden pt-[5px] font-sans">
+		<div class="flex flex-1 flex-col overflow-hidden md:flex-row">
+			<Sidebar
+				bind:collapsed={sidebarCollapsed}
+				bind:overlayOpen={menuOverlayOpen}
+				user={data.user}
+				avatarUrl={data.avatarUrl}
+				cotisationStatus={data.cotisationStatus}
+			/>
+			<div
+				class="flex min-w-0 flex-1 flex-col overflow-y-auto {sidebarCollapsed ? 'md:pt-28' : ''}"
+			>
+				<Header user={data.user} onOpenMenu={() => (menuOverlayOpen = true)} />
+				<main class="mx-auto w-full max-w-5xl flex-1 px-4 pt-10 pb-10">
+					{@render children()}
+				</main>
+				<Footer status={data.systemStatus} mattermostCacheStatus={data.mattermostCacheStatus} />
+			</div>
 		</div>
 	</div>
-</div>
+{:else}
+	<!-- Logged out: only the homepage ever renders through this branch (every other route either
+	     requires a user or is a server-only redirect with no page of its own, e.g. /login), so
+	     there's no sidebar/header chrome to show — just the centered welcome content and the
+	     footer, no menu of any kind. -->
+	<div class="flex h-screen flex-col overflow-hidden pt-[5px] font-sans">
+		<main class="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-4 pt-10 pb-10 text-center">
+			{@render children()}
+		</main>
+		<Footer status={data.systemStatus} mattermostCacheStatus={data.mattermostCacheStatus} />
+	</div>
+{/if}
 
 <Toast />
