@@ -126,6 +126,47 @@
 				</svg>
 				Accueil
 			</a>
+			<a href="/profile" onclick={closeOverlay} class="{itemClass} {itemStateClass('/profile')}">
+				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+					<circle cx="10" cy="6.5" r="3" />
+					<path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round" />
+				</svg>
+				Mon profil
+			</a>
+			<a href="/cotisation" onclick={closeOverlay} class="{itemClass} {itemStateClass('/cotisation')}">
+				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+					<rect x="2.5" y="5" width="15" height="10" rx="1.2" />
+					<path d="M2.5 8.5 H17.5" />
+				</svg>
+				Cotisation
+			</a>
+			<a href="/permissions" onclick={closeOverlay} class="{itemClass} {itemStateClass('/permissions')}">
+				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+					<path
+						d="M10 2.5 L16.5 5 V10 C16.5 13.8 13.8 16.7 10 17.5 C6.2 16.7 3.5 13.8 3.5 10 V5 Z"
+						stroke-linejoin="round"
+					/>
+				</svg>
+				Permissions
+			</a>
+			<a href="/badge" onclick={closeOverlay} class="{itemClass} {itemStateClass('/badge')}">
+				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+					<rect x="5" y="2" width="10" height="16" rx="2" />
+					<circle cx="10" cy="7.5" r="2" />
+					<path d="M7.5 13 H12.5 M7.5 15 H12.5" stroke-linecap="round" />
+				</svg>
+				Badge RFID
+			</a>
+			<a href="/github" onclick={closeOverlay} class="{itemClass} {itemStateClass('/github')}">
+				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+					<circle cx="6" cy="14.5" r="2" />
+					<circle cx="14" cy="5.5" r="2" />
+					<circle cx="6" cy="5.5" r="2" />
+					<path d="M6 7.5 V12.5" />
+					<path d="M8 14.5 H10 C12.2 14.5 14 12.7 14 10.5 V7.5" stroke-linecap="round" />
+				</svg>
+				GitHub
+			</a>
 			<a href="/trombinoscope" onclick={closeOverlay} class="{itemClass} {itemStateClass('/trombinoscope')}">
 				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
 					<circle cx="7" cy="7" r="2.5" />
@@ -150,47 +191,6 @@
 					/>
 				</svg>
 				Wishlist
-			</a>
-			<a href="/profile" onclick={closeOverlay} class="{itemClass} {itemStateClass('/profile')}">
-				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-					<circle cx="10" cy="6.5" r="3" />
-					<path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round" />
-				</svg>
-				Mon profil
-			</a>
-			<a href="/permissions" onclick={closeOverlay} class="{itemClass} {itemStateClass('/permissions')}">
-				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path
-						d="M10 2.5 L16.5 5 V10 C16.5 13.8 13.8 16.7 10 17.5 C6.2 16.7 3.5 13.8 3.5 10 V5 Z"
-						stroke-linejoin="round"
-					/>
-				</svg>
-				Permissions
-			</a>
-			<a href="/cotisation" onclick={closeOverlay} class="{itemClass} {itemStateClass('/cotisation')}">
-				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-					<rect x="2.5" y="5" width="15" height="10" rx="1.2" />
-					<path d="M2.5 8.5 H17.5" />
-				</svg>
-				Cotisation
-			</a>
-			<a href="/badge" onclick={closeOverlay} class="{itemClass} {itemStateClass('/badge')}">
-				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-					<rect x="5" y="2" width="10" height="16" rx="2" />
-					<circle cx="10" cy="7.5" r="2" />
-					<path d="M7.5 13 H12.5 M7.5 15 H12.5" stroke-linecap="round" />
-				</svg>
-				Badge
-			</a>
-			<a href="/github" onclick={closeOverlay} class="{itemClass} {itemStateClass('/github')}">
-				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-					<circle cx="6" cy="14.5" r="2" />
-					<circle cx="14" cy="5.5" r="2" />
-					<circle cx="6" cy="5.5" r="2" />
-					<path d="M6 7.5 V12.5" />
-					<path d="M8 14.5 H10 C12.2 14.5 14 12.7 14 10.5 V7.5" stroke-linecap="round" />
-				</svg>
-				GitHub
 			</a>
 
 			{#if isAdmin(user)}
@@ -248,21 +248,32 @@
      the nav's own `overflow-y-auto` scrolls it internally if it's ever taller than the viewport,
      without affecting the content column's scroll.
 
-     The logo itself is `fixed` and rendered here just once, entirely outside `<aside>`, always at
-     the same spot regardless of `collapsed` — an earlier version duplicated it and it visibly
-     jumped by a pixel or two on toggle. One element that never moves is the only way to truly
-     guarantee that; `<aside>` below reserves matching space at its own top (`pt-28`) instead of
-     rendering its own copy. -->
-<a href="/" class="no-underline-fx fixed top-6 left-0 z-20 hidden w-56 items-center justify-center px-4 md:flex">
-	<img src="/logo.svg" alt="Liège Hackerspace" class="h-16 w-auto" />
-</a>
+     The logo lives inside `<aside>` itself (normal flow, not `fixed`) — an earlier version kept
+     it as a separate always-visible fixed element outside <aside> so it stayed reachable even
+     while collapsed, but that meant reserving matching space on the content column whenever the
+     sidebar collapsed (it otherwise rendered behind the fixed logo), and how much space was safe
+     to reserve depended on viewport width, since a wide screen's centered content already clears
+     the logo on its own. Simpler to just let the logo disappear along with the rest of the menu
+     when collapsed — the toggle button (bottom of this file) stays reachable to bring it back.
 
+     Collapsing animates the width down to 0 rather than toggling `display: none` — `display`
+     can't be transitioned, so an instant hide/show was the only option before. `overflow-hidden`
+     clips the (still w-56-wide) content during that shrink instead of letting it spill out or
+     reflow; `hidden md:flex` still fully removes it on mobile, unrelated to this animation. -->
 <aside
-	class="h-full w-56 shrink-0 flex-col border-r border-gray-200 bg-white pt-28 {collapsed
-		? 'hidden'
-		: 'hidden md:flex'}"
+	class="hidden h-full shrink-0 flex-col overflow-hidden border-r bg-white transition-[width] duration-200 md:flex {collapsed
+		? 'w-0 border-transparent'
+		: 'w-56 border-gray-200'}"
 >
-	{@render sidebarNav()}
+	<!-- Fixed at w-56 regardless of the parent <aside>'s own animated width — otherwise this
+	     content would reflow/wrap onto itself while the parent shrinks, instead of the parent
+	     simply clipping a constant-width column as intended. -->
+	<div class="flex h-full w-56 shrink-0 flex-col">
+		<a href="/" class="no-underline-fx mb-6 flex shrink-0 items-center justify-center px-4 pt-6">
+			<img src="/logo.svg" alt="Liège Hackerspace" class="h-16 w-auto" />
+		</a>
+		{@render sidebarNav()}
+	</div>
 </aside>
 
 <!-- Temporary overlay drawer — mobile only, opened by Header.svelte's menu button
@@ -318,7 +329,7 @@
 		onclick={toggleCollapsed}
 		aria-label={collapsed ? 'Afficher le menu' : 'Masquer le menu'}
 		title={collapsed ? 'Afficher le menu' : 'Masquer le menu'}
-		class="group fixed top-24 z-20 hidden h-8 w-8 items-center justify-center rounded-full border-2 border-black bg-white text-black shadow-sm transition-[left] hover:bg-black hover:text-white md:flex"
+		class="group fixed top-24 z-20 hidden h-8 w-8 items-center justify-center rounded-full border-2 border-black bg-white text-black shadow-sm transition-[left] duration-200 hover:bg-black hover:text-white md:flex"
 		style="left: {collapsed ? '0.5rem' : '13rem'}"
 	>
 		<svg

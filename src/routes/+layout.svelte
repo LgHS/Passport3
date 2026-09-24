@@ -11,9 +11,9 @@
 
 	let { children, data } = $props();
 
-	// Bound from Sidebar so the content column can reserve top padding matching the fixed logo's
-	// footprint once the sidebar collapses (it goes to zero width then, so the content column
-	// would otherwise render underneath the still-visible fixed logo).
+	// Bound from Sidebar purely so it can be read/set from here if ever needed — the content
+	// column no longer needs to react to it (the sidebar's logo moved inside <aside> itself, so
+	// there's nothing fixed left for a collapsed, full-width content column to render behind).
 	let sidebarCollapsed = $state(false);
 
 	// Shared with Header's mobile menu button so both it and Sidebar's own collapse toggle open
@@ -38,9 +38,7 @@
 				avatarUrl={data.avatarUrl}
 				cotisationStatus={data.cotisationStatus}
 			/>
-			<div
-				class="flex min-w-0 flex-1 flex-col overflow-y-auto {sidebarCollapsed ? 'md:pt-28' : ''}"
-			>
+			<div class="flex min-w-0 flex-1 flex-col overflow-y-auto">
 				<Header user={data.user} onOpenMenu={() => (menuOverlayOpen = true)} />
 				<main class="mx-auto w-full max-w-5xl flex-1 px-4 pt-10 pb-10">
 					{@render children()}
@@ -54,7 +52,7 @@
 	     requires a user or is a server-only redirect with no page of its own, e.g. /login), so
 	     there's no sidebar/header chrome to show — just the centered welcome content and the
 	     footer, no menu of any kind. -->
-	<div class="flex h-screen flex-col overflow-hidden pt-[5px] font-sans">
+	<div class="flex h-screen flex-col overflow-y-auto pt-[5px] font-sans">
 		<main class="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-4 pt-10 pb-10 text-center">
 			{@render children()}
 		</main>
