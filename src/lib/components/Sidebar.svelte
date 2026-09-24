@@ -43,6 +43,10 @@
 
 	const itemClass =
 		'no-underline-fx flex items-center gap-3 rounded px-4 py-2.5 text-sm font-bold uppercase transition-colors';
+	// Indented, smaller sibling of itemClass for the admin submenu (Paramètres/Historique) — one
+	// level under "Admin" itself, not a full nav item in its own right.
+	const subItemClass =
+		'no-underline-fx block rounded py-1.5 pl-10 pr-4 text-sm font-bold uppercase transition-colors';
 	function itemStateClass(href: string): string {
 		return isActive(href) ? 'bg-lghs-yellow text-black' : 'text-black hover:bg-gray-100';
 	}
@@ -204,6 +208,18 @@
 					</svg>
 					Admin
 				</a>
+				{#if isActive('/admin')}
+					<a
+						href="/admin/settings"
+						onclick={closeOverlay}
+						class="{subItemClass} {itemStateClass('/admin/settings')}"
+					>
+						Paramètres
+					</a>
+					<a href="/admin/audit" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/admin/audit')}">
+						Audit logs
+					</a>
+				{/if}
 			{/if}
 		</nav>
 

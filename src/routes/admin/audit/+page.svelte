@@ -59,8 +59,6 @@
 </svelte:head>
 
 <section>
-	<a href="/admin" class="mb-4 inline-block text-sm">← Retour à la liste</a>
-
 	<h1 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">
 		Historique d'audit
 	</h1>
