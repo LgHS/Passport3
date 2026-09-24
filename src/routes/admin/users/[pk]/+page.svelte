@@ -5,6 +5,7 @@
 	import type { ActionData, PageData } from './$types';
 	import ProfileForm from '$lib/components/ProfileForm.svelte';
 	import EmergencyContactsForm from '$lib/components/EmergencyContactsForm.svelte';
+	import { TAG_COLOR_PRESETS } from '$lib/tagColors';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -63,11 +64,7 @@
 
 	// Quick-pick shortcuts for the colors used most often — just fills the field, still editable
 	// or overridable afterwards like any other value.
-	const tagColorPresets: { label: string; hex: string }[] = [
-		{ label: 'Bureau', hex: 'ffd800' },
-		{ label: 'Effectif', hex: 'ffa200' },
-		{ label: 'Support', hex: '00d5ff' }
-	];
+	const tagColorPresets = TAG_COLOR_PRESETS;
 
 	$effect(() => {
 		if (form?.tagSuccess) {

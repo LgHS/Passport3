@@ -2,6 +2,7 @@ import { requireEnv } from '$lib/server/env';
 import { getCachedProfile, setCachedProfile } from '$lib/server/profileCache';
 import { getMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
 import type { EmergencyContact, ProfileAttributeField, UserProfile } from '$lib/types';
+import { TAG_COLOR_PRESETS } from '$lib/tagColors';
 
 export type { EmergencyContact, ProfileAttributeField, UserProfile };
 
@@ -771,25 +772,20 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 		.filter((m): m is DirectoryMember => m !== null)
 		.sort(
 			(a, b) =>
-				directoryGroupRank(a.tag) - directoryGroupRank(b.tag) ||
+				directoryGroupRank(a.tag, a.tagColor) - directoryGroupRank(b.tag, b.tagColor) ||
 				a.username.localeCompare(b.username, 'fr', { sensitivity: 'base' })
 		);
 }
 
-// Trombinoscope display order: these tags first, in this order, then members with any other tag,
-// then members without one — alphabetical by username inside each group. Matched on the whole tag,
-// ignoring case and accents, since tags are free text typed by admins.
-const DIRECTORY_TAG_ORDER = ['bureau', 'effectif', 'support'];
-
-function directoryGroupRank(tag: string | null): number {
-	if (!tag) return DIRECTORY_TAG_ORDER.length + 1;
-	const normalized = tag
-		.normalize('NFD')
-		.replace(/[\u0300-\u036f]/g, '')
-		.trim()
-		.toLowerCase();
-	const index = DIRECTORY_TAG_ORDER.indexOf(normalized);
-	return index === -1 ? DIRECTORY_TAG_ORDER.length : index;
+// Trombinoscope display order: tags using the admin color presets first (Bureau, Effectif,
+// Support — see $lib/tagColors), then any other tag whatever its color, then members without a
+// tag — alphabetical by username inside each group.
+function directoryGroupRank(tag: string | null, tagColor: string | null): number {
+	if (!tag) return TAG_COLOR_PRESETS.length + 1;
+	const index = tagColor
+		? TAG_COLOR_PRESETS.findIndex((preset) => preset.hex === tagColor.toLowerCase())
+		: -1;
+	return index === -1 ? TAG_COLOR_PRESETS.length : index;
 }
 
 interface FlowRecord {
