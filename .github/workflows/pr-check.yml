@@ -1,8 +1,8 @@
 name: PR checks
 
 # Runs on every pull request, whatever its target branch — separate from docker-release.yml
-# (triggered by version tags only), never touches main directly and never builds/pushes the
-# Docker image. Not filtered to `branches: main`: this project relies heavily on stacked PRs
+# (triggered by version tags only), never touches main directly and never pushes the Docker
+# image. Not filtered to `branches: main`: this project relies heavily on stacked PRs
 # (a feature branch targeting another feature branch, not main directly), and GitHub evaluates
 # this trigger filter using the workflow file on the repo's default branch regardless of which
 # branch a given PR targets — so a `branches: main` filter here would silently never run at all
@@ -10,13 +10,21 @@ name: PR checks
 on:
   pull_request:
 
+permissions:
+  contents: read
+
+# A new push to the same PR makes the previous run pointless — cancel it instead of queueing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
 
@@ -37,3 +45,48 @@ jobs:
       # empty environment.
       - name: Build
         run: pnpm build
+
+  # Builds the same image docker-release.yml would publish (without pushing it), starts it, and
+  # scans it — a broken Dockerfile or a crash at startup otherwise only surfaces when a release
+  # tag is cut.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          push: false
+          tags: passport3:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # No env at all: the app must still boot and serve its anonymous landing page (verified
+      # locally with an empty environment, same as the Build step above) — anything >= 500, or
+      # no answer within 30s, fails the job.
+      - name: Smoke test
+        run: |
+          docker run -d --name smoke -p 8030:8030 passport3:ci
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8030/ || true)
+            if [ "$code" != "000" ]; then break; fi
+            sleep 1
+          done
+          docker logs smoke
+          echo "GET / -> $code"
+          [ "$code" -ge 200 ] && [ "$code" -lt 500 ]
+
+      # Only fails on HIGH/CRITICAL vulnerabilities that already have a fix available — an
+      # unfixable CVE in the base image would otherwise block every PR with nothing to act on.
+      - name: Scan image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: passport3:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'

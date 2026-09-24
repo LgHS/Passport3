@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
-FROM node:22-alpine AS base
+FROM node:25-alpine AS base
 WORKDIR /app
-RUN corepack enable
+# Node 25+ no longer bundles corepack, so it's installed from npm first. `--force` because the image
+# still ships a standalone /usr/local/bin/yarn that npm would otherwise refuse to overwrite (EEXIST).
+RUN npm install -g --force corepack && corepack enable
 # better-sqlite3 compiles a native addon at install time (no prebuilt binary for this musl/alpine
 # target) — needed in both the `deps` and `prod-deps` stages below, which both run `pnpm install`.
 RUN apk add --no-cache python3 make g++
@@ -23,13 +25,14 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
 # ---- runtime ----
-FROM node:22-alpine AS runner
+FROM node:25-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8030
 ENV HOST=0.0.0.0
 
 RUN addgroup -S passport && adduser -S passport -G passport
+
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/build ./build
 COPY package.json ./package.json
@@ -42,4 +45,11 @@ RUN mkdir -p /app/data && chown -R passport:passport /app/data
 
 USER passport
 EXPOSE 8030
+
+# Plain Node, no curl, to avoid adding a system package just for this — checks the app's own
+# /healthz (liveness only, see that route's own comment for why it doesn't check Authentik/
+# Dolibarr too).
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+	CMD node -e "require('http').get('http://127.0.0.1:8030/healthz', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+
 CMD ["node", "build/index.js"]
