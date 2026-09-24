@@ -48,4 +48,11 @@ RUN mkdir -p /app/data && chown -R passport:passport /app/data
 
 USER passport
 EXPOSE 8030
+
+# Plain Node, no curl, to avoid adding a system package just for this — checks the app's own
+# /healthz (liveness only, see that route's own comment for why it doesn't check Authentik/
+# Dolibarr too).
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+	CMD node -e "require('http').get('http://127.0.0.1:8030/healthz', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+
 CMD ["node", "build/index.js"]
