@@ -69,7 +69,12 @@
 		</label>
 
 		<div class="mt-4">
-			<label class="mb-1 block text-sm font-bold uppercase" for="hour">Heure d'envoi</label>
+			<label class="mb-1 block text-sm font-bold uppercase" for="hour">
+				Heure d'envoi
+				<span class="text-xs font-normal text-gray-500 normal-case"
+					>(Heure de la République libre d'Outremeuse)</span
+				>
+			</label>
 			<select
 				id="hour"
 				name="hour"
@@ -80,7 +85,6 @@
 					<option value={h}>{h}h00</option>
 				{/each}
 			</select>
-			<p class="mt-1 text-xs text-gray-500">Heure de Bruxelles.</p>
 		</div>
 
 		<button
