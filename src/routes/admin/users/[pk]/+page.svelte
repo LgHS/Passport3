@@ -203,7 +203,7 @@
 			{/if}
 
 			<p class="mt-4 text-xs text-gray-600">
-				Avant d'activer un nouveau champ, assurez-vous du consentement du membre concerné — ces
+				Avant d'activer un nouveau champ, assurez-vous du consentement du membre concerné : ces
 				informations deviennent publiques dans le trombinoscope.
 			</p>
 
@@ -359,7 +359,7 @@
 	{#if emergencyContactsSectionOpen}
 		{#if data.emergencyContacts === null}
 			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-				Impossible de charger les contacts d'urgence pour le moment — réessayez plus tard.
+				Impossible de charger les contacts d'urgence pour le moment. Réessayez plus tard.
 			</p>
 		{:else}
 			<EmergencyContactsForm

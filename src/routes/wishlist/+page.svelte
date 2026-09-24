@@ -141,6 +141,23 @@
 		})
 	);
 
+	// `vote-pop` used to be driven straight off `item.myVote`, which is persisted data — every
+	// page load/refresh re-renders an already-voted button with that class already present, so
+	// the browser plays the pop animation as if it had just been clicked. This tracks which
+	// item+direction was *actually* clicked in this client session (keyed by direction too, not
+	// just the item — otherwise clicking one button would also animate its sibling, since both
+	// share the same item id), so only the clicked button ever animates, on the click itself.
+	let justVotedKeys = $state(new Set<string>());
+	function markJustVoted(itemId: number, value: 'up' | 'down') {
+		const key = `${itemId}-${value}`;
+		justVotedKeys.add(key);
+		justVotedKeys = new Set(justVotedKeys);
+		setTimeout(() => {
+			justVotedKeys.delete(key);
+			justVotedKeys = new Set(justVotedKeys);
+		}, 300);
+	}
+
 	$effect(() => {
 		if (form?.created) {
 			showToast('success', 'Proposition ajoutée.');
@@ -395,7 +412,7 @@
 						<span>{item.authorLabel} — {formatDate(item.createdAt)}</span>
 						{#if item.status === 'pending'}
 							<div class="flex gap-2">
-								<form method="POST" action="?/vote" use:enhance>
+								<form method="POST" action="?/vote" use:enhance={() => markJustVoted(item.id, 'up')}>
 									<input type="hidden" name="itemId" value={item.id} />
 									<input type="hidden" name="value" value="up" />
 									<button
@@ -403,13 +420,13 @@
 										aria-label="Voter pour"
 										class="border-2 border-green-600 px-2 py-1 font-bold text-green-700 transition-transform duration-150 hover:scale-110 active:scale-90 {item.myVote ===
 										1
-											? 'vote-pop bg-green-600 text-white'
-											: ''}"
+											? 'bg-green-600 text-white'
+											: ''} {justVotedKeys.has(`${item.id}-up`) ? 'vote-pop' : ''}"
 									>
 										▲
 									</button>
 								</form>
-								<form method="POST" action="?/vote" use:enhance>
+								<form method="POST" action="?/vote" use:enhance={() => markJustVoted(item.id, 'down')}>
 									<input type="hidden" name="itemId" value={item.id} />
 									<input type="hidden" name="value" value="down" />
 									<button
@@ -417,8 +434,8 @@
 										aria-label="Voter contre"
 										class="border-2 border-red-600 px-2 py-1 font-bold text-red-700 transition-transform duration-150 hover:scale-110 active:scale-90 {item.myVote ===
 										-1
-											? 'vote-pop bg-red-600 text-white'
-											: ''}"
+											? 'bg-red-600 text-white'
+											: ''} {justVotedKeys.has(`${item.id}-down`) ? 'vote-pop' : ''}"
 									>
 										▼
 									</button>
@@ -609,7 +626,7 @@
 				<div class="mb-3 border-t border-black pt-3 text-sm">
 					{#if selectedItem.status === 'pending'}
 						<div class="mb-3 flex items-center gap-3">
-							<form method="POST" action="?/vote" use:enhance>
+							<form method="POST" action="?/vote" use:enhance={() => markJustVoted(selectedItem.id, 'up')}>
 								<input type="hidden" name="itemId" value={selectedItem.id} />
 								<input type="hidden" name="value" value="up" />
 								<button
@@ -617,13 +634,13 @@
 									aria-label="Voter pour"
 									class="border-2 border-green-600 px-3 py-1.5 font-bold text-green-700 transition-transform duration-150 hover:scale-110 active:scale-90 {selectedItem.myVote ===
 									1
-										? 'vote-pop bg-green-600 text-white'
-										: ''}"
+										? 'bg-green-600 text-white'
+										: ''} {justVotedKeys.has(`${selectedItem.id}-up`) ? 'vote-pop' : ''}"
 								>
 									▲
 								</button>
 							</form>
-							<form method="POST" action="?/vote" use:enhance>
+							<form method="POST" action="?/vote" use:enhance={() => markJustVoted(selectedItem.id, 'down')}>
 								<input type="hidden" name="itemId" value={selectedItem.id} />
 								<input type="hidden" name="value" value="down" />
 								<button
@@ -631,8 +648,8 @@
 									aria-label="Voter contre"
 									class="border-2 border-red-600 px-3 py-1.5 font-bold text-red-700 transition-transform duration-150 hover:scale-110 active:scale-90 {selectedItem.myVote ===
 									-1
-										? 'vote-pop bg-red-600 text-white'
-										: ''}"
+										? 'bg-red-600 text-white'
+										: ''} {justVotedKeys.has(`${selectedItem.id}-down`) ? 'vote-pop' : ''}"
 								>
 									▼
 								</button>
@@ -725,18 +742,44 @@
 
 	@keyframes vote-pop {
 		0% {
-			transform: scale(1);
+			transform: scale(1) rotate(0deg);
 		}
-		40% {
-			transform: scale(1.3);
+		30% {
+			transform: scale(1.3) rotate(-8deg);
+		}
+		60% {
+			transform: scale(1.15) rotate(6deg);
 		}
 		100% {
+			transform: scale(1) rotate(0deg);
+		}
+	}
+
+	/* Square, not round, to match the button's own sharp corners — the rest of the app never
+	   uses rounded corners on buttons, so a circular ripple would look out of place here. */
+	@keyframes vote-ripple {
+		0% {
 			transform: scale(1);
+			opacity: 0.6;
+		}
+		100% {
+			transform: scale(1.8);
+			opacity: 0;
 		}
 	}
 
 	.vote-pop {
-		animation: vote-pop 0.25s ease;
+		position: relative;
+		animation: vote-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+
+	.vote-pop::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border: 2px solid currentColor;
+		animation: vote-ripple 0.5s ease-out;
+		pointer-events: none;
 	}
 
 	.no-scrollbar {
