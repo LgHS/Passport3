@@ -5,6 +5,7 @@
 	import '@fontsource/open-sans/700-italic.css';
 	import '../app.css';
 	import Header from '$lib/components/Header.svelte';
+	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Footer from '$lib/components/Footer.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 
@@ -18,12 +19,17 @@
 	<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
 </svelte:head>
 
-<div class="flex min-h-screen flex-col font-sans">
-	<Header user={data.user} avatarUrl={data.avatarUrl} cotisationStatus={data.cotisationStatus} />
-	<main class="mx-auto w-full max-w-5xl flex-1 px-4 py-10">
-		{@render children()}
-	</main>
-	<Footer status={data.systemStatus} mattermostCacheStatus={data.mattermostCacheStatus} />
+<div class="flex h-screen flex-col overflow-hidden font-sans">
+	<div class="flex flex-1 flex-col overflow-hidden md:flex-row">
+		<Sidebar user={data.user} avatarUrl={data.avatarUrl} cotisationStatus={data.cotisationStatus} />
+		<div class="flex min-w-0 flex-1 flex-col overflow-y-auto">
+			<Header user={data.user} avatarUrl={data.avatarUrl} cotisationStatus={data.cotisationStatus} />
+			<main class="mx-auto w-full max-w-5xl flex-1 px-4 py-10">
+				{@render children()}
+			</main>
+			<Footer status={data.systemStatus} mattermostCacheStatus={data.mattermostCacheStatus} />
+		</div>
+	</div>
 </div>
 
 <Toast />
