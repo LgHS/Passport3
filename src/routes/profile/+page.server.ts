@@ -222,12 +222,14 @@ export const actions: Actions = {
 
 			// Matches the warning shown before this change: every session and linked service login
 			// is invalidated, not just this one — the member has to sign back in everywhere with the
-			// new username. Revoked under the *old* username (still valid at this point, before
-			// Authentik's own session/user join reflects the rename), then this app's own session
-			// goes with the rest instead of leaving the member looking logged in here while
-			// everything else already isn't. `redirect()` throws, so it must stay outside the
-			// try/catch above — that catch is for updateUsername()'s own failure, not for this.
-			await revokeAllSessions(usernameMutation.before);
+			// new username. Revoked under the *new* username: listSessions()'s user__username filter
+			// is a live join against Authentik's current username column, and updateUsername() has
+			// already renamed the user by this point, so querying with the old name would match zero
+			// sessions. Authentik's authenticated_sessions endpoint exposes no pk-based filter, so
+			// user__username is the only option, and it must be the post-rename value. `redirect()`
+			// throws, so it must stay outside the try/catch above — that catch is for
+			// updateUsername()'s own failure, not for this.
+			await revokeAllSessions(usernameMutation.after);
 			clearSessionCookie(cookies);
 			redirect(302, '/login');
 		}
