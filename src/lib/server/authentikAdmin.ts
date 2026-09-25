@@ -2,7 +2,7 @@ import { env } from '$env/dynamic/private';
 import { requireEnv } from '$lib/server/env';
 import { getCachedProfile, setCachedProfile } from '$lib/server/profileCache';
 import { getMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
-import { avatarUrlFor, emailHash, getLocalAvatarUrls } from '$lib/server/avatars';
+import { avatarUrlFor, emailHash, generatedAvatarUrl, getLocalAvatarUrls } from '$lib/server/avatars';
 import type { EmergencyContact, ProfileAttributeField, UserProfile } from '$lib/types';
 import { TAG_COLOR_PRESETS } from '$lib/tagColors';
 
@@ -882,7 +882,7 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 							? u.attributes.phoneNumber
 							: null,
 					avatar: optin.showAvatar
-						? (localAvatars.get(u.pk) ?? (u.email ? `/avatars/${emailHash(u.email)}.jpg` : null))
+						? (localAvatars.get(u.pk) ?? (u.email ? generatedAvatarUrl(u.email) : null))
 						: null,
 					tag: typeof tagValue === 'string' && tagValue.trim() ? tagValue : null,
 					tagColor:

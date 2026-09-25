@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DATA_DIR, getDb } from '$lib/server/db';
-import { renderInitialsAvatar } from '$lib/server/initialsAvatar';
+import { PALETTE_SIZE, renderInitialsAvatar } from '$lib/server/initialsAvatar';
 
 // Member-uploaded profile photos, stored on local disk next to the SQLite database (same volume).
 // A member with an uploaded photo gets it everywhere Passport shows an avatar (header, /profile,
@@ -153,19 +153,49 @@ export function isAvatarFileName(file: string): boolean {
 	return AVATAR_FILE_RE.test(file);
 }
 
-// URL of a member's avatar, whichever it is: their uploaded photo, or their generated initials.
-export function avatarUrlFor(pk: number, email: string | null | undefined): string | null {
-	return getLocalAvatarUrl(pk) ?? (email ? `/avatars/${emailHash(email)}.jpg` : null);
+function getVariant(hash: string): number {
+	const row = getDb().prepare('SELECT variant FROM avatar_variants WHERE email_hash = ?').get(hash) as
+		| { variant: number }
+		| undefined;
+	return row?.variant ?? 0;
 }
 
-// The initials are part of the cached file name, so a member whose name changes gets a fresh image
-// instead of a stale one; their previous images are removed when the new one is written.
+// URL of a member's generated initials avatar. `?c=` changes with the chosen colour, so Passport's
+// own pages show a new colour right away despite the URL otherwise staying the same.
+export function generatedAvatarUrl(email: string): string {
+	const hash = emailHash(email);
+	const variant = getVariant(hash);
+	return `/avatars/${hash}.jpg${variant ? `?c=${variant}` : ''}`;
+}
+
+// URL of a member's avatar, whichever it is: their uploaded photo, or their generated initials.
+export function avatarUrlFor(pk: number, email: string | null | undefined): string | null {
+	return getLocalAvatarUrl(pk) ?? (email ? generatedAvatarUrl(email) : null);
+}
+
+// "Changer de couleur": moves the member's generated avatar to another colour of the palette, at
+// random but never the one currently shown. The cached image is replaced on the next request.
+export function regenerateGeneratedAvatar(email: string): void {
+	const hash = emailHash(email);
+	const current = getVariant(hash) % PALETTE_SIZE;
+	const next = (current + 1 + Math.floor(Math.random() * (PALETTE_SIZE - 1))) % PALETTE_SIZE;
+	getDb()
+		.prepare(
+			`INSERT INTO avatar_variants (email_hash, variant) VALUES (?, ?)
+			 ON CONFLICT(email_hash) DO UPDATE SET variant = excluded.variant`
+		)
+		.run(hash, next);
+}
+
+// The initials and colour variant are part of the cached file name, so a new username or a new
+// colour gets a fresh image instead of a stale one; previous images are removed when it's written.
 export function getGeneratedAvatar(hash: string, initials: string): Buffer {
-	const file = `${hash}-${Buffer.from(initials).toString('hex')}.png`;
+	const variant = getVariant(hash);
+	const file = `${hash}-${Buffer.from(initials).toString('hex')}-${variant}.png`;
 	const path = join(GENERATED_DIR, file);
 	if (existsSync(path)) return readFileSync(path);
 
-	const png = renderInitialsAvatar(hash, initials);
+	const png = renderInitialsAvatar(hash, initials, variant);
 	mkdirSync(GENERATED_DIR, { recursive: true, mode: 0o700 });
 	for (const old of readdirSync(GENERATED_DIR)) {
 		if (old.startsWith(`${hash}-`) && old !== file) rmSync(join(GENERATED_DIR, old), { force: true });

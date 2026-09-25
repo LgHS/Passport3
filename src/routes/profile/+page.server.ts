@@ -21,7 +21,13 @@ import {
 	AuthentikUnavailableError
 } from '$lib/server/authentikAdmin';
 import { lookupMattermostUsername } from '$lib/server/mattermost';
-import { deleteAvatar, getLocalAvatarUrl, saveAvatar, validateAvatarUpload } from '$lib/server/avatars';
+import {
+	deleteAvatar,
+	getLocalAvatarUrl,
+	regenerateGeneratedAvatar,
+	saveAvatar,
+	validateAvatarUpload
+} from '$lib/server/avatars';
 import {
 	validateProfileSubmission,
 	validateEmergencyContactsSubmission,
@@ -134,6 +140,15 @@ export const actions: Actions = {
 		saveAvatar(pk, profile.email, bytes);
 		logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'avatar.update', { pk });
 		return { avatarUpdated: true };
+	},
+
+	// Only meaningful without an uploaded photo: picks another background colour for the generated
+	// initials avatar. Not audit-logged — purely cosmetic, and trivially undone.
+	regenerateAvatar: async ({ locals }) => {
+		const pk = resolvePk(locals);
+		const profile = await getUserProfile(pk);
+		regenerateGeneratedAvatar(profile.email);
+		return { avatarRegenerated: true };
 	},
 
 	deleteAvatar: async ({ locals }) => {

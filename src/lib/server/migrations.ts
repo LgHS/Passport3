@@ -132,6 +132,21 @@ const migrations: Migration[] = [
 				)
 			`);
 		}
+	},
+	{
+		version: 8,
+		name: 'create avatar_variants',
+		up: (db) => {
+			// Background colour picked by a member for their generated initials avatar ("Changer de
+			// couleur" on /profile), keyed by the same email hash as the avatar URL. No row means the
+			// default colour derived from the hash itself.
+			db.exec(`
+				CREATE TABLE avatar_variants (
+					email_hash TEXT PRIMARY KEY,
+					variant INTEGER NOT NULL
+				)
+			`);
+		}
 	}
 ];
 

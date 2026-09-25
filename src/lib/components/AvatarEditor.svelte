@@ -181,6 +181,24 @@
 				<button type="button" onclick={pickFile} class="btn-primary px-3 py-1.5 text-xs">
 					{hasLocalAvatar ? 'Changer la photo' : 'Envoyer une photo'}
 				</button>
+				{#if !hasLocalAvatar}
+					<form
+						method="POST"
+						action="?/regenerateAvatar"
+						use:enhance={() =>
+							async ({ result, update }) => {
+								await update();
+								if (result.type === 'success') showToast('success', 'Nouvelle couleur appliquée.');
+							}}
+					>
+						<button
+							type="submit"
+							class="border border-black px-3 py-1.5 text-xs font-bold uppercase transition-colors hover:bg-black hover:text-white"
+						>
+							Changer de couleur
+						</button>
+					</form>
+				{/if}
 				{#if hasLocalAvatar}
 					<form
 						method="POST"

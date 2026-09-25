@@ -37,8 +37,12 @@ function escapeXml(value: string): string {
 	return value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-export function renderInitialsAvatar(hash: string, initials: string): Buffer {
-	const background = PALETTE[parseInt(hash.slice(0, 8), 16) % PALETTE.length];
+export const PALETTE_SIZE = PALETTE.length;
+
+// `variant` shifts the colour picked from the hash — 0 is the default, anything else is a colour the
+// member chose to cycle to (see regenerateGeneratedAvatar in avatars.ts).
+export function renderInitialsAvatar(hash: string, initials: string, variant: number): Buffer {
+	const background = PALETTE[(parseInt(hash.slice(0, 8), 16) + variant) % PALETTE.length];
 	// One letter gets a bigger glyph than two, so both fill the square about as much.
 	const fontSize = [...initials].length > 1 ? 200 : 240;
 	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
