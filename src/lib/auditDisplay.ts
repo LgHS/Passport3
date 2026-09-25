@@ -5,6 +5,7 @@ export const ACTION_LABELS: Record<string, string> = {
 	'profile.update': 'Profil modifié',
 	'avatar.update': 'Photo de profil modifiée',
 	'avatar.delete': 'Photo de profil supprimée',
+	'profile.username.update': "Nom d'utilisateur modifié",
 	'trombinoscope.optin.update': 'Visibilité trombinoscope modifiée',
 	'trombinoscope.tag.update': 'Tag trombinoscope modifié',
 	'emergencyContacts.update': "Contacts d'urgence modifiés",

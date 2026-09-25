@@ -229,7 +229,13 @@
 				</p>
 			</div>
 
-			<ProfileForm profile={data.profile} fields={data.fields} {form} />
+			<ProfileForm
+				profile={data.profile}
+				fields={data.fields}
+				{form}
+				username={data.profile.username}
+				nextUsernameChangeAllowedAt={data.nextUsernameChangeAllowedAt}
+			/>
 
 			<a
 				href={data.authentikAccountUrl}

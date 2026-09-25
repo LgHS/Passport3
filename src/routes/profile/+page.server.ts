@@ -15,11 +15,18 @@ import {
 	getEmergencyContacts,
 	updateEmergencyContacts,
 	MAX_EMERGENCY_CONTACTS,
+	getUsernameChangeInfo,
+	updateUsername,
+	revokeAllSessions,
 	AuthentikUnavailableError
 } from '$lib/server/authentikAdmin';
 import { lookupMattermostUsername } from '$lib/server/mattermost';
 import { deleteAvatar, getLocalAvatarUrl, saveAvatar, validateAvatarUpload } from '$lib/server/avatars';
-import { validateProfileSubmission, validateEmergencyContactsSubmission } from '$lib/server/profileValidation';
+import {
+	validateProfileSubmission,
+	validateEmergencyContactsSubmission,
+	validateUsername
+} from '$lib/server/profileValidation';
 import { clearSessionCookie } from '$lib/server/session';
 import { logAuditEvent, listAuditEventsForTarget } from '$lib/server/auditLog';
 import { authentikPk, displayName } from '$lib/types';
@@ -47,21 +54,35 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		error(500, 'Impossible de récupérer votre profil Authentik.');
 	}
 
-	let sessions, mfaDevices, mfaEnrollUrls, notificationPreferences, mattermost, emergencyContacts;
+	let sessions,
+		mfaDevices,
+		mfaEnrollUrls,
+		notificationPreferences,
+		mattermost,
+		emergencyContacts,
+		usernameChangeInfo;
 	try {
-		[sessions, mfaDevices, mfaEnrollUrls, notificationPreferences, mattermost, emergencyContacts] =
-			await Promise.all([
-				listSessions(profile.username),
-				listMfaDevices(pk),
-				getMfaEnrollUrls(),
-				getNotificationPreferences(pk),
-				// Best-effort: a transient Mattermost hiccup shouldn't break the whole profile page,
-				// same reasoning as the Authentik/Dolibarr .catch()s in +layout.server.ts. Unlike a
-				// plain .catch(() => null), `unavailable` stays distinguishable from "no linked
-				// account" — see feedback_distinguish-fetch-failure-from-empty.
-				lookupMattermostUsername(profile.email),
-				getEmergencyContacts(pk)
-			]);
+		[
+			sessions,
+			mfaDevices,
+			mfaEnrollUrls,
+			notificationPreferences,
+			mattermost,
+			emergencyContacts,
+			usernameChangeInfo
+		] = await Promise.all([
+			listSessions(profile.username),
+			listMfaDevices(pk),
+			getMfaEnrollUrls(),
+			getNotificationPreferences(pk),
+			// Best-effort: a transient Mattermost hiccup shouldn't break the whole profile page,
+			// same reasoning as the Authentik/Dolibarr .catch()s in +layout.server.ts. Unlike a
+			// plain .catch(() => null), `unavailable` stays distinguishable from "no linked
+			// account" — see feedback_distinguish-fetch-failure-from-empty.
+			lookupMattermostUsername(profile.email),
+			getEmergencyContacts(pk),
+			getUsernameChangeInfo(pk)
+		]);
 	} catch (err) {
 		if (err instanceof AuthentikUnavailableError) {
 			error(503, AUTHENTIK_UNAVAILABLE_MESSAGE);
@@ -84,6 +105,7 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		mattermostUsername: mattermost.username,
 		mattermostUnavailable: mattermost.unavailable,
 		emergencyContacts,
+		nextUsernameChangeAllowedAt: usernameChangeInfo.nextChangeAllowedAt,
 		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
 		// Whether profile.avatar is an uploaded photo (deletable) or the Gravatar fallback.
 		hasLocalAvatar: getLocalAvatarUrl(pk) !== null,
@@ -123,10 +145,11 @@ export const actions: Actions = {
 		return { avatarDeleted: true };
 	},
 
-	updateProfile: async ({ request, locals }) => {
+	updateProfile: async ({ request, locals, cookies }) => {
 		const pk = resolvePk(locals);
 		const user = locals.user!;
-		const result = validateProfileSubmission(await request.formData());
+		const formData = await request.formData();
+		const result = validateProfileSubmission(formData);
 
 		if (!result.ok) {
 			return fail(400, {
@@ -135,6 +158,40 @@ export const actions: Actions = {
 				lastName: result.lastName,
 				attributes: result.attributes
 			});
+		}
+
+		// Username lives in this same form/submission (see ProfileForm.svelte's `username` prop)
+		// rather than its own action — one "Enregistrer" covers both, per the user's own request.
+		// `formData.has('username')` is only true on the member-facing /profile (the admin edit
+		// form never renders that field), and only a value that actually differs from the current
+		// one counts as "requesting a change" — resubmitting the same value must never restart the
+		// cooldown or touch Authentik at all.
+		const currentProfile = await getUserProfile(pk);
+		const submittedUsername = formData.has('username') ? String(formData.get('username') ?? '').trim() : null;
+		const usernameRequestedChange = submittedUsername !== null && submittedUsername !== currentProfile.username;
+
+		if (usernameRequestedChange) {
+			// Re-checked server-side, not trusted from whatever the client last rendered — the
+			// cooldown only means anything if it can't be bypassed by replaying the form after the
+			// client-side disabling wears off.
+			const info = await getUsernameChangeInfo(pk);
+			if (info.nextChangeAllowedAt) {
+				return fail(400, {
+					usernameError: `Vous devez attendre le ${new Date(info.nextChangeAllowedAt).toLocaleDateString('fr-BE')} avant de pouvoir modifier à nouveau votre nom d'utilisateur.`,
+					firstName: result.firstName,
+					lastName: result.lastName,
+					attributes: result.attributes
+				});
+			}
+			const usernameResult = validateUsername(submittedUsername!);
+			if (!usernameResult.ok) {
+				return fail(400, {
+					usernameError: usernameResult.error,
+					firstName: result.firstName,
+					lastName: result.lastName,
+					attributes: result.attributes
+				});
+			}
 		}
 
 		// before/after come from updateUserProfile()'s own internal read, not a separate call here
@@ -152,12 +209,87 @@ export const actions: Actions = {
 			);
 		}
 
+		let usernameError: string | undefined;
+		let usernameMutation: { before: string; after: string } | undefined;
+		if (usernameRequestedChange) {
+			try {
+				usernameMutation = await updateUsername(pk, submittedUsername!);
+			} catch (err) {
+				// Surfaces Authentik's own rejection reason (most likely a uniqueness conflict)
+				// instead of a guessed message — authentikApiFetch's Error wraps the raw response
+				// body after "failed (<status>): ", typically DRF-style {"field": ["message"]} JSON.
+				// The profile fields above are already saved at this point; only the username part
+				// failed, so this doesn't roll anything back — it just reports its own error.
+				const message = err instanceof Error ? err.message : String(err);
+				const bodyText = message.replace(/^Authentik API request to .* failed \(\d+\): /, '');
+				usernameError = bodyText;
+				try {
+					const parsed = JSON.parse(bodyText) as Record<string, unknown>;
+					// Authentik's own "unique" validator message ("Ce champ doit être unique.") doesn't
+					// say which field, or that it's the username specifically — friendlier wording for
+					// that one specific, common case, otherwise pass its message through as-is.
+					if (
+						'username' in parsed &&
+						[parsed.username].flat().some((m) => typeof m === 'string' && /unique/i.test(m))
+					) {
+						usernameError = 'Ce nom d’utilisateur est déjà utilisé.';
+					} else {
+						const messages = Object.values(parsed).flat();
+						if (messages.length > 0) {
+							usernameError = messages.join(' ');
+						}
+					}
+				} catch {
+					// Not JSON, or an unexpected shape — the raw text may contain the API's internal
+					// path or wording, so it isn't shown to the member; log it server-side instead and
+					// fall back to a generic message.
+					console.error('[updateProfile] unrecognized username update error from Authentik:', bodyText);
+					usernameError = "Le changement de nom d'utilisateur a échoué. Merci de réessayer plus tard.";
+				}
+			}
+		}
+
+		if (usernameMutation) {
+			logAuditEvent(
+				{ sub: user.sub, label: displayName(user) },
+				'user',
+				'profile.username.update',
+				{ pk },
+				{ before: { username: usernameMutation.before }, after: { username: usernameMutation.after } }
+			);
+
+			// Matches the warning shown before this change: every session and linked service login
+			// is invalidated, not just this one — the member has to sign back in everywhere with the
+			// new username. Revoked under the *new* username: listSessions()'s user__username filter
+			// is a live join against Authentik's current username column, and updateUsername() has
+			// already renamed the user by this point, so querying with the old name would match zero
+			// sessions. Authentik's authenticated_sessions endpoint exposes no pk-based filter, so
+			// user__username is the only option, and it must be the post-rename value.
+			//
+			// The rename itself already succeeded by this point, so a failure here (e.g. Authentik
+			// slow or briefly unavailable) must not surface as a 500 — it's logged and swallowed, and
+			// the member is still redirected to log back in under their new username either way.
+			try {
+				await revokeAllSessions(usernameMutation.after);
+			} catch (err) {
+				console.error('[updateProfile] failed to revoke sessions after username change:', err);
+			}
+			// `redirect()` throws, so it must stay outside the try/catch above — that catch is for
+			// updateUsername()'s own failure, not for this.
+			clearSessionCookie(cookies);
+			redirect(302, '/login');
+		}
+
+		// Only ever reached when the username either wasn't part of this submission, or matched a
+		// rejection above — a successful change always redirects (see the block above) before
+		// getting here, so there's no "new username" to echo back at this point.
 		return {
 			success: true,
 			changed: mutation.changed,
 			firstName: result.firstName,
 			lastName: result.lastName,
-			attributes: result.attributes
+			attributes: result.attributes,
+			usernameError
 		};
 	},
 
