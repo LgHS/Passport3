@@ -725,21 +725,48 @@ function initialsOf(username: string): string {
 	return [...username.trim()].slice(0, 2).join('').toUpperCase();
 }
 
-// `fresh` bypasses the 15-minute cache — for the admin's bulk generation, which should reflect the
-// current member list.
-export async function getInitialsByEmailHash(fresh = false): Promise<Map<string, string>> {
-	if (fresh || !initialsByHash || initialsByHash.expiresAt <= Date.now()) {
-		const res = await authentikApiFetch('core/users/?page_size=500');
-		const data = (await res.json()) as { results: (AuthentikUserRecord & { type: string })[] };
-		const map = new Map<string, string>();
-		for (const u of data.results) {
-			if (!u.email || EXCLUDED_USERNAMES.has(u.username) || EXCLUDED_TYPES.has(u.type)) continue;
-			const initials = initialsOf(u.username);
-			if (initials) map.set(emailHash(u.email), initials);
-		}
-		initialsByHash = { map, expiresAt: Date.now() + INITIALS_TTL_MS };
+// Guards for the public /avatars endpoint, which anyone can hit with any hash: concurrent requests
+// share a single in-flight Authentik call, and after a failure every lookup fails fast for a minute
+// instead of each request retrying against an Authentik that's down.
+const INITIALS_FAILURE_COOLDOWN_MS = 60 * 1000;
+let initialsInFlight: Promise<Map<string, string>> | null = null;
+let initialsFailedAt = 0;
+
+async function loadInitialsByEmailHash(): Promise<Map<string, string>> {
+	const res = await authentikApiFetch('core/users/?page_size=500');
+	const data = (await res.json()) as { results: (AuthentikUserRecord & { type: string })[] };
+	const map = new Map<string, string>();
+	for (const u of data.results) {
+		if (!u.email || EXCLUDED_USERNAMES.has(u.username) || EXCLUDED_TYPES.has(u.type)) continue;
+		const initials = initialsOf(u.username);
+		if (initials) map.set(emailHash(u.email), initials);
 	}
-	return initialsByHash.map;
+	return map;
+}
+
+// `fresh` bypasses the 15-minute cache (and the failure cooldown) — for the admin's bulk
+// generation, which should reflect the current member list.
+export async function getInitialsByEmailHash(fresh = false): Promise<Map<string, string>> {
+	if (!fresh && initialsByHash && initialsByHash.expiresAt > Date.now()) return initialsByHash.map;
+	if (!fresh && Date.now() - initialsFailedAt < INITIALS_FAILURE_COOLDOWN_MS) {
+		throw new Error('Authentik user list recently unavailable.');
+	}
+	if (!initialsInFlight) {
+		initialsInFlight = loadInitialsByEmailHash()
+			.then((map) => {
+				initialsByHash = { map, expiresAt: Date.now() + INITIALS_TTL_MS };
+				initialsFailedAt = 0;
+				return map;
+			})
+			.catch((err) => {
+				initialsFailedAt = Date.now();
+				throw err;
+			})
+			.finally(() => {
+				initialsInFlight = null;
+			});
+	}
+	return initialsInFlight;
 }
 
 export async function getInitialsForEmailHash(hash: string): Promise<string | null> {

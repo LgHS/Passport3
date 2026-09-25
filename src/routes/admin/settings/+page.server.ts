@@ -46,7 +46,7 @@ export const actions: Actions = {
 		const admin = requireAdminUser(locals);
 		let result;
 		try {
-			result = pregenerateAvatars(await getInitialsByEmailHash(true));
+			result = await pregenerateAvatars(await getInitialsByEmailHash(true));
 		} catch {
 			return fail(500, { avatarsError: 'La génération des avatars a échoué, réessayez.' });
 		}

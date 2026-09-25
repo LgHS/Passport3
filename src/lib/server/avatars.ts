@@ -223,7 +223,9 @@ export interface PregenerateResult {
 // Admin bulk action: makes sure every member without an uploaded photo already has their initials
 // image on disk, instead of waiting for its first request (e.g. before pointing Authentik or
 // BookStack at Passport). Idempotent: images already cached are left alone.
-export function pregenerateAvatars(initialsByHash: Map<string, string>): PregenerateResult {
+// Rendering is synchronous, so the loop hands control back to the event loop between images:
+// generating a few hundred avatars never freezes the server for other requests.
+export async function pregenerateAvatars(initialsByHash: Map<string, string>): Promise<PregenerateResult> {
 	const withPhoto = new Set(
 		(getDb().prepare('SELECT file FROM member_avatars').all() as { file: string }[]).map((row) =>
 			row.file.replace(/\.jpg$/, '')
@@ -238,6 +240,7 @@ export function pregenerateAvatars(initialsByHash: Map<string, string>): Pregene
 		} else {
 			writeGeneratedAvatar(hash, initials);
 			result.generated++;
+			await new Promise((resolve) => setImmediate(resolve));
 		}
 	}
 	return result;
