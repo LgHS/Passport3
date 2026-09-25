@@ -2,10 +2,10 @@
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
 	import { showToast } from '$lib/stores/toast.svelte';
-	import { avatarSize } from '$lib/avatar';
 	import type { ActionData, PageData } from './$types';
 	import ProfileForm from '$lib/components/ProfileForm.svelte';
 	import EmergencyContactsForm from '$lib/components/EmergencyContactsForm.svelte';
+	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
 	import { actionLabel, sourceLabel, detailRows } from '$lib/auditDisplay';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -219,18 +219,7 @@
 {#if activeTab === 'info'}
 	<section class="w-full">
 		<div class="mx-auto max-w-2xl">
-			<div class="mb-6 flex items-center gap-4">
-				{#if data.profile.avatar}
-					<img src={avatarSize(data.profile.avatar, 128)} alt="" class="h-16 w-16 object-cover" />
-				{/if}
-				<p class="text-sm">
-					Votre photo est associée à votre adresse email via <a
-						href="https://gravatar.com"
-						target="_blank"
-						rel="noopener">Gravatar</a
-					>. Pour la changer, mettez à jour votre Gravatar avec la même adresse email.
-				</p>
-			</div>
+			<AvatarEditor avatarUrl={data.profile.avatar} hasLocalAvatar={data.hasLocalAvatar} />
 
 			<div class="mb-4">
 				<span class="mb-1 block text-sm font-bold uppercase">Email</span>

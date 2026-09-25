@@ -188,6 +188,12 @@ container is running — recent transactions can still be sitting in `passport3.
 the container before copying just the `.db` file, or back up the whole volume (`.db`, `.db-wal`,
 `.db-shm` together) in one atomic snapshot.
 
+Uploaded profile photos live in the same volume, under `avatars/` next to the database (256×256
+JPEGs with random file names, indexed by the `member_avatars` table) — back them up together.
+The container runs with a read-only filesystem, no Linux capabilities and `no-new-privileges`
+(see `docker-compose*.yml`): the data volume and a `/tmp` tmpfs are the only writable places, and
+the data directory is readable only by the `passport` user.
+
 Tables are created by numbered, append-only migrations in `src/lib/server/migrations.ts` (run
 automatically on first connection) rather than by each feature module creating its own table ad
 hoc — add a new entry there for a new table instead of a local `CREATE TABLE IF NOT EXISTS`.

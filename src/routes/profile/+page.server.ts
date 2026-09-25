@@ -18,6 +18,7 @@ import {
 	AuthentikUnavailableError
 } from '$lib/server/authentikAdmin';
 import { lookupMattermostUsername } from '$lib/server/mattermost';
+import { deleteAvatar, getLocalAvatarUrl, saveAvatar, validateAvatarUpload } from '$lib/server/avatars';
 import { validateProfileSubmission, validateEmergencyContactsSubmission } from '$lib/server/profileValidation';
 import { clearSessionCookie } from '$lib/server/session';
 import { logAuditEvent, listAuditEventsForTarget } from '$lib/server/auditLog';
@@ -84,11 +85,41 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		mattermostUnavailable: mattermost.unavailable,
 		emergencyContacts,
 		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
+		// Whether profile.avatar is an uploaded photo (deletable) or the Gravatar fallback.
+		hasLocalAvatar: getLocalAvatarUrl(pk) !== null,
 		auditEvents
 	};
 };
 
 export const actions: Actions = {
+	uploadAvatar: async ({ request, locals }) => {
+		const pk = resolvePk(locals);
+		const user = locals.user!;
+		const file = (await request.formData()).get('avatar');
+		if (!(file instanceof File)) {
+			return fail(400, { avatarError: 'Aucune image reçue.' });
+		}
+
+		const bytes = new Uint8Array(await file.arrayBuffer());
+		const validation = validateAvatarUpload(bytes);
+		if (!validation.ok) {
+			return fail(400, { avatarError: validation.error });
+		}
+
+		saveAvatar(pk, bytes);
+		logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'avatar.update', { pk });
+		return { avatarUpdated: true };
+	},
+
+	deleteAvatar: async ({ locals }) => {
+		const pk = resolvePk(locals);
+		const user = locals.user!;
+		if (deleteAvatar(pk)) {
+			logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'avatar.delete', { pk });
+		}
+		return { avatarDeleted: true };
+	},
+
 	updateProfile: async ({ request, locals }) => {
 		const pk = resolvePk(locals);
 		const user = locals.user!;

@@ -45,7 +45,9 @@ COPY package.json ./package.json
 # volume mounted here is root-owned by default, which would leave `passport` unable to create the
 # database file at all. Created and chowned before switching users, so the mountpoint underneath
 # it is already writable regardless of what Docker sets on the volume itself.
-RUN mkdir -p /app/data && chown -R passport:passport /app/data
+# Owner-only (0700): the volume holds member data — the SQLite database and uploaded avatars
+# (data/avatars) — so nothing else in the container, nor another UID, should read it.
+RUN mkdir -p /app/data/avatars && chown -R passport:passport /app/data && chmod -R 700 /app/data
 
 USER passport
 EXPOSE 8030

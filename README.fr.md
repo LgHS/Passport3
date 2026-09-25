@@ -154,6 +154,8 @@ Passport3 a une petite base SQLite locale (`better-sqlite3`) pour les données q
 
 La base tourne en mode WAL, donc `passport3.db` seul n'est pas un instantané cohérent tant que le conteneur tourne : des transactions récentes peuvent encore se trouver dans `passport3.db-wal`. Soit arrêter le conteneur avant de copier uniquement le fichier `.db`, soit sauvegarder tout le volume (`.db`, `.db-wal`, `.db-shm` ensemble) en un seul instantané atomique.
 
+Les photos de profil envoyées par les membres sont dans le même volume, dans `avatars/` à côté de la base (JPEG 256×256 aux noms aléatoires, référencés par la table `member_avatars`) : à sauvegarder ensemble. Le conteneur tourne avec un système de fichiers en lecture seule, sans capacités Linux et avec `no-new-privileges` (voir `docker-compose*.yml`) : seuls le volume de données et un `/tmp` en mémoire sont inscriptibles, et le dossier de données n'est lisible que par l'utilisateur `passport`.
+
 ## Contribuer
 
 Les contributions sont les bienvenues.

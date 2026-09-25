@@ -116,6 +116,22 @@ const migrations: Migration[] = [
 				)
 			`);
 		}
+	},
+	{
+		version: 7,
+		name: 'create member_avatars',
+		up: (db) => {
+			// One row per member who uploaded a photo — no row means "fall back to Gravatar". The
+			// file name is random (see avatars.ts) rather than derived from the pk, so an avatar URL
+			// can't be guessed for a member whose trombinoscope opt-in keeps it hidden.
+			db.exec(`
+				CREATE TABLE member_avatars (
+					member_pk INTEGER PRIMARY KEY,
+					file TEXT NOT NULL,
+					updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+				)
+			`);
+		}
 	}
 ];
 

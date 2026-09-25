@@ -2,6 +2,7 @@ import { env } from '$env/dynamic/private';
 import { requireEnv } from '$lib/server/env';
 import { getCachedProfile, setCachedProfile } from '$lib/server/profileCache';
 import { getMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
+import { getLocalAvatarUrl, getLocalAvatarUrls } from '$lib/server/avatars';
 import type { EmergencyContact, ProfileAttributeField, UserProfile } from '$lib/types';
 import { TAG_COLOR_PRESETS } from '$lib/tagColors';
 
@@ -160,7 +161,15 @@ function pickAttributes(source: Record<string, unknown>): Record<string, string>
 	return picked;
 }
 
+// A locally uploaded photo (see avatars.ts) takes precedence over the Gravatar URL Authentik
+// reports. Applied on every read rather than baked into the cache, so an upload or delete shows up
+// immediately without having to invalidate the cached Authentik record.
 export async function getUserProfile(pk: number): Promise<UserProfile> {
+	const profile = await getAuthentikUserProfile(pk);
+	return { ...profile, avatar: getLocalAvatarUrl(pk) ?? profile.avatar };
+}
+
+async function getAuthentikUserProfile(pk: number): Promise<UserProfile> {
 	const cached = getCachedProfile(pk);
 	if (cached) return cached;
 
@@ -747,6 +756,8 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 		results: (AuthentikUserRecord & { is_active: boolean; type: string })[];
 	};
 
+	const localAvatars = getLocalAvatarUrls();
+
 	const members = await Promise.all(
 		data.results
 			.filter(
@@ -787,7 +798,7 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 						optin.showPhone && typeof u.attributes.phoneNumber === 'string'
 							? u.attributes.phoneNumber
 							: null,
-					avatar: optin.showAvatar ? u.avatar || null : null,
+					avatar: optin.showAvatar ? (localAvatars.get(u.pk) ?? (u.avatar || null)) : null,
 					tag: typeof tagValue === 'string' && tagValue.trim() ? tagValue : null,
 					tagColor:
 						typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue)

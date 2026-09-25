@@ -134,7 +134,23 @@
 
 	<div class="mb-6 flex items-center gap-4">
 		{#if data.profile.avatar}
-			<img src={avatarSize(data.profile.avatar, 128)} alt="" class="h-16 w-16 object-cover" />
+			<div class="flex shrink-0 flex-col items-center gap-1">
+				<img src={avatarSize(data.profile.avatar, 128)} alt="" class="h-16 w-16 object-cover" />
+				{#if data.hasLocalAvatar}
+					<!-- Moderation only: removes the uploaded photo, the member falls back to Gravatar. -->
+					<form
+						method="POST"
+						action="?/deleteAvatar"
+						use:enhance={() =>
+							async ({ result, update }) => {
+								await update();
+								if (result.type === 'success') showToast('success', 'Photo supprimée.');
+							}}
+					>
+						<button type="submit" class="text-xs text-red-700 underline">Supprimer la photo</button>
+					</form>
+				{/if}
+			</div>
 		{/if}
 		<div class="text-sm">
 			<p><span class="font-bold uppercase">Identifiant :</span> {data.profile.username}</p>

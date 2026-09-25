@@ -3,6 +3,8 @@ import type { AuditSource } from '$lib/server/auditLog';
 export const ACTION_LABELS: Record<string, string> = {
 	'invitation.create': 'Invitation créée',
 	'profile.update': 'Profil modifié',
+	'avatar.update': 'Photo de profil modifiée',
+	'avatar.delete': 'Photo de profil supprimée',
 	'trombinoscope.optin.update': 'Visibilité trombinoscope modifiée',
 	'trombinoscope.tag.update': 'Tag trombinoscope modifié',
 	'emergencyContacts.update': "Contacts d'urgence modifiés",
