@@ -17,6 +17,7 @@ import {
 	DolibarrUnavailableError
 } from '$lib/server/dolibarr';
 import { authentikPk, type CotisationStatus } from '$lib/types';
+import { getLocalAvatarUrl } from '$lib/server/avatars';
 
 export interface AppGroup {
 	name: string;
@@ -36,6 +37,8 @@ export interface DashboardChecklist {
 	mfaConfigured: boolean | null;
 	emergencyContactConfigured: boolean | null;
 	badgeConfigured: boolean | null;
+	// Local SQLite lookup (see avatars.ts), so never "couldn't check" — a plain boolean.
+	avatarUploaded: boolean;
 	// Also null when Dolibarr is unavailable, same reasoning as above — a Dolibarr outage must
 	// never be reported as "IBAN not filled in", which would be actively wrong for a member who
 	// already filled it in.
@@ -125,6 +128,7 @@ const NO_CHECKLIST: DashboardChecklist = {
 	mfaConfigured: null,
 	emergencyContactConfigured: null,
 	badgeConfigured: null,
+	avatarUploaded: false,
 	ibanPersoConfigured: false,
 	ibanProApplicable: false,
 	ibanProConfigured: false
@@ -153,6 +157,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		mfaConfigured: mfaDevices === null ? null : mfaDevices.length > 0,
 		emergencyContactConfigured: emergencyContacts === null ? null : emergencyContacts.length > 0,
 		badgeConfigured: rfidUid === undefined ? null : rfidUid !== null,
+		avatarUploaded: pk ? getLocalAvatarUrl(pk) !== null : false,
 		ibanPersoConfigured: financial.unavailable ? null : !!financial.ibanPerso,
 		ibanProApplicable: financial.isPro,
 		ibanProConfigured: financial.unavailable ? null : !!financial.ibanPro

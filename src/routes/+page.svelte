@@ -28,6 +28,12 @@
 				todoLabel: 'Renseigner au moins un contact "d’urgence"'
 			},
 			{
+				href: '/profile',
+				done: data.checklist.avatarUploaded,
+				doneLabel: 'Photo de profil envoyée',
+				todoLabel: 'Envoyer une photo de profil'
+			},
+			{
 				href: '/badge',
 				done: data.checklist.badgeConfigured,
 				doneLabel: 'Badge RFID généré',
