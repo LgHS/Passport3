@@ -107,7 +107,7 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		emergencyContacts,
 		nextUsernameChangeAllowedAt: usernameChangeInfo.nextChangeAllowedAt,
 		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
-		// Whether profile.avatar is an uploaded photo (deletable) or the Gravatar fallback.
+		// Whether profile.avatar is an uploaded photo (deletable) or generated initials.
 		hasLocalAvatar: getLocalAvatarUrl(pk) !== null,
 		auditEvents
 	};

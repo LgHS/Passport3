@@ -1,11 +1,13 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DATA_DIR, getDb } from '$lib/server/db';
+import { renderInitialsAvatar } from '$lib/server/initialsAvatar';
 
 // Member-uploaded profile photos, stored on local disk next to the SQLite database (same volume).
 // A member with an uploaded photo gets it everywhere Passport shows an avatar (header, /profile,
-// admin, trombinoscope) instead of their Gravatar; deleting it falls back to Gravatar again.
+// admin, trombinoscope); without one, an image of their initials is generated instead (see
+// getGeneratedAvatar below). Gravatar is not used at all.
 //
 // The browser does the square crop and resize itself (AvatarEditor.svelte) and sends a JPEG — the
 // server doesn't re-encode images, so it only accepts exactly that shape: a JPEG of
@@ -15,6 +17,9 @@ export const AVATAR_SIZE = 512;
 const AVATAR_MAX_BYTES = 400 * 1024;
 
 const AVATAR_DIR = join(DATA_DIR, 'avatars');
+// Initials images, generated on first request and kept on disk — they're only a cache, safe to
+// delete at any time (they're regenerated on the next request).
+const GENERATED_DIR = join(AVATAR_DIR, 'generated');
 
 // Files are named after the Gravatar-style hash of the member's email — md5 of the trimmed,
 // lowercased address — so other services can point at the same photo from the email alone:
@@ -146,4 +151,27 @@ export function readAvatar(file: string): { bytes: Buffer; modifiedAt: Date } | 
 
 export function isAvatarFileName(file: string): boolean {
 	return AVATAR_FILE_RE.test(file);
+}
+
+// URL of a member's avatar, whichever it is: their uploaded photo, or their generated initials.
+export function avatarUrlFor(pk: number, email: string | null | undefined): string | null {
+	return getLocalAvatarUrl(pk) ?? (email ? `/avatars/${emailHash(email)}.jpg` : null);
+}
+
+// The initials are part of the cached file name, so a member whose name changes gets a fresh image
+// instead of a stale one; their previous images are removed when the new one is written.
+export function getGeneratedAvatar(hash: string, initials: string): Buffer {
+	const file = `${hash}-${Buffer.from(initials).toString('hex')}.png`;
+	const path = join(GENERATED_DIR, file);
+	if (existsSync(path)) return readFileSync(path);
+
+	const png = renderInitialsAvatar(hash, initials);
+	mkdirSync(GENERATED_DIR, { recursive: true, mode: 0o700 });
+	for (const old of readdirSync(GENERATED_DIR)) {
+		if (old.startsWith(`${hash}-`) && old !== file) rmSync(join(GENERATED_DIR, old), { force: true });
+	}
+	const tmpPath = join(GENERATED_DIR, `${randomBytes(8).toString('hex')}.tmp`);
+	writeFileSync(tmpPath, png, { mode: 0o600 });
+	renameSync(tmpPath, path);
+	return png;
 }

@@ -190,14 +190,15 @@ the container before copying just the `.db` file, or back up the whole volume (`
 
 Uploaded profile photos live in the same volume, under `avatars/` next to the database (512×512
 JPEGs named after the md5 hash of the member's email, indexed by the `member_avatars` table) — back them up together.
-Avatar URLs are public and follow the Gravatar scheme (`/avatars/<md5 of the lowercased email>.jpg`)
-and always return an image: the member's uploaded photo, or else their Gravatar fetched and served by
-Passport (with the member's initials if they have no Gravatar, looked up from Authentik — only the
-initials are sent to Gravatar; `?d=404` returns a 404 instead). Other
-services can use them as their avatar source:
+Passport is its own avatar service — Gravatar isn't used at all. Avatar URLs are public and keyed
+like Gravatar (`/avatars/<md5 of the lowercased email>.jpg`), and always return an image: the
+member's uploaded photo, or else an image of their initials (first two characters of their
+username, on a muted background picked from their hash), generated on first request with
+[resvg](https://github.com/thx/resvg-js) and cached under `avatars/generated/`. Other services can
+use them as their avatar source:
 
 - **Authentik** — *System → Settings → Avatars*: `https://<passport>/avatars/%(mail_hash)s.jpg`
-- **BookStack** — `AVATAR_URL=https://<passport>/avatars/${hash}.jpg?s=${size}`
+- **BookStack** — `AVATAR_URL=https://<passport>/avatars/${hash}.jpg`
 
 The container runs with a read-only filesystem, no Linux capabilities and `no-new-privileges`
 (see `docker-compose*.yml`): the data volume and a `/tmp` tmpfs are the only writable places, and

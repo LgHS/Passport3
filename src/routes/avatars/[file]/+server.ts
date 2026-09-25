@@ -1,91 +1,28 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { isAvatarFileName, readAvatar } from '$lib/server/avatars';
-import { DEFAULT_AVATAR_PNG } from '$lib/server/defaultAvatar';
+import { getGeneratedAvatar, isAvatarFileName, readAvatar } from '$lib/server/avatars';
 import { getInitialsForEmailHash } from '$lib/server/authentikAdmin';
+import { DEFAULT_AVATAR_PNG } from '$lib/server/defaultAvatar';
 
-// Public on purpose: Authentik and BookStack load these URLs directly, from a browser or a server
-// that isn't logged into Passport, keyed by the md5 hash of the member's email — the same scheme
-// as Gravatar (see avatars.ts). Anyone who knows a member's email can therefore fetch their photo.
-//
-// Always answers with an image: the member's uploaded photo if there is one, otherwise their
-// Gravatar, fetched and served by Passport itself (so those services only ever deal with this one
-// URL, and the member's browser never talks to Gravatar). `d` picks Gravatar's fallback when the
-// member has no Gravatar either — the member's initials by default (Gravatar's `initials` style,
-// looked up from the email hash; `mp`, a neutral silhouette, for an unknown hash); `d=404` is still
-// available for a caller that wants to fall through to its own fallback (e.g. Authentik initials).
-// If Gravatar itself fails, Passport's own silhouette is returned instead (see defaultAvatar.ts).
+// Passport's own avatar service, keyed like Gravatar (md5 of the lowercased email) so Authentik and
+// BookStack can use it as their avatar source — which is also why it's public: anyone who knows a
+// member's email can fetch their avatar. Always answers with an image, and never calls a third
+// party:
+// 1. the member's uploaded photo;
+// 2. otherwise an image of their initials (first two characters of their username), generated on
+//    first request and then cached on disk;
+// 3. for a hash that matches no member (or if Authentik can't be reached to find out), a neutral
+//    silhouette.
+// A single size is served (512px); callers scale it down. `s`/`size` query parameters are ignored.
 
-const GRAVATAR_TIMEOUT_MS = 5_000;
-const GRAVATAR_CACHE_TTL_MS = 60 * 60 * 1000;
-const GRAVATAR_CACHE_MAX_ENTRIES = 500;
-const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
-// Some CDNs treat requests with Node's default User-Agent as bots; identify ourselves plainly.
-const GRAVATAR_USER_AGENT = 'Passport3 avatar proxy (+https://github.com/LgHS/Passport3)';
-
-type CachedImage = { bytes: Uint8Array; type: string; expiresAt: number };
-// Keeps a page full of avatars (e.g. a BookStack listing) from turning into one Gravatar request
-// per image per view. Plain insertion-ordered Map: the oldest entry is evicted when full.
-const gravatarCache = new Map<string, CachedImage>();
-
-const baseHeaders = {
+const headers = {
 	'X-Content-Type-Options': 'nosniff',
 	// Embeddable from other origins (Authentik, BookStack), but only ever as a bare image.
 	'Cross-Origin-Resource-Policy': 'cross-origin',
 	'Content-Security-Policy': "default-src 'none'"
 };
 
-// Null when Gravatar has no image to give: a real 404 (only expected with d=404), an unreachable
-// Gravatar, or an unexpected answer. Everything but the expected 404 is logged, so a failing
-// fallback can be diagnosed from the server logs instead of guessed at.
-async function fetchGravatar(
-	hash: string,
-	size: string,
-	fallback: string,
-	initials: string | null
-): Promise<CachedImage | null> {
-	const key = `${hash}|${size}|${fallback}|${initials ?? ''}`;
-	const cached = gravatarCache.get(key);
-	if (cached && cached.expiresAt > Date.now()) return cached;
-	gravatarCache.delete(key);
-
-	const url = new URL(`https://www.gravatar.com/avatar/${hash}`);
-	url.searchParams.set('s', size);
-	url.searchParams.set('d', fallback);
-	// Gravatar's `initials` default draws the letters itself; only the letters are sent, never the
-	// member's name.
-	if (fallback === 'initials' && initials) {
-		url.searchParams.set('initials', initials);
-		url.searchParams.set('name', initials);
-	}
-
-	let res: Response;
-	try {
-		res = await fetch(url, {
-			headers: { 'User-Agent': GRAVATAR_USER_AGENT, Accept: 'image/*' },
-			signal: AbortSignal.timeout(GRAVATAR_TIMEOUT_MS)
-		});
-	} catch (err) {
-		console.warn(`[avatars] Gravatar unreachable for ${url}: ${err instanceof Error ? err.message : err}`);
-		return null;
-	}
-	const type = res.headers.get('content-type')?.split(';')[0].trim() ?? '';
-	if (!res.ok || !IMAGE_TYPES.has(type)) {
-		if (!(res.status === 404 && fallback === '404')) {
-			console.warn(`[avatars] Unexpected Gravatar answer for ${url}: ${res.status} ${type} (final URL ${res.url})`);
-		}
-		return null;
-	}
-
-	const image = { bytes: new Uint8Array(await res.arrayBuffer()), type, expiresAt: Date.now() + GRAVATAR_CACHE_TTL_MS };
-	if (gravatarCache.size >= GRAVATAR_CACHE_MAX_ENTRIES) {
-		gravatarCache.delete(gravatarCache.keys().next().value!);
-	}
-	gravatarCache.set(key, image);
-	return image;
-}
-
-export const GET: RequestHandler = async ({ params, url }) => {
+export const GET: RequestHandler = async ({ params }) => {
 	if (!isAvatarFileName(params.file)) {
 		error(404, 'Image introuvable.');
 	}
@@ -94,7 +31,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	if (avatar) {
 		return new Response(new Uint8Array(avatar.bytes), {
 			headers: {
-				...baseHeaders,
+				...headers,
 				'Content-Type': 'image/jpeg',
 				// The file name stays the same across uploads (it's the email hash), so caches must
 				// expire; Passport's own pages add a `?v=` cache-buster that changes on every upload.
@@ -104,37 +41,16 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		});
 	}
 
-	const requestedSize = url.searchParams.get('s') ?? url.searchParams.get('size') ?? '';
-	const size = /^\d{1,4}$/.test(requestedSize) ? String(Math.min(2048, Math.max(1, Number(requestedSize)))) : '512';
 	const hash = params.file.replace(/\.jpg$/, '');
-	const requestedFallback = url.searchParams.get('d') ?? '';
-	let fallback = /^[a-z0-9-]{1,20}$/.test(requestedFallback) ? requestedFallback : '';
-	let initials: string | null = null;
-	// No explicit `d`: a known member without a Gravatar gets their initials, anyone else (or if
-	// Authentik can't be reached right now) Gravatar's neutral silhouette.
-	if (!fallback || fallback === 'initials') {
-		initials = await getInitialsForEmailHash(hash).catch(() => null);
-		fallback = initials ? 'initials' : 'mp';
-	}
-
-	const gravatar = await fetchGravatar(hash, size, fallback, initials);
-	if (!gravatar) {
-		// A 404 only when the caller explicitly asked for one; otherwise this URL keeps its promise
-		// of always returning an image, with Passport's own neutral silhouette. Short cache, so the
-		// real Gravatar shows up again soon once it's reachable.
-		if (fallback === '404') {
-			error(404, 'Image introuvable.');
-		}
-		return new Response(new Uint8Array(DEFAULT_AVATAR_PNG), {
-			headers: { ...baseHeaders, 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=300' }
+	const initials = await getInitialsForEmailHash(hash).catch(() => null);
+	if (initials) {
+		return new Response(new Uint8Array(getGeneratedAvatar(hash, initials)), {
+			headers: { ...headers, 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=3600' }
 		});
 	}
 
-	return new Response(new Uint8Array(gravatar.bytes), {
-		headers: {
-			...baseHeaders,
-			'Content-Type': gravatar.type,
-			'Cache-Control': 'public, max-age=3600'
-		}
+	// Short cache: an unknown hash may just be a member Authentik couldn't be asked about right now.
+	return new Response(new Uint8Array(DEFAULT_AVATAR_PNG), {
+		headers: { ...headers, 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=300' }
 	});
 };

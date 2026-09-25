@@ -137,7 +137,7 @@
 			<div class="flex shrink-0 flex-col items-center gap-1">
 				<img src={avatarSize(data.profile.avatar, 128)} alt="" class="h-16 w-16 object-cover" />
 				{#if data.hasLocalAvatar}
-					<!-- Moderation only: removes the uploaded photo, the member falls back to Gravatar. -->
+					<!-- Moderation only: removes the uploaded photo, the member falls back to generated initials. -->
 					<form
 						method="POST"
 						action="?/deleteAvatar"

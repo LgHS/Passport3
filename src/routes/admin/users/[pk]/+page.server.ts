@@ -255,7 +255,7 @@ export const actions: Actions = {
 		return { rfidRegenerated: true };
 	},
 
-	// Moderation: removes a member's uploaded photo (they fall back to their Gravatar). Admins can
+	// Moderation: removes a member's uploaded photo (they fall back to their generated initials). Admins can
 	// only remove, never upload on someone's behalf — the photo is the member's own choice.
 	deleteAvatar: async ({ params, locals }) => {
 		const admin = requireAdminUser(locals);

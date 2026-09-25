@@ -7,7 +7,7 @@
 		avatarUrl,
 		hasLocalAvatar
 	}: {
-		// The avatar currently shown everywhere: the uploaded photo if there is one, Gravatar otherwise.
+		// The avatar currently shown everywhere: the uploaded photo if there is one, generated initials otherwise.
 		avatarUrl: string | null;
 		hasLocalAvatar: boolean;
 	} = $props();
@@ -175,10 +175,7 @@
 			{#if hasLocalAvatar}
 				<p>Votre photo de profil est affichée partout sur Passport, y compris dans le trombinoscope.</p>
 			{:else}
-				<p>
-					Votre photo vient de <a href="https://gravatar.com" target="_blank" rel="noopener">Gravatar</a>,
-					via votre adresse email. Vous pouvez aussi envoyer votre propre photo.
-				</p>
+				<p>Sans photo, un avatar à vos initiales est affiché. Vous pouvez envoyer votre propre photo.</p>
 			{/if}
 			<div class="mt-2 flex flex-wrap gap-2">
 				<button type="button" onclick={pickFile} class="btn-primary px-3 py-1.5 text-xs">
@@ -191,7 +188,7 @@
 						use:enhance={() =>
 							async ({ result, update }) => {
 								await update();
-								if (result.type === 'success') showToast('success', 'Photo supprimée, retour à Gravatar.');
+								if (result.type === 'success') showToast('success', 'Photo supprimée, retour aux initiales.');
 							}}
 					>
 						<button

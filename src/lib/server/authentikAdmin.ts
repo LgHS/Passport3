@@ -2,7 +2,7 @@ import { env } from '$env/dynamic/private';
 import { requireEnv } from '$lib/server/env';
 import { getCachedProfile, setCachedProfile } from '$lib/server/profileCache';
 import { getMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
-import { emailHash, getLocalAvatarUrl, getLocalAvatarUrls } from '$lib/server/avatars';
+import { avatarUrlFor, emailHash, getLocalAvatarUrls } from '$lib/server/avatars';
 import type { EmergencyContact, ProfileAttributeField, UserProfile } from '$lib/types';
 import { TAG_COLOR_PRESETS } from '$lib/tagColors';
 
@@ -161,12 +161,12 @@ function pickAttributes(source: Record<string, unknown>): Record<string, string>
 	return picked;
 }
 
-// A locally uploaded photo (see avatars.ts) takes precedence over the Gravatar URL Authentik
-// reports. Applied on every read rather than baked into the cache, so an upload or delete shows up
-// immediately without having to invalidate the cached Authentik record.
+// Avatars come from Passport itself (see avatars.ts): the member's uploaded photo, or their
+// generated initials — never the Gravatar URL Authentik reports. Applied on every read rather than
+// baked into the cache, so an upload or delete shows up immediately.
 export async function getUserProfile(pk: number): Promise<UserProfile> {
 	const profile = await getAuthentikUserProfile(pk);
-	return { ...profile, avatar: getLocalAvatarUrl(pk) ?? profile.avatar };
+	return { ...profile, avatar: avatarUrlFor(pk, profile.email) };
 }
 
 async function getAuthentikUserProfile(pk: number): Promise<UserProfile> {
@@ -714,21 +714,15 @@ export interface AdminUserSummary {
 const EXCLUDED_USERNAMES = new Set(['lghsadm','akadmin']);
 const EXCLUDED_TYPES = new Set(['service_account', 'internal_service_account']);
 
-// Initials for the public avatar endpoint's Gravatar fallback (/avatars/[file]), keyed by the same
-// email hash as the URL. Only the initials ever leave this module — never the full name — since
-// they end up in a request to Gravatar. Refreshed every 15 minutes: one Authentik call covers every
-// avatar request in between, however many members a page shows.
+// Initials for the generated avatar (/avatars/[file]), keyed by the same email hash as the URL:
+// the first two characters of the username — same rule as the trombinoscope's initials fallback,
+// and never derived from the member's real name, which the avatar URL is public enough to leak.
+// Refreshed every 15 minutes: one Authentik call covers every avatar request in between.
 const INITIALS_TTL_MS = 15 * 60 * 1000;
 let initialsByHash: { map: Map<string, string>; expiresAt: number } | null = null;
 
-function initialsOf(label: string): string {
-	return label
-		.trim()
-		.split(/[\s._-]+/)
-		.filter(Boolean)
-		.slice(0, 2)
-		.map((word) => [...word][0]?.toUpperCase() ?? '')
-		.join('');
+function initialsOf(username: string): string {
+	return [...username.trim()].slice(0, 2).join('').toUpperCase();
 }
 
 export async function getInitialsForEmailHash(hash: string): Promise<string | null> {
@@ -738,7 +732,7 @@ export async function getInitialsForEmailHash(hash: string): Promise<string | nu
 		const map = new Map<string, string>();
 		for (const u of data.results) {
 			if (!u.email || EXCLUDED_USERNAMES.has(u.username) || EXCLUDED_TYPES.has(u.type)) continue;
-			const initials = initialsOf(u.name || u.username);
+			const initials = initialsOf(u.username);
 			if (initials) map.set(emailHash(u.email), initials);
 		}
 		initialsByHash = { map, expiresAt: Date.now() + INITIALS_TTL_MS };
@@ -887,7 +881,9 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 						optin.showPhone && typeof u.attributes.phoneNumber === 'string'
 							? u.attributes.phoneNumber
 							: null,
-					avatar: optin.showAvatar ? (localAvatars.get(u.pk) ?? (u.avatar || null)) : null,
+					avatar: optin.showAvatar
+						? (localAvatars.get(u.pk) ?? (u.email ? `/avatars/${emailHash(u.email)}.jpg` : null))
+						: null,
 					tag: typeof tagValue === 'string' && tagValue.trim() ? tagValue : null,
 					tagColor:
 						typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue)
