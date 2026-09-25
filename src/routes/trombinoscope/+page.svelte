@@ -224,14 +224,19 @@
 							id="trombiEmail"
 							name="trombiEmail"
 							type="email"
+							maxlength="254"
 							bind:value={trombiEmailValue}
 							class="w-full border border-black px-3 py-2 text-sm"
 						/>
 						<p class="mt-1 text-xs text-gray-500">
 							Laissez vide pour afficher votre email de compte, ou indiquez une autre adresse à
-							montrer à la place.
+							montrer à la place. Adresse publique, visible par tous les membres.
 						</p>
 					</div>
+				{:else}
+					<!-- Keeps the override while "Mail" is unchecked — otherwise the field would be absent
+					     from the submission and saved as empty, losing the address. -->
+					<input type="hidden" name="trombiEmail" value={trombiEmailValue} />
 				{/if}
 			{/if}
 

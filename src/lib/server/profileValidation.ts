@@ -195,7 +195,8 @@ const TROMBI_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function validateTrombiEmail(raw: string): { ok: true; value: string } | { ok: false; error: string } {
 	const trimmed = raw.trim();
 	if (!trimmed) return { ok: true, value: '' };
-	if (!TROMBI_EMAIL_RE.test(trimmed)) {
+	// 254: longueur maximale d'une adresse email (RFC 5321).
+	if (trimmed.length > 254 || !TROMBI_EMAIL_RE.test(trimmed)) {
 		return { ok: false, error: 'Adresse email invalide.' };
 	}
 	return { ok: true, value: trimmed };
