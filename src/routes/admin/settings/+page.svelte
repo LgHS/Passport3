@@ -29,9 +29,7 @@
 	<title>Paramètres — Administration — Passport</title>
 </svelte:head>
 
-<section class="mx-auto max-w-2xl">
-	<a href="/admin" class="mb-4 inline-block text-sm">← Retour à la liste</a>
-
+<section>
 	<h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Paramètres</h1>
 
 	<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">
@@ -71,7 +69,12 @@
 		</label>
 
 		<div class="mt-4">
-			<label class="mb-1 block text-sm font-bold uppercase" for="hour">Heure d'envoi</label>
+			<label class="mb-1 block text-sm font-bold uppercase" for="hour">
+				Heure d'envoi
+				<span class="text-xs font-normal text-gray-500 normal-case"
+					>(Heure de la République libre d'Outremeuse)</span
+				>
+			</label>
 			<select
 				id="hour"
 				name="hour"
@@ -82,7 +85,6 @@
 					<option value={h}>{h}h00</option>
 				{/each}
 			</select>
-			<p class="mt-1 text-xs text-gray-500">Heure de Bruxelles.</p>
 		</div>
 
 		<button

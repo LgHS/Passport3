@@ -40,9 +40,6 @@
 			<a href="/admin/invite" class="no-underline-fx btn-primary inline-block px-4 py-2">
 				Créer une invitation
 			</a>
-			<a href="/admin/settings" class="no-underline-fx btn-primary inline-block px-4 py-2">
-				Paramètres
-			</a>
 		</div>
 	</div>
 
@@ -54,12 +51,6 @@
 			placeholder="Rechercher par nom, identifiant ou email…"
 			class="min-w-0 flex-1 border border-black px-3 py-2 text-sm"
 		/>
-		<a
-			href="/admin/audit"
-			class="no-underline-fx inline-block shrink-0 border border-black px-4 py-2 text-sm font-bold uppercase transition-colors hover:bg-black hover:text-white"
-		>
-			Historique d'audit
-		</a>
 	</div>
 
 	{#if pagedUsers.length > 0}

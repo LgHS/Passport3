@@ -258,7 +258,7 @@
 			<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->
 			<div class="space-y-2 sm:hidden">
 				{#each data.sessions as session (session.uuid)}
-					<div class="border border-black p-3 text-sm">
+					<div class="border border-black p-3 text-sm leading-relaxed">
 						<p class="font-bold">{session.os} — {session.browser}</p>
 						<p class="mt-1 text-gray-600">{session.location ?? session.lastIp}</p>
 						<p class="mt-1 text-gray-600">Dernière activité : {formatDate(session.lastUsed)}</p>
@@ -280,7 +280,7 @@
 			</div>
 
 			<div class="hidden overflow-x-auto sm:block">
-				<table class="w-full border-collapse text-sm">
+				<table class="w-full border-collapse text-sm leading-relaxed">
 					<thead>
 						<tr class="bg-black text-white uppercase">
 							<th class="border border-black px-3 py-2 text-left">Navigateur / OS</th>
@@ -477,7 +477,7 @@
 				</form>
 			{:else}
 				<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-					Aucun compte Mattermost lié à votre adresse email — rien à envoyer pour l'instant.
+					Aucun compte Mattermost lié à votre adresse email. Rien à envoyer pour l'instant.
 					Cette option apparaîtra dès qu'un compte sera relié.
 				</p>
 			{/if}

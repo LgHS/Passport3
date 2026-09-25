@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { getGithubUsername, setGithubUsername } from '$lib/server/authentikAdmin';
 import { getGithubOrgMembershipStatus, inviteToGithubOrg, GithubUnavailableError } from '$lib/server/githubApp';
 import { logAuditEvent } from '$lib/server/auditLog';
+import { requireEnv } from '$lib/server/env';
 import { authentikPk, displayName } from '$lib/types';
 
 // Same auth guard shape as the rest of the app.
@@ -21,13 +22,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const pk = resolvePk(locals);
 	const githubUsername = await getGithubUsername(pk);
 
+	const githubOrgUrl = `https://github.com/${requireEnv('GITHUB_ORG')}`;
+
 	if (!githubUsername) {
-		return { githubUsername: null, membershipStatus: null, githubUnavailable: false };
+		return { githubUsername: null, membershipStatus: null, githubUnavailable: false, githubOrgUrl };
 	}
 
 	try {
 		const membershipStatus = await getGithubOrgMembershipStatus(githubUsername);
-		return { githubUsername, membershipStatus, githubUnavailable: false };
+		return { githubUsername, membershipStatus, githubUnavailable: false, githubOrgUrl };
 	} catch (err) {
 		if (err instanceof GithubUnavailableError) {
 			// Distinct from `membershipStatus === null` meaning "no linked account" — this member
@@ -35,7 +38,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			// through to the invite button while that's unknown (see feedback_distinguish-fetch-
 			// failure-from-empty), it would risk a redundant invite attempt against a status we
 			// never actually confirmed.
-			return { githubUsername, membershipStatus: null, githubUnavailable: true };
+			return { githubUsername, membershipStatus: null, githubUnavailable: true, githubOrgUrl };
 		}
 		throw err;
 	}

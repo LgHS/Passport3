@@ -321,10 +321,11 @@
 								rel="noopener"
 								aria-label="Ouvrir la conversation Mattermost"
 								title="Ouvrir la conversation Mattermost"
+								class="no-underline-fx"
 							>
 								<svg
 									viewBox="0 0 20 20"
-									class="h-4 w-4 shrink-0"
+									class="h-5 w-5 shrink-0"
 									fill="none"
 									stroke="currentColor"
 									stroke-width="2.5"

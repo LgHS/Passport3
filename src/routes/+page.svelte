@@ -56,7 +56,7 @@
 {#snippet checklistItem(href: string, done: boolean | null, doneLabel: string, todoLabel: string)}
 	<a
 		{href}
-		class="no-underline-fx flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-gray-50"
+		class="no-underline-fx flex items-center gap-3 px-4 py-2 text-sm transition-colors hover:bg-gray-50"
 	>
 		<span
 			class="flex h-5 w-5 shrink-0 items-center justify-center border text-xs font-bold {done
@@ -80,42 +80,34 @@
 	<title>Passport</title>
 </svelte:head>
 
-<section class="mb-12">
-	<h1 class="mb-2 text-3xl font-bold uppercase">Passport</h1>
-
-	{#if !data.user}
-		<p class="mb-4 max-w-2xl text-lg font-bold">
-			Bienvenue sur l'extranet membres du <a
-				href="https://lghs.be"
-				target="_blank"
-				rel="noopener">Liège Hackerspace</a
-			>
-		</p>
-		<p class="mb-4 max-w-2xl leading-relaxed">
+{#if !data.user}
+	<img src="/logo.svg" alt="Liège Hackerspace" class="mb-6 h-20 w-auto" />
+	<p class="mb-4 text-lg font-bold">
+		Bienvenue sur l'extranet membres du
+		<br><a href="https://lghs.be" target="_blank" rel="noopener">Liège Hackerspace</a>
+	</p>
+	<p class="mb-8 leading-relaxed">
+		Il centralise les informations et les services liés à votre adhésion afin de vous permettre de
+		gérer facilement votre compte et vos accès au hackerspace.
+	</p>
+	<a
+		href="/login"
+		data-sveltekit-preload-data="off"
+		class="no-underline-fx btn-primary inline-block px-6 py-3"
+	>
+		Se connecter
+	</a>
+{:else}
+	<section class="mb-12">
+		<h1 class="mb-2 text-3xl font-bold uppercase">Passport</h1>
+		<p class="mb-2 max-w-2xl text-lg font-bold">Bienvenue sur Passport, {displayName(data.user)} !</p>
+		<p class="leading-relaxed">
 			Il centralise les informations et les services liés à votre adhésion afin de vous permettre
-			de gérer facilement votre compte et vos accès au hackerspace.
+			de gérer facilement votre compte et vos accès au hackerspace. En cas de souci :
+			<a href="mailto:noc@lghs.be">noc@lghs.be</a>
 		</p>
-		<p class="mb-2 max-w-2xl leading-relaxed">Depuis Passport, vous pouvez notamment :</p>
-		<ul class="mb-6 max-w-2xl list-disc space-y-1 pl-5 leading-relaxed">
-			<li>consulter et modifier vos informations personnelles ;</li>
-			<li>vérifier l’état de vos cotisations ;</li>
-			<li>consulter vos droits d’accès au hackerspace ;</li>
-			<li>gérer votre badge RFID.</li>
-			<li>…</li>
-		</ul>
-		<a
-			href="/login"
-			data-sveltekit-preload-data="off"
-			class="no-underline-fx btn-primary inline-block px-6 py-3"
-		>
-			Se connecter avec le SSO
-		</a>
-	{:else}
-		<p class="max-w-2xl text-lg font-bold">
-			Bienvenue, {displayName(data.user)} !
-		</p>
-	{/if}
-</section>
+	</section>
+{/if}
 
 {#if data.user}
 	<div class="mb-10 flex flex-col gap-8 md:flex-row md:items-start">
@@ -137,7 +129,7 @@
 
 		<section class="w-full md:w-1/2">
 			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma check-list</h2>
-			<div class="divide-y divide-black border border-black">
+			<div class="border border-black">
 				{#each checklistItems as item, i (i)}
 					{@render checklistItem(item.href, item.done, item.doneLabel, item.todoLabel)}
 				{/each}

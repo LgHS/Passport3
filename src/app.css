@@ -14,7 +14,10 @@
 		top: 0;
 		left: 0;
 		right: 0;
-		height: 10px;
+		/* tooth.svg's natural size is 20x5px. The band must match that exactly — any taller and
+		   the image (drawn once per row, top-aligned, not stretched) leaves blank space below it
+		   inside the band itself. */
+		height: 5px;
 		background: url('/tooth.svg') repeat-x top left;
 		z-index: 50;
 	}
@@ -22,9 +25,20 @@
 	/* The strip above is absolutely positioned, so it doesn't push anything down on its own — on
 	   lghs.be that's masked by their header's generous 48px padding, but Passport's header sits
 	   much closer to the top (the cotisation badge especially), so without this the strip visually
-	   glues itself to whatever's underneath. */
+	   glues itself to whatever's underneath. This used to live on `body` as padding-top, but the
+	   app shell (+layout.svelte) is now a fixed `h-dvh` element with its own internal scroll
+	   regions — any extra height on `body` beyond exactly 100dvh creates a separate, tiny page-level
+	   scroll range that fights the strip's position and the app shell's own scrolling. The app
+	   shell reserves this same space itself instead (border-box padding doesn't add to its height).
+	   */
+	html {
+		height: 100%;
+		overflow: hidden;
+	}
+
 	body {
-		padding-top: 16px;
+		height: 100dvh;
+		overflow: hidden;
 	}
 
 	a {
