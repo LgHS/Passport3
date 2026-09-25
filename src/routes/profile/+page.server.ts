@@ -17,6 +17,7 @@ import {
 	MAX_EMERGENCY_CONTACTS,
 	getUsernameChangeInfo,
 	updateUsername,
+	revokeAllSessions,
 	AuthentikUnavailableError
 } from '$lib/server/authentikAdmin';
 import { lookupMattermostUsername } from '$lib/server/mattermost';
@@ -110,7 +111,7 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 };
 
 export const actions: Actions = {
-	updateProfile: async ({ request, locals }) => {
+	updateProfile: async ({ request, locals, cookies }) => {
 		const pk = resolvePk(locals);
 		const user = locals.user!;
 		const formData = await request.formData();
@@ -175,18 +176,10 @@ export const actions: Actions = {
 		}
 
 		let usernameError: string | undefined;
-		let newUsername: string | undefined;
+		let usernameMutation: { before: string; after: string } | undefined;
 		if (usernameRequestedChange) {
 			try {
-				const usernameMutation = await updateUsername(pk, submittedUsername!);
-				newUsername = usernameMutation.after;
-				logAuditEvent(
-					{ sub: user.sub, label: displayName(user) },
-					'user',
-					'profile.username.update',
-					{ pk },
-					{ before: { username: usernameMutation.before }, after: { username: usernameMutation.after } }
-				);
+				usernameMutation = await updateUsername(pk, submittedUsername!);
 			} catch (err) {
 				// Surfaces Authentik's own rejection reason (most likely a uniqueness conflict)
 				// instead of a guessed message — authentikApiFetch's Error wraps the raw response
@@ -218,14 +211,37 @@ export const actions: Actions = {
 			}
 		}
 
+		if (usernameMutation) {
+			logAuditEvent(
+				{ sub: user.sub, label: displayName(user) },
+				'user',
+				'profile.username.update',
+				{ pk },
+				{ before: { username: usernameMutation.before }, after: { username: usernameMutation.after } }
+			);
+
+			// Matches the warning shown before this change: every session and linked service login
+			// is invalidated, not just this one — the member has to sign back in everywhere with the
+			// new username. Revoked under the *old* username (still valid at this point, before
+			// Authentik's own session/user join reflects the rename), then this app's own session
+			// goes with the rest instead of leaving the member looking logged in here while
+			// everything else already isn't. `redirect()` throws, so it must stay outside the
+			// try/catch above — that catch is for updateUsername()'s own failure, not for this.
+			await revokeAllSessions(usernameMutation.before);
+			clearSessionCookie(cookies);
+			redirect(302, '/login');
+		}
+
+		// Only ever reached when the username either wasn't part of this submission, or matched a
+		// rejection above — a successful change always redirects (see the block above) before
+		// getting here, so there's no "new username" to echo back at this point.
 		return {
 			success: true,
 			changed: mutation.changed,
 			firstName: result.firstName,
 			lastName: result.lastName,
 			attributes: result.attributes,
-			usernameError,
-			newUsername
+			usernameError
 		};
 	},
 

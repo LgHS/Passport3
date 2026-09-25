@@ -364,6 +364,17 @@ export async function updateUsername(pk: number, username: string): Promise<User
 	return { before: currentUser.username, after: username };
 }
 
+// Called right after a successful username change, matching the warning shown before that change
+// ("vous serez déconnecté de toutes vos sessions et services") — a straight loop over each
+// session's own DELETE, no per-session ownership re-check needed since listSessions() only ever
+// returns sessions belonging to this exact username in the first place.
+export async function revokeAllSessions(username: string): Promise<void> {
+	const sessions = await listSessions(username);
+	await Promise.all(
+		sessions.map((s) => authentikApiFetch(`core/authenticated_sessions/${s.uuid}/`, { method: 'DELETE' }))
+	);
+}
+
 export interface TrombinoscopeOptin {
 	visible: boolean;
 	showAvatar: boolean;

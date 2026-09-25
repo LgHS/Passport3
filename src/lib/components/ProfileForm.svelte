@@ -11,7 +11,6 @@
 		lastName?: string;
 		attributes?: Record<string, string>;
 		usernameError?: string;
-		newUsername?: string;
 	} | null;
 
 	let {
@@ -66,8 +65,11 @@
 		}
 	});
 
+	// A successful change always redirects to /login server-side (see profile/+page.server.ts) —
+	// there's never a re-render with a saved `username` prop value different from what's typed
+	// here, so this only ever needs seeding from the prop itself, not from any `form` result.
 	// svelte-ignore state_referenced_locally
-	let usernameValue = $state(form?.newUsername ?? username ?? '');
+	let usernameValue = $state(username ?? '');
 
 	function fieldLabel(key: string): string {
 		return fields.find((f) => f.key === key)?.label ?? key;
@@ -212,9 +214,10 @@
 					class="w-full border border-black px-3 py-2 text-sm"
 				/>
 				<p class="mt-1 text-xs text-gray-500">
-					En changeant votre nom d'utilisateur, vous devrez vous déconnecter et vous
-					reconnecter aux autres services (ex. Mattermost) pour que la mise à jour soit prise en
-					compte. Cette action est limitée à une fois tous les 30 jours.
+					En changeant votre nom d'utilisateur, vous serez déconnecté·e de toutes vos sessions
+					et services (ex. Mattermost). <strong
+						>Il faudra alors vous connecter avec votre nouveau username.</strong
+					> Cette action est limitée à une fois tous les 30 jours.
 				</p>
 			{/if}
 		</div>
