@@ -134,20 +134,37 @@
 
 	<div class="mb-6 flex items-center gap-4">
 		{#if data.profile.avatar}
-			<div class="flex shrink-0 flex-col items-center gap-1">
+			<!-- Relative box so the delete control sits on the photo itself, without shifting the
+			     identity block next to it. -->
+			<div class="relative h-16 w-16 shrink-0">
 				<img src={avatarSize(data.profile.avatar, 128)} alt="" class="h-16 w-16 object-cover" />
 				{#if data.hasLocalAvatar}
 					<!-- Moderation only: removes the uploaded photo, the member falls back to generated initials. -->
 					<form
 						method="POST"
 						action="?/deleteAvatar"
-						use:enhance={() =>
-							async ({ result, update }) => {
+						class="absolute -top-2 -right-2"
+						use:enhance={({ cancel }) => {
+							if (!confirm(`Supprimer la photo de profil de ${data.profile.name} ? Ses initiales seront affichées à la place.`)) {
+								cancel();
+								return;
+							}
+							return async ({ result, update }) => {
 								await update();
 								if (result.type === 'success') showToast('success', 'Photo supprimée.');
-							}}
+							};
+						}}
 					>
-						<button type="submit" class="text-xs text-red-700 underline">Supprimer la photo</button>
+						<button
+							type="submit"
+							title="Supprimer la photo"
+							aria-label="Supprimer la photo"
+							class="flex h-6 w-6 items-center justify-center border border-black bg-white text-red-700 transition-colors hover:bg-red-700 hover:text-white"
+						>
+							<svg viewBox="0 0 20 20" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+								<path d="M4 6h12M8 6V4h4v2M6 6l1 10h6l1-10M9 9v5M11 9v5" stroke-linecap="round" stroke-linejoin="round" />
+							</svg>
+						</button>
 					</form>
 				{/if}
 			</div>

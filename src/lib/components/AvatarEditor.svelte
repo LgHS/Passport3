@@ -203,11 +203,16 @@
 					<form
 						method="POST"
 						action="?/deleteAvatar"
-						use:enhance={() =>
-							async ({ result, update }) => {
+						use:enhance={({ cancel: cancelDelete }) => {
+							if (!confirm('Supprimer votre photo de profil ? Vos initiales seront affichées à la place.')) {
+								cancelDelete();
+								return;
+							}
+							return async ({ result, update }) => {
 								await update();
 								if (result.type === 'success') showToast('success', 'Photo supprimée, retour aux initiales.');
-							}}
+							};
+						}}
 					>
 						<button
 							type="submit"
