@@ -42,6 +42,11 @@
 		showPhone: form?.optin?.showPhone ?? data.optin.showPhone
 	});
 
+	// Not part of fieldOptinState/fieldOptins above: free text, not a boolean toggle — same
+	// pattern as the member-facing /trombinoscope form.
+	// svelte-ignore state_referenced_locally
+	let trombiEmailValue = $state(form?.optin?.trombiEmail ?? data.optin.trombiEmail);
+
 	$effect(() => {
 		if (form?.optinSuccess) {
 			showToast('success', 'Visibilité trombinoscope mise à jour.');
@@ -200,6 +205,30 @@
 						</label>
 					{/each}
 				</div>
+
+				{#if fieldOptinState.showMail}
+					<div class="mt-3">
+						<label class="mb-1 block text-xs font-bold uppercase text-gray-600" for="trombiEmail">
+							Email affiché (optionnel)
+						</label>
+						<input
+							id="trombiEmail"
+							name="trombiEmail"
+							type="email"
+							maxlength="254"
+							bind:value={trombiEmailValue}
+							class="w-full border border-black px-3 py-2 text-sm"
+						/>
+						<p class="mt-1 text-xs text-gray-500">
+							Laissez vide pour afficher l'email de compte du membre, ou indiquez une autre
+							adresse à montrer à la place. Adresse publique, visible par tous les membres.
+						</p>
+					</div>
+				{:else}
+					<!-- Keeps the override while "Mail" is unchecked — otherwise the field would be absent
+					     from the submission and saved as empty, losing the address. -->
+					<input type="hidden" name="trombiEmail" value={trombiEmailValue} />
+				{/if}
 			{/if}
 
 			<p class="mt-4 text-xs text-gray-600">
