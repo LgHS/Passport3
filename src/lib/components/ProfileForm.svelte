@@ -10,13 +10,17 @@
 		firstName?: string;
 		lastName?: string;
 		attributes?: Record<string, string>;
+		usernameError?: string;
+		newUsername?: string;
 	} | null;
 
 	let {
 		profile,
 		fields,
 		form,
-		collapsibleSocials = true
+		collapsibleSocials = true,
+		username,
+		nextUsernameChangeAllowedAt
 	}: {
 		profile: UserProfile;
 		fields: ProfileAttributeField[];
@@ -26,6 +30,11 @@
 		// them flat instead: an admin editing on someone's behalf (oral/email request) needs to see
 		// everything at a glance, not remember to expand a panel.
 		collapsibleSocials?: boolean;
+		// Only the member-facing /profile passes these — the admin edit form doesn't, which is what
+		// keeps the username field out of that context entirely (see the `{#if username !==
+		// undefined}` guard below) without a separate prop just to toggle it.
+		username?: string;
+		nextUsernameChangeAllowedAt?: string | null;
 	} = $props();
 
 	let submitting = $state(false);
@@ -48,12 +57,17 @@
 	});
 
 	$effect(() => {
-		if (form?.success) {
+		if (form?.usernameError) {
+			showToast('error', form.usernameError);
+		} else if (form?.success) {
 			showToast('success', form.changed ? 'Les données ont été enregistrées.' : 'Aucune modification à enregistrer.');
 		} else if (form?.error) {
 			showToast('error', form.error);
 		}
 	});
+
+	// svelte-ignore state_referenced_locally
+	let usernameValue = $state(form?.newUsername ?? username ?? '');
 
 	function fieldLabel(key: string): string {
 		return fields.find((f) => f.key === key)?.label ?? key;
@@ -179,6 +193,33 @@
 		};
 	}}
 >
+	{#if username !== undefined}
+		<div class="mb-4">
+			<span class="mb-1 block text-sm font-bold uppercase">Nom d'utilisateur</span>
+			{#if nextUsernameChangeAllowedAt}
+				<p class="border border-black bg-gray-100 px-3 py-2 text-sm">{username}</p>
+				<p class="mt-1 text-xs text-gray-500">
+					Vous pourrez le modifier à nouveau à partir du
+					{new Date(nextUsernameChangeAllowedAt).toLocaleDateString('fr-BE')}.
+				</p>
+			{:else}
+				<input
+					id="username"
+					name="username"
+					type="text"
+					maxlength="32"
+					bind:value={usernameValue}
+					class="w-full border border-black px-3 py-2 text-sm"
+				/>
+				<p class="mt-1 text-xs text-gray-500">
+					En changeant votre nom d'utilisateur, vous devrez vous déconnecter et vous
+					reconnecter aux autres services (ex. Mattermost) pour que la mise à jour soit prise en
+					compte. Cette action est limitée à une fois tous les 30 jours.
+				</p>
+			{/if}
+		</div>
+	{/if}
+
 	<div class="mb-4 grid grid-cols-2 gap-4">
 		<div>
 			<label class="mb-1 block text-sm font-bold uppercase" for="firstName">Prénom</label>

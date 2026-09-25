@@ -202,6 +202,37 @@ export function validateTrombiEmail(raw: string): { ok: true; value: string } | 
 	return { ok: true, value: trimmed };
 }
 
+// Contrairement aux champs optionnels ci-dessus, le nom d'utilisateur est obligatoire (Authentik
+// en a toujours besoin d'un) — pas de cas "vide = valide" ici.
+//
+// Le jeu de caractères n'est pas deviné : confirmé en lisant le schéma OpenAPI réel d'Authentik
+// (GET /api/v3/schema/), qui documente son `username` avec exactement ce pattern et cette
+// description : "Requis. 150 caractères maximum. Uniquement des lettres, nombres et les
+// caractères « @ », « . », « + », « - » et « _ »." — c'est le UnicodeUsernameValidator standard
+// de Django, dont le `\w` couvre aussi les lettres accentuées/Unicode, pas seulement a-z/A-Z/0-9
+// (JS n'a pas cet équivalent Unicode-aware pour `\w`, donc \p{L}/\p{N} + le flag `u` en dessous).
+// 32 caractères ici est une limite business plus stricte que les 150 d'Authentik, pas un défaut
+// de son côté — 32 < 150 donc jamais un souci pour l'API elle-même.
+const USERNAME_MAX_LENGTH = 32;
+const USERNAME_RE = /^[\p{L}\p{N}_.@+-]+$/u;
+export function validateUsername(raw: string): { ok: true; value: string } | { ok: false; error: string } {
+	const trimmed = raw.trim();
+	if (!trimmed) {
+		return { ok: false, error: "Le nom d'utilisateur ne peut pas être vide." };
+	}
+	if (trimmed.length > USERNAME_MAX_LENGTH) {
+		return { ok: false, error: `Le nom d'utilisateur ne peut pas dépasser ${USERNAME_MAX_LENGTH} caractères.` };
+	}
+	if (!USERNAME_RE.test(trimmed)) {
+		return {
+			ok: false,
+			error:
+				"Le nom d'utilisateur ne peut contenir que des lettres, chiffres, et les caractères @, ., +, - et _."
+		};
+	}
+	return { ok: true, value: trimmed };
+}
+
 // Format stocké : "YYYY-MM-DD" si l'année est donnée, "MM-DD" sinon — un membre peut vouloir
 // partager son anniversaire (jour/mois) sans révéler son âge. Les deux parties sont combinées
 // côté client dans un champ caché avant l'envoi (voir ProfileForm.svelte), mais revalidées ici
