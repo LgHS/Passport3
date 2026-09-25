@@ -2,6 +2,7 @@ import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { isAvatarFileName, readAvatar } from '$lib/server/avatars';
 import { DEFAULT_AVATAR_PNG } from '$lib/server/defaultAvatar';
+import { getInitialsForEmailHash } from '$lib/server/authentikAdmin';
 
 // Public on purpose: Authentik and BookStack load these URLs directly, from a browser or a server
 // that isn't logged into Passport, keyed by the md5 hash of the member's email — the same scheme
@@ -10,7 +11,8 @@ import { DEFAULT_AVATAR_PNG } from '$lib/server/defaultAvatar';
 // Always answers with an image: the member's uploaded photo if there is one, otherwise their
 // Gravatar, fetched and served by Passport itself (so those services only ever deal with this one
 // URL, and the member's browser never talks to Gravatar). `d` picks Gravatar's fallback when the
-// member has no Gravatar either — `mp` (a neutral silhouette) by default; `d=404` is still
+// member has no Gravatar either — the member's initials by default (Gravatar's `initials` style,
+// looked up from the email hash; `mp`, a neutral silhouette, for an unknown hash); `d=404` is still
 // available for a caller that wants to fall through to its own fallback (e.g. Authentik initials).
 // If Gravatar itself fails, Passport's own silhouette is returned instead (see defaultAvatar.ts).
 
@@ -36,8 +38,13 @@ const baseHeaders = {
 // Null when Gravatar has no image to give: a real 404 (only expected with d=404), an unreachable
 // Gravatar, or an unexpected answer. Everything but the expected 404 is logged, so a failing
 // fallback can be diagnosed from the server logs instead of guessed at.
-async function fetchGravatar(hash: string, size: string, fallback: string): Promise<CachedImage | null> {
-	const key = `${hash}|${size}|${fallback}`;
+async function fetchGravatar(
+	hash: string,
+	size: string,
+	fallback: string,
+	initials: string | null
+): Promise<CachedImage | null> {
+	const key = `${hash}|${size}|${fallback}|${initials ?? ''}`;
 	const cached = gravatarCache.get(key);
 	if (cached && cached.expiresAt > Date.now()) return cached;
 	gravatarCache.delete(key);
@@ -45,6 +52,12 @@ async function fetchGravatar(hash: string, size: string, fallback: string): Prom
 	const url = new URL(`https://www.gravatar.com/avatar/${hash}`);
 	url.searchParams.set('s', size);
 	url.searchParams.set('d', fallback);
+	// Gravatar's `initials` default draws the letters itself; only the letters are sent, never the
+	// member's name.
+	if (fallback === 'initials' && initials) {
+		url.searchParams.set('initials', initials);
+		url.searchParams.set('name', initials);
+	}
 
 	let res: Response;
 	try {
@@ -93,10 +106,18 @@ export const GET: RequestHandler = async ({ params, url }) => {
 
 	const requestedSize = url.searchParams.get('s') ?? url.searchParams.get('size') ?? '';
 	const size = /^\d{1,4}$/.test(requestedSize) ? String(Math.min(2048, Math.max(1, Number(requestedSize)))) : '512';
+	const hash = params.file.replace(/\.jpg$/, '');
 	const requestedFallback = url.searchParams.get('d') ?? '';
-	const fallback = /^[a-z0-9-]{1,20}$/.test(requestedFallback) ? requestedFallback : 'mp';
+	let fallback = /^[a-z0-9-]{1,20}$/.test(requestedFallback) ? requestedFallback : '';
+	let initials: string | null = null;
+	// No explicit `d`: a known member without a Gravatar gets their initials, anyone else (or if
+	// Authentik can't be reached right now) Gravatar's neutral silhouette.
+	if (!fallback || fallback === 'initials') {
+		initials = await getInitialsForEmailHash(hash).catch(() => null);
+		fallback = initials ? 'initials' : 'mp';
+	}
 
-	const gravatar = await fetchGravatar(params.file.replace(/\.jpg$/, ''), size, fallback);
+	const gravatar = await fetchGravatar(hash, size, fallback, initials);
 	if (!gravatar) {
 		// A 404 only when the caller explicitly asked for one; otherwise this URL keeps its promise
 		// of always returning an image, with Passport's own neutral silhouette. Short cache, so the

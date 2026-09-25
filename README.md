@@ -192,7 +192,8 @@ Uploaded profile photos live in the same volume, under `avatars/` next to the da
 JPEGs named after the md5 hash of the member's email, indexed by the `member_avatars` table) — back them up together.
 Avatar URLs are public and follow the Gravatar scheme (`/avatars/<md5 of the lowercased email>.jpg`)
 and always return an image: the member's uploaded photo, or else their Gravatar fetched and served by
-Passport (Gravatar's neutral silhouette if they have none; `?d=404` returns a 404 instead). Other
+Passport (with the member's initials if they have no Gravatar, looked up from Authentik — only the
+initials are sent to Gravatar; `?d=404` returns a 404 instead). Other
 services can use them as their avatar source:
 
 - **Authentik** — *System → Settings → Avatars*: `https://<passport>/avatars/%(mail_hash)s.jpg`

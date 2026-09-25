@@ -2,7 +2,7 @@ import { env } from '$env/dynamic/private';
 import { requireEnv } from '$lib/server/env';
 import { getCachedProfile, setCachedProfile } from '$lib/server/profileCache';
 import { getMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
-import { getLocalAvatarUrl, getLocalAvatarUrls } from '$lib/server/avatars';
+import { emailHash, getLocalAvatarUrl, getLocalAvatarUrls } from '$lib/server/avatars';
 import type { EmergencyContact, ProfileAttributeField, UserProfile } from '$lib/types';
 import { TAG_COLOR_PRESETS } from '$lib/tagColors';
 
@@ -713,6 +713,38 @@ export interface AdminUserSummary {
 // admin account, which shouldn't clutter the member list.
 const EXCLUDED_USERNAMES = new Set(['lghsadm','akadmin']);
 const EXCLUDED_TYPES = new Set(['service_account', 'internal_service_account']);
+
+// Initials for the public avatar endpoint's Gravatar fallback (/avatars/[file]), keyed by the same
+// email hash as the URL. Only the initials ever leave this module — never the full name — since
+// they end up in a request to Gravatar. Refreshed every 15 minutes: one Authentik call covers every
+// avatar request in between, however many members a page shows.
+const INITIALS_TTL_MS = 15 * 60 * 1000;
+let initialsByHash: { map: Map<string, string>; expiresAt: number } | null = null;
+
+function initialsOf(label: string): string {
+	return label
+		.trim()
+		.split(/[\s._-]+/)
+		.filter(Boolean)
+		.slice(0, 2)
+		.map((word) => [...word][0]?.toUpperCase() ?? '')
+		.join('');
+}
+
+export async function getInitialsForEmailHash(hash: string): Promise<string | null> {
+	if (!initialsByHash || initialsByHash.expiresAt <= Date.now()) {
+		const res = await authentikApiFetch('core/users/?page_size=500');
+		const data = (await res.json()) as { results: (AuthentikUserRecord & { type: string })[] };
+		const map = new Map<string, string>();
+		for (const u of data.results) {
+			if (!u.email || EXCLUDED_USERNAMES.has(u.username) || EXCLUDED_TYPES.has(u.type)) continue;
+			const initials = initialsOf(u.name || u.username);
+			if (initials) map.set(emailHash(u.email), initials);
+		}
+		initialsByHash = { map, expiresAt: Date.now() + INITIALS_TTL_MS };
+	}
+	return initialsByHash.map.get(hash) ?? null;
+}
 
 // v1 simplification: single page, no pager UI — fine for a hackerspace-sized member list.
 export async function listUsers(): Promise<AdminUserSummary[]> {
