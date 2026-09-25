@@ -1,0 +1,21 @@
+Passport3
+Copyright (c) 2026 Liège Hackerspace ASBL (BCE 0649.448.256) and contributors.
+
+Licensed under the Business Source License 1.1 (see LICENSE). Each version
+converts to the GNU Affero General Public License v3.0 or later on its Change
+Date.
+
+Attribution
+-----------
+
+Any deployment of the Licensed Work, original or modified, must keep visible
+in the footer of its user interface the following notice, with a working link
+to the project repository:
+
+    Basé sur Passport — Liège Hackerspace
+    https://github.com/LgHS/Passport3
+
+The notice may be restyled to fit the deployment's design, but must remain
+readable on every page that shows the footer.
+
+Commercial licensing: noc@lghs.be

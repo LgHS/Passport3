@@ -198,6 +198,8 @@ Contributions are welcome.
 
 Passport3 is developed for the Liège Hackerspace community. Issues, suggestions, and pull requests can be submitted through the project repository.
 
+By submitting a pull request, you agree to the [Contributor License Agreement](CLA.md) (add the line given at the end of that file to your first PR).
+
 Please do not include personal member data, credentials, API keys, or production configuration in issues or contributions.
 
 Any new feature that mutates a member's account or admin-side data should call `logAuditEvent()` (`src/lib/server/auditLog.ts`), the same way every existing action does — see the [Audit log](#audit-log) section above.
@@ -207,3 +209,12 @@ Any new feature that mutates a member's account or admin-side data should call `
 Passport3 is the third generation of the Liège Hackerspace member portal.
 
 The name reflects its purpose: providing members with a single identity and entry point to the hackerspace ecosystem.
+
+## License
+
+Passport3 is © 2026 Liège Hackerspace ASBL and contributors, released under the [Business Source License 1.1](LICENSE):
+
+- **Free** for non-profit organizations (ASBL, associations, hackerspaces) running it for their own members, and for internal non-commercial use.
+- **Commercial license required** to sell it, host it for third parties as part of a commercial offering, or embed it in a commercial product. Contact: noc@lghs.be.
+- Every deployment must keep the attribution notice in its footer (see [NOTICE](NOTICE)).
+- Each version becomes available under the **AGPL-3.0-or-later** four years after its release.
