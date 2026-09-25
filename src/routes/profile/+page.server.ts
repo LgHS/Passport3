@@ -206,7 +206,11 @@ export const actions: Actions = {
 						}
 					}
 				} catch {
-					// Not JSON, or an unexpected shape — fall back to the raw text above.
+					// Not JSON, or an unexpected shape — the raw text may contain the API's internal
+					// path or wording, so it isn't shown to the member; log it server-side instead and
+					// fall back to a generic message.
+					console.error('[updateProfile] unrecognized username update error from Authentik:', bodyText);
+					usernameError = "Le changement de nom d'utilisateur a échoué. Merci de réessayer plus tard.";
 				}
 			}
 		}
@@ -226,10 +230,18 @@ export const actions: Actions = {
 			// is a live join against Authentik's current username column, and updateUsername() has
 			// already renamed the user by this point, so querying with the old name would match zero
 			// sessions. Authentik's authenticated_sessions endpoint exposes no pk-based filter, so
-			// user__username is the only option, and it must be the post-rename value. `redirect()`
-			// throws, so it must stay outside the try/catch above — that catch is for
+			// user__username is the only option, and it must be the post-rename value.
+			//
+			// The rename itself already succeeded by this point, so a failure here (e.g. Authentik
+			// slow or briefly unavailable) must not surface as a 500 — it's logged and swallowed, and
+			// the member is still redirected to log back in under their new username either way.
+			try {
+				await revokeAllSessions(usernameMutation.after);
+			} catch (err) {
+				console.error('[updateProfile] failed to revoke sessions after username change:', err);
+			}
+			// `redirect()` throws, so it must stay outside the try/catch above — that catch is for
 			// updateUsername()'s own failure, not for this.
-			await revokeAllSessions(usernameMutation.after);
 			clearSessionCookie(cookies);
 			redirect(302, '/login');
 		}
