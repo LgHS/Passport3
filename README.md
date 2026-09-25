@@ -215,6 +215,6 @@ The name reflects its purpose: providing members with a single identity and entr
 Passport3 is © 2026 Liège Hackerspace ASBL and contributors, released under the [Business Source License 1.1](LICENSE):
 
 - **Free** for non-profit organizations (ASBL, associations, hackerspaces) running it for their own members, and for internal non-commercial use.
-- **Commercial license required** to sell it, host it for third parties as part of a commercial offering, or embed it in a commercial product. Contact: noc@lghs.be.
+- **Commercial license required** to sell it, host it for third parties as part of a commercial offering, or embed it in a commercial product. Contact: admin@lghs.be.
 - Every deployment must keep the attribution notice in its footer (see [NOTICE](NOTICE)).
 - Each version becomes available under the **AGPL-3.0-or-later** four years after its release.
