@@ -18,7 +18,11 @@ import {
 	regenerateRfidUid
 } from '$lib/server/authentikAdmin';
 import { lookupMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
-import { validateProfileSubmission, validateEmergencyContactsSubmission } from '$lib/server/profileValidation';
+import {
+	validateProfileSubmission,
+	validateEmergencyContactsSubmission,
+	validateTrombiEmail
+} from '$lib/server/profileValidation';
 import { requireAdminUser } from '$lib/server/auth';
 import { logAuditEvent } from '$lib/server/auditLog';
 import { displayName } from '$lib/types';
@@ -127,6 +131,12 @@ export const actions: Actions = {
 		const pk = resolvePk(params.pk);
 		const formData = await request.formData();
 		const optin = optinFromFormData(formData);
+
+		const trombiEmailResult = validateTrombiEmail(optin.trombiEmail);
+		if (!trombiEmailResult.ok) {
+			return fail(400, { optinError: trombiEmailResult.error, optin });
+		}
+		optin.trombiEmail = trombiEmailResult.value;
 
 		let mutation;
 		try {

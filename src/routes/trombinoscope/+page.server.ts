@@ -7,6 +7,7 @@ import {
 	optinFromFormData
 } from '$lib/server/authentikAdmin';
 import { logAuditEvent } from '$lib/server/auditLog';
+import { validateTrombiEmail } from '$lib/server/profileValidation';
 import { authentikPk, displayName } from '$lib/types';
 
 // Same auth guard shape as /badge and /cotisation — never trust a client-submitted pk, always
@@ -36,6 +37,12 @@ export const actions: Actions = {
 		const user = locals.user!;
 		const formData = await request.formData();
 		const optin = optinFromFormData(formData);
+
+		const trombiEmailResult = validateTrombiEmail(optin.trombiEmail);
+		if (!trombiEmailResult.ok) {
+			return fail(400, { error: trombiEmailResult.error, optin });
+		}
+		optin.trombiEmail = trombiEmailResult.value;
 
 		let mutation;
 		try {

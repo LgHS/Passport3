@@ -326,6 +326,12 @@ export interface TrombinoscopeOptin {
 	showLastname: boolean;
 	showMail: boolean;
 	showPhone: boolean;
+	// Optional override shown instead of the account's real email when set — lets a member keep
+	// their official address private while still giving out a contact address on the
+	// trombinoscope. Empty string means "no override, show the real email" (see the `||` in
+	// listDirectoryMembers below), never null/undefined, same convention as every other stored
+	// string field in this app.
+	trombiEmail: string;
 }
 
 const TROMBINOSCOPE_DEFAULTS: TrombinoscopeOptin = {
@@ -339,7 +345,8 @@ const TROMBINOSCOPE_DEFAULTS: TrombinoscopeOptin = {
 	showFirstname: false,
 	showLastname: false,
 	showMail: false,
-	showPhone: false
+	showPhone: false,
+	trombiEmail: ''
 };
 
 // Not part of PROFILE_ATTRIBUTE_FIELDS, same reasoning as rfid_uid: this isn't a plain string
@@ -352,13 +359,30 @@ const TROMBINOSCOPE_ATTRIBUTE = 'trombinoscope';
 // getTrombinoscopeOptin() and the audit trail below: a member merely toggling their visibility got
 // tag/tagc showing up as "removed" in the diff, since `after` (a clean TrombinoscopeOptin) never
 // had them in the first place. Whitelisting explicitly, same spirit as pickAttributes() above.
+// Only the boolean fields — narrowing the loop below to just these keeps TypeScript able to
+// verify the assignment inside it, now that trombiEmail (a string) also lives on this type.
+const BOOLEAN_OPTIN_KEYS = [
+	'visible',
+	'showAvatar',
+	'showChat',
+	'showFirstname',
+	'showLastname',
+	'showMail',
+	'showPhone'
+] as const satisfies readonly (keyof TrombinoscopeOptin)[];
+
 function pickTrombinoscopeOptin(raw: unknown): TrombinoscopeOptin {
 	const source = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
 	const optin = { ...TROMBINOSCOPE_DEFAULTS };
-	for (const key of Object.keys(TROMBINOSCOPE_DEFAULTS) as (keyof TrombinoscopeOptin)[]) {
+	for (const key of BOOLEAN_OPTIN_KEYS) {
 		if (typeof source[key] === 'boolean') {
 			optin[key] = source[key] as boolean;
 		}
+	}
+	// trombiEmail is a string, not a boolean — the loop above skips it, so it's whitelisted here
+	// on its own instead.
+	if (typeof source.trombiEmail === 'string') {
+		optin.trombiEmail = source.trombiEmail;
 	}
 	return optin;
 }
@@ -380,7 +404,8 @@ export function optinFromFormData(formData: FormData): TrombinoscopeOptin {
 		showFirstname: formData.has('showFirstname'),
 		showLastname: formData.has('showLastname'),
 		showMail: formData.has('showMail'),
-		showPhone: formData.has('showPhone')
+		showPhone: formData.has('showPhone'),
+		trombiEmail: String(formData.get('trombiEmail') ?? '').trim()
 	};
 }
 
@@ -754,7 +779,10 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 					username: u.username,
 					firstName: optin.showFirstname ? firstName : null,
 					lastName: optin.showLastname ? lastName : null,
-					email: optin.showMail ? u.email : null,
+					// An override takes precedence over the account's real email when set — same rule
+					// applied server-side here as on the opt-in forms, so the trombinoscope grid itself
+					// needs no special handling: it's still just "one email, or none".
+					email: optin.showMail ? optin.trombiEmail || u.email : null,
 					phone:
 						optin.showPhone && typeof u.attributes.phoneNumber === 'string'
 							? u.attributes.phoneNumber

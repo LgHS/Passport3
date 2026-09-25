@@ -189,6 +189,18 @@ function validateMatrixId(raw: string): { ok: true; value: string } | { ok: fals
 	return { ok: true, value };
 }
 
+// Même regex que admin/invite/+page.server.ts pour l'email d'invitation — optionnel ici (une
+// valeur vide veut juste dire "pas de remplacement, afficher l'email du compte").
+const TROMBI_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export function validateTrombiEmail(raw: string): { ok: true; value: string } | { ok: false; error: string } {
+	const trimmed = raw.trim();
+	if (!trimmed) return { ok: true, value: '' };
+	if (!TROMBI_EMAIL_RE.test(trimmed)) {
+		return { ok: false, error: 'Adresse email invalide.' };
+	}
+	return { ok: true, value: trimmed };
+}
+
 // Format stocké : "YYYY-MM-DD" si l'année est donnée, "MM-DD" sinon — un membre peut vouloir
 // partager son anniversaire (jour/mois) sans révéler son âge. Les deux parties sont combinées
 // côté client dans un champ caché avant l'envoi (voir ProfileForm.svelte), mais revalidées ici
