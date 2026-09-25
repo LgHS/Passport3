@@ -11,6 +11,16 @@ services:
     volumes:
       - passport3-data:/app/data
     restart: always
+    # Hardening: the image itself is read-only, only the data volume (and a small /tmp for SQLite's
+    # temp files) is writable — a compromised process can't alter the app code or plant files
+    # elsewhere. No Linux capabilities and no privilege escalation (the app runs as `passport`).
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     labels:
       - com.centurylinklabs.watchtower.enable=true
 

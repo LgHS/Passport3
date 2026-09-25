@@ -9,6 +9,10 @@ import { runMigrations } from '$lib/server/migrations';
 // volume declared in docker-compose*.yml, or the file is lost on every Watchtower redeploy.
 const DB_PATH = env.DB_PATH || 'data/passport3.db';
 
+// Everything Passport persists on disk lives next to the database, so the single volume mounted on
+// DB_PATH's directory (see docker-compose*.yml) also covers uploaded files like avatars.
+export const DATA_DIR = dirname(DB_PATH);
+
 let db: Database.Database | null = null;
 
 // Lazy singleton: one connection for the process lifetime, opened on first use rather than at

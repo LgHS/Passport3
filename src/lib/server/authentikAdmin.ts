@@ -2,6 +2,7 @@ import { env } from '$env/dynamic/private';
 import { requireEnv } from '$lib/server/env';
 import { getCachedProfile, setCachedProfile } from '$lib/server/profileCache';
 import { getMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
+import { avatarUrlFor, emailHash, generatedAvatarUrl, getLocalAvatarUrls } from '$lib/server/avatars';
 import type { EmergencyContact, ProfileAttributeField, UserProfile } from '$lib/types';
 import { TAG_COLOR_PRESETS } from '$lib/tagColors';
 
@@ -160,7 +161,15 @@ function pickAttributes(source: Record<string, unknown>): Record<string, string>
 	return picked;
 }
 
+// Avatars come from Passport itself (see avatars.ts): the member's uploaded photo, or their
+// generated initials — never the Gravatar URL Authentik reports. Applied on every read rather than
+// baked into the cache, so an upload or delete shows up immediately.
 export async function getUserProfile(pk: number): Promise<UserProfile> {
+	const profile = await getAuthentikUserProfile(pk);
+	return { ...profile, avatar: avatarUrlFor(pk, profile.email) };
+}
+
+async function getAuthentikUserProfile(pk: number): Promise<UserProfile> {
 	const cached = getCachedProfile(pk);
 	if (cached) return cached;
 
@@ -705,6 +714,65 @@ export interface AdminUserSummary {
 const EXCLUDED_USERNAMES = new Set(['lghsadm','akadmin']);
 const EXCLUDED_TYPES = new Set(['service_account', 'internal_service_account']);
 
+// Initials for the generated avatar (/avatars/[file]), keyed by the same email hash as the URL:
+// the first two characters of the username — same rule as the trombinoscope's initials fallback,
+// and never derived from the member's real name, which the avatar URL is public enough to leak.
+// Refreshed every 15 minutes: one Authentik call covers every avatar request in between.
+const INITIALS_TTL_MS = 15 * 60 * 1000;
+let initialsByHash: { map: Map<string, string>; expiresAt: number } | null = null;
+
+function initialsOf(username: string): string {
+	return [...username.trim()].slice(0, 2).join('').toUpperCase();
+}
+
+// Guards for the public /avatars endpoint, which anyone can hit with any hash: concurrent requests
+// share a single in-flight Authentik call, and after a failure every lookup fails fast for a minute
+// instead of each request retrying against an Authentik that's down.
+const INITIALS_FAILURE_COOLDOWN_MS = 60 * 1000;
+let initialsInFlight: Promise<Map<string, string>> | null = null;
+let initialsFailedAt = 0;
+
+async function loadInitialsByEmailHash(): Promise<Map<string, string>> {
+	const res = await authentikApiFetch('core/users/?page_size=500');
+	const data = (await res.json()) as { results: (AuthentikUserRecord & { type: string })[] };
+	const map = new Map<string, string>();
+	for (const u of data.results) {
+		if (!u.email || EXCLUDED_USERNAMES.has(u.username) || EXCLUDED_TYPES.has(u.type)) continue;
+		const initials = initialsOf(u.username);
+		if (initials) map.set(emailHash(u.email), initials);
+	}
+	return map;
+}
+
+// `fresh` bypasses the 15-minute cache (and the failure cooldown) — for the admin's bulk
+// generation, which should reflect the current member list.
+export async function getInitialsByEmailHash(fresh = false): Promise<Map<string, string>> {
+	if (!fresh && initialsByHash && initialsByHash.expiresAt > Date.now()) return initialsByHash.map;
+	if (!fresh && Date.now() - initialsFailedAt < INITIALS_FAILURE_COOLDOWN_MS) {
+		throw new Error('Authentik user list recently unavailable.');
+	}
+	if (!initialsInFlight) {
+		initialsInFlight = loadInitialsByEmailHash()
+			.then((map) => {
+				initialsByHash = { map, expiresAt: Date.now() + INITIALS_TTL_MS };
+				initialsFailedAt = 0;
+				return map;
+			})
+			.catch((err) => {
+				initialsFailedAt = Date.now();
+				throw err;
+			})
+			.finally(() => {
+				initialsInFlight = null;
+			});
+	}
+	return initialsInFlight;
+}
+
+export async function getInitialsForEmailHash(hash: string): Promise<string | null> {
+	return (await getInitialsByEmailHash()).get(hash) ?? null;
+}
+
 // v1 simplification: single page, no pager UI — fine for a hackerspace-sized member list.
 export async function listUsers(): Promise<AdminUserSummary[]> {
 	const res = await authentikApiFetch('core/users/?page_size=500');
@@ -804,6 +872,8 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 		results: (AuthentikUserRecord & { is_active: boolean; type: string })[];
 	};
 
+	const localAvatars = getLocalAvatarUrls();
+
 	const members = await Promise.all(
 		data.results
 			.filter(
@@ -844,7 +914,9 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 						optin.showPhone && typeof u.attributes.phoneNumber === 'string'
 							? u.attributes.phoneNumber
 							: null,
-					avatar: optin.showAvatar ? u.avatar || null : null,
+					avatar: optin.showAvatar
+						? (localAvatars.get(u.pk) ?? (u.email ? generatedAvatarUrl(u.email) : null))
+						: null,
 					tag: typeof tagValue === 'string' && tagValue.trim() ? tagValue : null,
 					tagColor:
 						typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue)

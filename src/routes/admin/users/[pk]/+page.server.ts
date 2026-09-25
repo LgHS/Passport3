@@ -24,6 +24,7 @@ import {
 	validateTrombiEmail
 } from '$lib/server/profileValidation';
 import { requireAdminUser } from '$lib/server/auth';
+import { deleteAvatar, getLocalAvatarUrl } from '$lib/server/avatars';
 import { logAuditEvent } from '$lib/server/auditLog';
 import { displayName } from '$lib/types';
 
@@ -79,7 +80,8 @@ export const load: PageServerLoad = async ({ params }) => {
 		groups,
 		emergencyContacts,
 		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
-		rfidUid
+		rfidUid,
+		hasLocalAvatar: getLocalAvatarUrl(pk) !== null
 	};
 };
 
@@ -251,5 +253,16 @@ export const actions: Actions = {
 		logAuditEvent({ sub: admin.sub, label: displayName(admin) }, 'admin', 'badge.regenerate', { pk });
 
 		return { rfidRegenerated: true };
+	},
+
+	// Moderation: removes a member's uploaded photo (they fall back to their generated initials). Admins can
+	// only remove, never upload on someone's behalf — the photo is the member's own choice.
+	deleteAvatar: async ({ params, locals }) => {
+		const admin = requireAdminUser(locals);
+		const pk = resolvePk(params.pk);
+		if (deleteAvatar(pk)) {
+			logAuditEvent({ sub: admin.sub, label: displayName(admin) }, 'admin', 'avatar.delete', { pk });
+		}
+		return { avatarDeleted: true };
 	}
 };

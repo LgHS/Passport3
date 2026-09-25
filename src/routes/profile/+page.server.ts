@@ -22,6 +22,13 @@ import {
 } from '$lib/server/authentikAdmin';
 import { lookupMattermostUsername } from '$lib/server/mattermost';
 import {
+	deleteAvatar,
+	getLocalAvatarUrl,
+	regenerateGeneratedAvatar,
+	saveAvatar,
+	validateAvatarUpload
+} from '$lib/server/avatars';
+import {
 	validateProfileSubmission,
 	validateEmergencyContactsSubmission,
 	validateUsername
@@ -106,11 +113,53 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		emergencyContacts,
 		nextUsernameChangeAllowedAt: usernameChangeInfo.nextChangeAllowedAt,
 		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
+		// Whether profile.avatar is an uploaded photo (deletable) or generated initials.
+		hasLocalAvatar: getLocalAvatarUrl(pk) !== null,
 		auditEvents
 	};
 };
 
 export const actions: Actions = {
+	uploadAvatar: async ({ request, locals }) => {
+		const pk = resolvePk(locals);
+		const user = locals.user!;
+		const file = (await request.formData()).get('avatar');
+		if (!(file instanceof File)) {
+			return fail(400, { avatarError: 'Aucune image reçue.' });
+		}
+
+		const bytes = new Uint8Array(await file.arrayBuffer());
+		const validation = validateAvatarUpload(bytes);
+		if (!validation.ok) {
+			return fail(400, { avatarError: validation.error });
+		}
+
+		// The file is named after the email's hash (see avatars.ts), taken from Authentik's own
+		// record rather than the session token, since that's what Authentik itself hashes.
+		const profile = await getUserProfile(pk);
+		saveAvatar(pk, profile.email, bytes);
+		logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'avatar.update', { pk });
+		return { avatarUpdated: true };
+	},
+
+	// Only meaningful without an uploaded photo: picks another background colour for the generated
+	// initials avatar. Not audit-logged — purely cosmetic, and trivially undone.
+	regenerateAvatar: async ({ locals }) => {
+		const pk = resolvePk(locals);
+		const profile = await getUserProfile(pk);
+		regenerateGeneratedAvatar(profile.email);
+		return { avatarRegenerated: true };
+	},
+
+	deleteAvatar: async ({ locals }) => {
+		const pk = resolvePk(locals);
+		const user = locals.user!;
+		if (deleteAvatar(pk)) {
+			logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'avatar.delete', { pk });
+		}
+		return { avatarDeleted: true };
+	},
+
 	updateProfile: async ({ request, locals, cookies }) => {
 		const pk = resolvePk(locals);
 		const user = locals.user!;

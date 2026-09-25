@@ -188,6 +188,22 @@ container is running — recent transactions can still be sitting in `passport3.
 the container before copying just the `.db` file, or back up the whole volume (`.db`, `.db-wal`,
 `.db-shm` together) in one atomic snapshot.
 
+Uploaded profile photos live in the same volume, under `avatars/` next to the database (512×512
+JPEGs named after the md5 hash of the member's email, indexed by the `member_avatars` table) — back them up together.
+Passport is its own avatar service — Gravatar isn't used at all. Avatar URLs are public and keyed
+like Gravatar (`/avatars/<md5 of the lowercased email>.jpg`), and always return an image: the
+member's uploaded photo, or else an image of their initials (first two characters of their
+username, on a muted background picked from their hash), generated on first request with
+[resvg](https://github.com/thx/resvg-js) and cached under `avatars/generated/`. Other services can
+use them as their avatar source:
+
+- **Authentik** — *System → Settings → Avatars*: `https://<passport>/avatars/%(mail_hash)s.jpg`
+- **BookStack** — `AVATAR_URL=https://<passport>/avatars/${hash}.jpg`
+
+The container runs with a read-only filesystem, no Linux capabilities and `no-new-privileges`
+(see `docker-compose*.yml`): the data volume and a `/tmp` tmpfs are the only writable places, and
+the data directory is readable only by the `passport` user.
+
 Tables are created by numbered, append-only migrations in `src/lib/server/migrations.ts` (run
 automatically on first connection) rather than by each feature module creating its own table ad
 hoc — add a new entry there for a new table instead of a local `CREATE TABLE IF NOT EXISTS`.

@@ -116,6 +116,37 @@ const migrations: Migration[] = [
 				)
 			`);
 		}
+	},
+	{
+		version: 7,
+		name: 'create member_avatars',
+		up: (db) => {
+			// One row per member who uploaded a photo — no row means "show generated initials". The
+			// file is named after the md5 hash of the member's email (see avatars.ts), so Authentik
+			// and BookStack can reference it from the email alone, like a Gravatar.
+			db.exec(`
+				CREATE TABLE member_avatars (
+					member_pk INTEGER PRIMARY KEY,
+					file TEXT NOT NULL,
+					updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+				)
+			`);
+		}
+	},
+	{
+		version: 8,
+		name: 'create avatar_variants',
+		up: (db) => {
+			// Background colour picked by a member for their generated initials avatar ("Changer de
+			// couleur" on /profile), keyed by the same email hash as the avatar URL. No row means the
+			// default colour derived from the hash itself.
+			db.exec(`
+				CREATE TABLE avatar_variants (
+					email_hash TEXT PRIMARY KEY,
+					variant INTEGER NOT NULL
+				)
+			`);
+		}
 	}
 ];
 

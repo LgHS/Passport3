@@ -154,6 +154,13 @@ Passport3 a une petite base SQLite locale (`better-sqlite3`) pour les données q
 
 La base tourne en mode WAL, donc `passport3.db` seul n'est pas un instantané cohérent tant que le conteneur tourne : des transactions récentes peuvent encore se trouver dans `passport3.db-wal`. Soit arrêter le conteneur avant de copier uniquement le fichier `.db`, soit sauvegarder tout le volume (`.db`, `.db-wal`, `.db-shm` ensemble) en un seul instantané atomique.
 
+Les photos de profil envoyées par les membres sont dans le même volume, dans `avatars/` à côté de la base (JPEG 512×512 nommés d'après le hash md5 de l'email du membre, référencés par la table `member_avatars`) : à sauvegarder ensemble. Passport est son propre service d'avatars : Gravatar n'est plus utilisé du tout. Les URL d'avatar sont publiques, construites comme celles de Gravatar (`/avatars/<md5 de l'email en minuscules>.jpg`), et renvoient toujours une image : la photo envoyée par le membre, sinon une image de ses initiales (les deux premiers caractères de son nom d'utilisateur, sur un fond sobre choisi d'après son hash), générée au premier appel avec [resvg](https://github.com/thx/resvg-js) puis mise en cache dans `avatars/generated/`. D'autres services peuvent s'en servir comme source d'avatar :
+
+- **Authentik**, *System → Settings → Avatars* : `https://<passport>/avatars/%(mail_hash)s.jpg`
+- **BookStack** : `AVATAR_URL=https://<passport>/avatars/${hash}.jpg`
+
+Le conteneur tourne avec un système de fichiers en lecture seule, sans capacités Linux et avec `no-new-privileges` (voir `docker-compose*.yml`) : seuls le volume de données et un `/tmp` en mémoire sont inscriptibles, et le dossier de données n'est lisible que par l'utilisateur `passport`.
+
 ## Contribuer
 
 Les contributions sont les bienvenues.
