@@ -1,5 +1,5 @@
-import { randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DATA_DIR, getDb } from '$lib/server/db';
 
@@ -7,37 +7,51 @@ import { DATA_DIR, getDb } from '$lib/server/db';
 // A member with an uploaded photo gets it everywhere Passport shows an avatar (header, /profile,
 // admin, trombinoscope) instead of their Gravatar; deleting it falls back to Gravatar again.
 //
-// The browser does the square crop and resize itself (AvatarUpload.svelte) and sends a small
-// JPEG — the server doesn't re-encode images, so it only accepts exactly that shape: a JPEG of
+// The browser does the square crop and resize itself (AvatarEditor.svelte) and sends a JPEG — the
+// server doesn't re-encode images, so it only accepts exactly that shape: a JPEG of
 // AVATAR_SIZE x AVATAR_SIZE under AVATAR_MAX_BYTES, checked from the file's own bytes rather than
 // trusting the client's filename or Content-Type.
-export const AVATAR_SIZE = 256;
-const AVATAR_MAX_BYTES = 200 * 1024;
+export const AVATAR_SIZE = 512;
+const AVATAR_MAX_BYTES = 400 * 1024;
 
 const AVATAR_DIR = join(DATA_DIR, 'avatars');
-// Random, unguessable names: an avatar URL is only ever handed out where the member's own
-// visibility settings allow it (see listDirectoryMembers), so knowing a member's pk isn't enough to
-// fetch their photo directly. A new name on every upload also makes the URL safe to cache forever.
+
+// Files are named after the Gravatar-style hash of the member's email — md5 of the trimmed,
+// lowercased address — so other services can point at the same photo from the email alone:
+// Authentik's avatar setting (`https://<passport>/avatars/%(mail_hash)s.jpg`) and BookStack's
+// AVATAR_URL (`https://<passport>/avatars/${hash}.jpg`) use that exact hash. The flip side is that
+// the photo is as public as a Gravatar: anyone who knows a member's email can compute its URL.
+// If a member's email ever changes, their file has to be renamed along with it (saveAvatar does
+// this on the next upload; an email-change tool should call renameAvatar).
 const AVATAR_FILE_RE = /^[a-f0-9]{32}\.jpg$/;
 
-function avatarUrl(file: string): string {
-	return `/avatars/${file}`;
+export function emailHash(email: string): string {
+	return createHash('md5').update(email.trim().toLowerCase()).digest('hex');
+}
+
+// `?v=` changes with every upload, so Passport's own pages never show a stale photo even though
+// the file name itself stays the same for a given email.
+function avatarUrl(file: string, updatedAt: string): string {
+	return `/avatars/${file}?v=${Date.parse(updatedAt) || 0}`;
+}
+
+type AvatarRow = { member_pk: number; file: string; updated_at: string };
+
+function getRow(pk: number): AvatarRow | undefined {
+	return getDb()
+		.prepare('SELECT member_pk, file, updated_at FROM member_avatars WHERE member_pk = ?')
+		.get(pk) as AvatarRow | undefined;
 }
 
 export function getLocalAvatarUrl(pk: number): string | null {
-	const row = getDb().prepare('SELECT file FROM member_avatars WHERE member_pk = ?').get(pk) as
-		| { file: string }
-		| undefined;
-	return row ? avatarUrl(row.file) : null;
+	const row = getRow(pk);
+	return row ? avatarUrl(row.file, row.updated_at) : null;
 }
 
 // One query for the whole trombinoscope instead of one per member.
 export function getLocalAvatarUrls(): Map<number, string> {
-	const rows = getDb().prepare('SELECT member_pk, file FROM member_avatars').all() as {
-		member_pk: number;
-		file: string;
-	}[];
-	return new Map(rows.map((row) => [row.member_pk, avatarUrl(row.file)]));
+	const rows = getDb().prepare('SELECT member_pk, file, updated_at FROM member_avatars').all() as AvatarRow[];
+	return new Map(rows.map((row) => [row.member_pk, avatarUrl(row.file, row.updated_at)]));
 }
 
 // Walks the JPEG markers up to the first SOF (start of frame) segment, which carries the image
@@ -77,18 +91,17 @@ function removeFile(file: string): void {
 	rmSync(join(AVATAR_DIR, file), { force: true });
 }
 
-// Written to a temp name then renamed, so a crash mid-write never leaves a truncated file behind a
-// row that points at it. Owner-only permissions: the volume holds member data, not public assets.
-export function saveAvatar(pk: number, bytes: Uint8Array): void {
+// Written to a random temp name then renamed over the final one, so a crash mid-write never leaves
+// a truncated file, and a reader never sees a half-written replacement. Owner-only permissions:
+// the volume holds member data.
+export function saveAvatar(pk: number, email: string, bytes: Uint8Array): void {
 	mkdirSync(AVATAR_DIR, { recursive: true, mode: 0o700 });
-	const file = `${randomBytes(16).toString('hex')}.jpg`;
-	const tmpPath = join(AVATAR_DIR, `${file}.tmp`);
+	const file = `${emailHash(email)}.jpg`;
+	const tmpPath = join(AVATAR_DIR, `${randomBytes(8).toString('hex')}.tmp`);
 	writeFileSync(tmpPath, bytes, { mode: 0o600 });
 	renameSync(tmpPath, join(AVATAR_DIR, file));
 
-	const previous = getDb().prepare('SELECT file FROM member_avatars WHERE member_pk = ?').get(pk) as
-		| { file: string }
-		| undefined;
+	const previous = getRow(pk);
 	getDb()
 		.prepare(
 			`INSERT INTO member_avatars (member_pk, file) VALUES (?, ?)
@@ -96,27 +109,41 @@ export function saveAvatar(pk: number, bytes: Uint8Array): void {
 			 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`
 		)
 		.run(pk, file);
-	if (previous) removeFile(previous.file);
+	// Only differs when the member's email changed since their last upload.
+	if (previous && previous.file !== file) removeFile(previous.file);
+}
+
+// For a future email-change tool: keeps the photo reachable under the new email's hash.
+export function renameAvatar(pk: number, newEmail: string): void {
+	const row = getRow(pk);
+	if (!row) return;
+	const file = `${emailHash(newEmail)}.jpg`;
+	if (file === row.file) return;
+	renameSync(join(AVATAR_DIR, row.file), join(AVATAR_DIR, file));
+	getDb().prepare('UPDATE member_avatars SET file = ? WHERE member_pk = ?').run(file, pk);
 }
 
 // Returns whether there was anything to delete, so callers only audit-log real changes.
 export function deleteAvatar(pk: number): boolean {
-	const previous = getDb().prepare('SELECT file FROM member_avatars WHERE member_pk = ?').get(pk) as
-		| { file: string }
-		| undefined;
+	const previous = getRow(pk);
 	if (!previous) return false;
 	getDb().prepare('DELETE FROM member_avatars WHERE member_pk = ?').run(pk);
 	removeFile(previous.file);
 	return true;
 }
 
-// Null for anything that isn't one of our own file names, so a crafted path can never escape
-// AVATAR_DIR.
-export function readAvatar(file: string): Buffer | null {
+// Null for anything that isn't one of our own file names (so a crafted path can never escape
+// AVATAR_DIR), or when that member has no uploaded photo.
+export function readAvatar(file: string): { bytes: Buffer; modifiedAt: Date } | null {
 	if (!AVATAR_FILE_RE.test(file)) return null;
+	const path = join(AVATAR_DIR, file);
 	try {
-		return readFileSync(join(AVATAR_DIR, file));
+		return { bytes: readFileSync(path), modifiedAt: statSync(path).mtime };
 	} catch {
 		return null;
 	}
+}
+
+export function isAvatarFileName(file: string): boolean {
+	return AVATAR_FILE_RE.test(file);
 }

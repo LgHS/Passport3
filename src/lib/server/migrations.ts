@@ -122,8 +122,8 @@ const migrations: Migration[] = [
 		name: 'create member_avatars',
 		up: (db) => {
 			// One row per member who uploaded a photo — no row means "fall back to Gravatar". The
-			// file name is random (see avatars.ts) rather than derived from the pk, so an avatar URL
-			// can't be guessed for a member whose trombinoscope opt-in keeps it hidden.
+			// file is named after the md5 hash of the member's email (see avatars.ts), so Authentik
+			// and BookStack can reference it the same way they reference a Gravatar.
 			db.exec(`
 				CREATE TABLE member_avatars (
 					member_pk INTEGER PRIMARY KEY,

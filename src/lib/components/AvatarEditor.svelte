@@ -15,10 +15,10 @@
 	// Crop viewport on screen, and the size of the JPEG actually sent — must match the server's
 	// AVATAR_SIZE (src/lib/server/avatars.ts), which rejects anything else.
 	const VIEW = 240;
-	const OUTPUT = 256;
-	// Server-side cap is 200 KB; a 256px JPEG is typically 15-40 KB, so this only kicks in for
+	const OUTPUT = 512;
+	// Server-side cap is 400 KB; a 512px JPEG is typically 40-120 KB, so this only kicks in for
 	// unusually noisy photos, by lowering the quality until it fits.
-	const MAX_BYTES = 200 * 1024;
+	const MAX_BYTES = 400 * 1024;
 	const MAX_ZOOM = 4;
 	const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
 

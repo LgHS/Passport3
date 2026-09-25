@@ -106,7 +106,10 @@ export const actions: Actions = {
 			return fail(400, { avatarError: validation.error });
 		}
 
-		saveAvatar(pk, bytes);
+		// The file is named after the email's hash (see avatars.ts), taken from Authentik's own
+		// record rather than the session token, since that's what Authentik itself hashes.
+		const profile = await getUserProfile(pk);
+		saveAvatar(pk, profile.email, bytes);
 		logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'avatar.update', { pk });
 		return { avatarUpdated: true };
 	},
