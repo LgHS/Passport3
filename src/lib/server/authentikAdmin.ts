@@ -725,8 +725,10 @@ function initialsOf(username: string): string {
 	return [...username.trim()].slice(0, 2).join('').toUpperCase();
 }
 
-export async function getInitialsForEmailHash(hash: string): Promise<string | null> {
-	if (!initialsByHash || initialsByHash.expiresAt <= Date.now()) {
+// `fresh` bypasses the 15-minute cache — for the admin's bulk generation, which should reflect the
+// current member list.
+export async function getInitialsByEmailHash(fresh = false): Promise<Map<string, string>> {
+	if (fresh || !initialsByHash || initialsByHash.expiresAt <= Date.now()) {
 		const res = await authentikApiFetch('core/users/?page_size=500');
 		const data = (await res.json()) as { results: (AuthentikUserRecord & { type: string })[] };
 		const map = new Map<string, string>();
@@ -737,7 +739,11 @@ export async function getInitialsForEmailHash(hash: string): Promise<string | nu
 		}
 		initialsByHash = { map, expiresAt: Date.now() + INITIALS_TTL_MS };
 	}
-	return initialsByHash.map.get(hash) ?? null;
+	return initialsByHash.map;
+}
+
+export async function getInitialsForEmailHash(hash: string): Promise<string | null> {
+	return (await getInitialsByEmailHash()).get(hash) ?? null;
 }
 
 // v1 simplification: single page, no pager UI — fine for a hackerspace-sized member list.

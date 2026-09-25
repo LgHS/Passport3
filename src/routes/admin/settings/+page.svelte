@@ -11,6 +11,7 @@
 	// svelte-ignore state_referenced_locally
 	let hour = $state(form?.hour ?? data.birthdaySettings.hour);
 	let refreshingMattermostCache = $state(false);
+	let generatingAvatars = $state(false);
 
 	$effect(() => {
 		if (form?.birthdaySuccess) {
@@ -21,6 +22,14 @@
 			showToast('success', 'Cache Mattermost régénéré.');
 		} else if (form?.mattermostCacheError) {
 			showToast('error', form.mattermostCacheError);
+		} else if (form?.avatarsGenerated) {
+			const { generated, alreadyCached, withPhoto } = form.avatarsGenerated;
+			showToast(
+				'success',
+				`${generated} avatar(s) généré(s), ${alreadyCached} déjà en cache, ${withPhoto} membre(s) avec photo.`
+			);
+		} else if (form?.avatarsError) {
+			showToast('error', form.avatarsError);
 		}
 	});
 </script>
@@ -120,6 +129,34 @@
 			class="btn-primary px-4 py-2 text-sm disabled:opacity-50"
 		>
 			{refreshingMattermostCache ? 'Régénération…' : 'Régénérer le cache Mattermost'}
+		</button>
+	</form>
+
+	<h2 class="mt-8 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Avatars</h2>
+	<form
+		method="POST"
+		action="?/pregenerateAvatars"
+		class="border border-black p-4"
+		use:enhance={() => {
+			generatingAvatars = true;
+			return async ({ update }) => {
+				await update({ reset: false });
+				generatingAvatars = false;
+			};
+		}}
+	>
+		<p class="mb-4 text-sm text-gray-600">
+			Les membres sans photo ont un avatar généré à partir de leur nom d'utilisateur, créé
+			automatiquement la première fois qu'il est affiché. Ce bouton les génère tous d'un coup, par
+			exemple avant de brancher Authentik ou BookStack sur Passport. Les avatars déjà générés ne
+			sont pas refaits.
+		</p>
+		<button
+			type="submit"
+			disabled={generatingAvatars}
+			class="btn-primary px-4 py-2 text-sm disabled:opacity-50"
+		>
+			{generatingAvatars ? 'Génération…' : 'Générer les avatars manquants'}
 		</button>
 	</form>
 </section>

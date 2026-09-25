@@ -1,6 +1,10 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { requireAdmin } from '$lib/server/auth';
+import { requireAdmin, requireAdminUser } from '$lib/server/auth';
+import { getInitialsByEmailHash } from '$lib/server/authentikAdmin';
+import { pregenerateAvatars } from '$lib/server/avatars';
+import { logAuditEvent } from '$lib/server/auditLog';
+import { displayName } from '$lib/types';
 import { getBirthdaySettings, updateBirthdaySettings } from '$lib/server/birthdaySettings';
 import { refreshMattermostCache } from '$lib/server/mattermost';
 
@@ -36,5 +40,21 @@ export const actions: Actions = {
 			});
 		}
 		return { mattermostCacheRefreshed: true };
+	},
+
+	pregenerateAvatars: async ({ locals }) => {
+		const admin = requireAdminUser(locals);
+		let result;
+		try {
+			result = pregenerateAvatars(await getInitialsByEmailHash(true));
+		} catch {
+			return fail(500, { avatarsError: 'La génération des avatars a échoué, réessayez.' });
+		}
+		if (result.generated > 0) {
+			logAuditEvent({ sub: admin.sub, label: displayName(admin) }, 'admin', 'avatars.pregenerate', {}, {
+				generated: result.generated
+			});
+		}
+		return { avatarsGenerated: result };
 	}
 };

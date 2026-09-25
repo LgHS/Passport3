@@ -189,12 +189,14 @@ export function regenerateGeneratedAvatar(email: string): void {
 
 // The initials and colour variant are part of the cached file name, so a new username or a new
 // colour gets a fresh image instead of a stale one; previous images are removed when it's written.
-export function getGeneratedAvatar(hash: string, initials: string): Buffer {
+function generatedFile(hash: string, initials: string): { file: string; path: string; variant: number } {
 	const variant = getVariant(hash);
 	const file = `${hash}-${Buffer.from(initials).toString('hex')}-${variant}.png`;
-	const path = join(GENERATED_DIR, file);
-	if (existsSync(path)) return readFileSync(path);
+	return { file, path: join(GENERATED_DIR, file), variant };
+}
 
+function writeGeneratedAvatar(hash: string, initials: string): Buffer {
+	const { file, path, variant } = generatedFile(hash, initials);
 	const png = renderInitialsAvatar(hash, initials, variant);
 	mkdirSync(GENERATED_DIR, { recursive: true, mode: 0o700 });
 	for (const old of readdirSync(GENERATED_DIR)) {
@@ -204,4 +206,39 @@ export function getGeneratedAvatar(hash: string, initials: string): Buffer {
 	writeFileSync(tmpPath, png, { mode: 0o600 });
 	renameSync(tmpPath, path);
 	return png;
+}
+
+export function getGeneratedAvatar(hash: string, initials: string): Buffer {
+	const { path } = generatedFile(hash, initials);
+	if (existsSync(path)) return readFileSync(path);
+	return writeGeneratedAvatar(hash, initials);
+}
+
+export interface PregenerateResult {
+	generated: number;
+	alreadyCached: number;
+	withPhoto: number;
+}
+
+// Admin bulk action: makes sure every member without an uploaded photo already has their initials
+// image on disk, instead of waiting for its first request (e.g. before pointing Authentik or
+// BookStack at Passport). Idempotent: images already cached are left alone.
+export function pregenerateAvatars(initialsByHash: Map<string, string>): PregenerateResult {
+	const withPhoto = new Set(
+		(getDb().prepare('SELECT file FROM member_avatars').all() as { file: string }[]).map((row) =>
+			row.file.replace(/\.jpg$/, '')
+		)
+	);
+	const result: PregenerateResult = { generated: 0, alreadyCached: 0, withPhoto: 0 };
+	for (const [hash, initials] of initialsByHash) {
+		if (withPhoto.has(hash)) {
+			result.withPhoto++;
+		} else if (existsSync(generatedFile(hash, initials).path)) {
+			result.alreadyCached++;
+		} else {
+			writeGeneratedAvatar(hash, initials);
+			result.generated++;
+		}
+	}
+	return result;
 }
