@@ -198,7 +198,7 @@ Contributions are welcome.
 
 Passport3 is developed for the Liège Hackerspace community. Issues, suggestions, and pull requests can be submitted through the project repository.
 
-By submitting a pull request, you agree to the [Contributor License Agreement](CLA.md) (add the line given at the end of that file to your first PR).
+By submitting a pull request, you agree to the [Contributor License Agreement](CLA.md) (comment the acceptance sentence given at the end of that file on your first PR).
 
 Please do not include personal member data, credentials, API keys, or production configuration in issues or contributions.
 
