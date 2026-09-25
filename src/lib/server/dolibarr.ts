@@ -134,8 +134,15 @@ function resolveFkSoc(raw: string | number | null | undefined): number | null {
 	return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+// Characters that carry meaning in Dolibarr's sqlfilters syntax — quotes delimit the value,
+// parentheses delimit criteria, and a backslash could escape our own closing quote. None of them
+// belong in a real member's address, so refusing them outright beats trying to escape them for a
+// parser whose escaping rules aren't documented.
+const SQLFILTER_UNSAFE_CHARS = /['"\\()]/;
+
 export async function getMemberByEmail(email: string): Promise<DolibarrMember | null> {
-	const filter = `(t.email:=:'${email.replace(/'/g, "\\'")}')`;
+	if (SQLFILTER_UNSAFE_CHARS.test(email)) return null;
+	const filter = `(t.email:=:'${email}')`;
 	const res = await dolibarrApiFetch(`members?sqlfilters=${encodeURIComponent(filter)}`);
 	const results = (await res.json()) as RawMemberRecord[];
 	const record = results[0];
