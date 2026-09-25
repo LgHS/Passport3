@@ -318,6 +318,63 @@ export async function setGithubUsername(pk: number, username: string): Promise<v
 	});
 }
 
+// Not part of PROFILE_ATTRIBUTE_FIELDS, same reasoning as rfid_uid/github_username: a
+// server-managed cooldown timestamp, never hand-typed by the member.
+const USERNAME_CHANGED_ATTRIBUTE = 'username_changed_at';
+const USERNAME_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+
+// `nextChangeAllowedAt` is computed here rather than left as a raw timestamp for the caller to do
+// date math on — null means "can change right now", otherwise it's the ISO instant the cooldown
+// actually lifts, ready to format/compare wherever it's shown or enforced.
+export async function getUsernameChangeInfo(
+	pk: number
+): Promise<{ username: string; nextChangeAllowedAt: string | null }> {
+	const res = await authentikApiFetch(`core/users/${pk}/`);
+	const user = (await res.json()) as AuthentikUserRecord;
+	const raw = user.attributes[USERNAME_CHANGED_ATTRIBUTE];
+	const lastChangedAt = typeof raw === 'string' ? Date.parse(raw) : NaN;
+	const nextChangeAllowedAt =
+		!Number.isNaN(lastChangedAt) && Date.now() - lastChangedAt < USERNAME_CHANGE_COOLDOWN_MS
+			? new Date(lastChangedAt + USERNAME_CHANGE_COOLDOWN_MS).toISOString()
+			: null;
+	return { username: user.username, nextChangeAllowedAt };
+}
+
+export interface UsernameMutationResult {
+	before: string;
+	after: string;
+}
+
+// Read-merge-write, same reasoning as updateUserProfile/regenerateRfidUid — stamps the cooldown
+// timestamp in the very same PATCH as the username change itself, so the two can never end up out
+// of step (e.g. the username changing but the cooldown failing to record, letting a second change
+// slip through immediately after).
+export async function updateUsername(pk: number, username: string): Promise<UsernameMutationResult> {
+	const current = await authentikApiFetch(`core/users/${pk}/`);
+	const currentUser = (await current.json()) as AuthentikUserRecord;
+
+	await authentikApiFetch(`core/users/${pk}/`, {
+		method: 'PATCH',
+		body: JSON.stringify({
+			username,
+			attributes: { ...currentUser.attributes, [USERNAME_CHANGED_ATTRIBUTE]: new Date().toISOString() }
+		})
+	});
+
+	return { before: currentUser.username, after: username };
+}
+
+// Called right after a successful username change, matching the warning shown before that change
+// ("vous serez déconnecté de toutes vos sessions et services") — a straight loop over each
+// session's own DELETE, no per-session ownership re-check needed since listSessions() only ever
+// returns sessions belonging to this exact username in the first place.
+export async function revokeAllSessions(username: string): Promise<void> {
+	const sessions = await listSessions(username);
+	await Promise.all(
+		sessions.map((s) => authentikApiFetch(`core/authenticated_sessions/${s.uuid}/`, { method: 'DELETE' }))
+	);
+}
+
 export interface TrombinoscopeOptin {
 	visible: boolean;
 	showAvatar: boolean;
