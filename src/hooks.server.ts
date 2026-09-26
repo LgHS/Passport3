@@ -1,4 +1,5 @@
 import type { Handle } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import { OidcUnavailableError, verifyIdToken } from '$lib/server/authentik';
 import { clearSessionCookie, SESSION_COOKIE } from '$lib/server/session';
 import { startBirthdayScheduler } from '$lib/server/birthdayScheduler';
@@ -28,5 +29,20 @@ export const handle: Handle = async ({ event, resolve }) => {
 		event.locals.user = null;
 	}
 
-	return resolve(event);
+	const response = await resolve(event);
+	setSecurityHeaders(response.headers);
+	return response;
 };
+
+function setSecurityHeaders(headers: Headers) {
+	headers.set('X-Content-Type-Options', 'nosniff');
+	// frame-ancestors would be the modern equivalent, but it's ignored in a report-only CSP —
+	// this one actually blocks clickjacking today.
+	headers.set('X-Frame-Options', 'DENY');
+	headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+	headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+	if (!dev) {
+		// No includeSubDomains/preload: other lghs.be subdomains aren't this app's call to make.
+		headers.set('Strict-Transport-Security', 'max-age=31536000');
+	}
+}
