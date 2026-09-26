@@ -99,7 +99,12 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		throw err;
 	}
 
-	const auditEvents = await listAuditEventsForTarget(pk);
+	// Best-effort like the avatar lookups: a Postgres outage empties the history tab rather than
+	// taking the whole profile page (and every edit form on it) down with it.
+	const auditEvents = await listAuditEventsForTarget(pk).catch((err) => {
+		console.error('Failed to load audit history', err);
+		return [];
+	});
 
 	return {
 		profile,

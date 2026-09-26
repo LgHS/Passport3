@@ -57,7 +57,9 @@ const migrations: Migration[] = [
 					description TEXT,
 					link TEXT,
 					quantity INTEGER NOT NULL DEFAULT 1,
-					estimated_amount REAL,
+					-- DOUBLE PRECISION, not REAL: Postgres' REAL is 4 bytes (~7 significant digits),
+					-- unlike SQLite's 8-byte REAL this column was first written for.
+					estimated_amount DOUBLE PRECISION,
 					type TEXT NOT NULL
 				)
 			`;

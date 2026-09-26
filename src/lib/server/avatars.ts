@@ -52,18 +52,36 @@ async function getRow(pk: number): Promise<AvatarRow | undefined> {
 	return row ? { ...row, updated_at: row.updated_at.toISOString() } : undefined;
 }
 
+// The read helpers below never throw: showing an avatar is never worth failing a page over. If
+// Postgres is unreachable, members just get their generated initials (in the default colour)
+// instead of an error — the header, /profile, the trombinoscope and the public /avatars endpoint
+// (used by Authentik and BookStack) all keep working on Authentik alone.
+function logReadFailure(what: string, err: unknown): void {
+	console.error(`[avatars] ${what} failed, falling back`, err);
+}
+
 export async function getLocalAvatarUrl(pk: number): Promise<string | null> {
-	const row = await getRow(pk);
-	return row ? avatarUrl(row.file, row.updated_at) : null;
+	try {
+		const row = await getRow(pk);
+		return row ? avatarUrl(row.file, row.updated_at) : null;
+	} catch (err) {
+		logReadFailure('local avatar lookup', err);
+		return null;
+	}
 }
 
 // One query for the whole trombinoscope instead of one per member.
 export async function getLocalAvatarUrls(): Promise<Map<number, string>> {
-	const sql = await getDb();
-	const rows = await sql<{ member_pk: number; file: string; updated_at: Date }[]>`
-		SELECT member_pk, file, updated_at FROM member_avatars
-	`;
-	return new Map(rows.map((row) => [row.member_pk, avatarUrl(row.file, row.updated_at.toISOString())]));
+	try {
+		const sql = await getDb();
+		const rows = await sql<{ member_pk: number; file: string; updated_at: Date }[]>`
+			SELECT member_pk, file, updated_at FROM member_avatars
+		`;
+		return new Map(rows.map((row) => [row.member_pk, avatarUrl(row.file, row.updated_at.toISOString())]));
+	} catch (err) {
+		logReadFailure('local avatars lookup', err);
+		return new Map();
+	}
 }
 
 // Walks the JPEG markers up to the first SOF (start of frame) segment, which carries the image
@@ -161,9 +179,14 @@ export function isAvatarFileName(file: string): boolean {
 }
 
 async function getVariant(hash: string): Promise<number> {
-	const sql = await getDb();
-	const [row] = await sql<{ variant: number }[]>`SELECT variant FROM avatar_variants WHERE email_hash = ${hash}`;
-	return row?.variant ?? 0;
+	try {
+		const sql = await getDb();
+		const [row] = await sql<{ variant: number }[]>`SELECT variant FROM avatar_variants WHERE email_hash = ${hash}`;
+		return row?.variant ?? 0;
+	} catch (err) {
+		logReadFailure('avatar colour lookup', err);
+		return 0;
+	}
 }
 
 // URL of a member's generated initials avatar. `?c=` changes with the chosen colour, so Passport's
