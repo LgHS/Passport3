@@ -24,5 +24,30 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  # Provisioned ahead of the actual SQLite -> Postgres migration (not wired into the app yet, which
+  # still reads/writes passport3-data above via better-sqlite3) so that work has a real instance to
+  # target. Exposed on localhost so `pnpm dev` (running on the host, outside Docker) can already
+  # connect to it once the migration lands, without waiting on the whole app to run in Docker too.
+  postgres:
+    image: postgres:17-alpine
+    container_name: passport3-postgres
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - passport3-postgres-data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   passport3-data:
+  passport3-postgres-data:

@@ -208,6 +208,14 @@ Tables are created by numbered, append-only migrations in `src/lib/server/migrat
 automatically on first connection) rather than by each feature module creating its own table ad
 hoc — add a new entry there for a new table instead of a local `CREATE TABLE IF NOT EXISTS`.
 
+### PostgreSQL (provisioning ahead of a future migration)
+
+`docker-compose.yml` also runs a `postgres` container, provisioned ahead of a planned SQLite ->
+PostgreSQL migration — the app itself doesn't read from it yet, it still uses the SQLite database
+described above. Its own named volume (`passport3-postgres-data`) keeps it independent of that
+migration's timing. Set `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` in `.env` (see
+`.env.example`) before starting it.
+
 ## Contributing
 
 Contributions are welcome.
