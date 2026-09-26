@@ -9,13 +9,17 @@ services:
     env_file:
       - .env
     environment:
-      - DB_PATH=/app/data/passport3.db
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - passport3-data:/app/data
     restart: always
-    # Hardening: the image itself is read-only, only the data volume (and a small /tmp for SQLite's
-    # temp files) is writable — a compromised process can't alter the app code or plant files
-    # elsewhere. No Linux capabilities and no privilege escalation (the app runs as `passport`).
+    # Hardening: the image itself is read-only, only the data volume (and a small /tmp for
+    # incidental temp files) is writable — a compromised process can't alter the app code or plant
+    # files elsewhere. No Linux capabilities and no privilege escalation (the app runs as `passport`).
     read_only: true
     tmpfs:
       - /tmp
@@ -24,15 +28,12 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  # Provisioned ahead of the actual SQLite -> Postgres migration (not wired into the app yet, which
-  # still reads/writes passport3-data above via better-sqlite3) so that work has a real instance to
-  # target. Exposed on localhost so `pnpm dev` (running on the host, outside Docker) can already
-  # connect to it once the migration lands, without waiting on the whole app to run in Docker too.
   postgres:
     image: postgres:17-alpine
     container_name: passport3-postgres
-    env_file:
-      - .env
+    # Only the three vars it actually needs, not the whole `.env` (env_file would also inject every
+    # other secret in there — Authentik/Dolibarr/GitHub/Mattermost tokens — into a container that
+    # has no use for any of them).
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}

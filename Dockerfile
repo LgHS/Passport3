@@ -4,9 +4,6 @@ WORKDIR /app
 # Node 25+ no longer bundles corepack, so it's installed from npm first. `--force` because the image
 # still ships a standalone /usr/local/bin/yarn that npm would otherwise refuse to overwrite (EEXIST).
 RUN npm install -g --force corepack && corepack enable
-# better-sqlite3 compiles a native addon at install time (no prebuilt binary for this musl/alpine
-# target) — needed in both the `deps` and `prod-deps` stages below, which both run `pnpm install`.
-RUN apk add --no-cache python3 make g++
 
 # ---- dependencies (full, incl. dev, for building) ----
 FROM base AS deps
@@ -41,12 +38,12 @@ COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/build ./build
 COPY package.json ./package.json
 
-# /app/data (see src/lib/server/db.ts's DB_PATH) is where the SQLite file lives — a fresh named
-# volume mounted here is root-owned by default, which would leave `passport` unable to create the
-# database file at all. Created and chowned before switching users, so the mountpoint underneath
-# it is already writable regardless of what Docker sets on the volume itself.
-# Owner-only (0700): the volume holds member data — the SQLite database and uploaded avatars
-# (data/avatars) — so nothing else in the container, nor another UID, should read it.
+# /app/data (see src/lib/server/db.ts's DATA_DIR) is where uploaded avatars live — a fresh named
+# volume mounted here is root-owned by default, which would leave `passport` unable to write to it
+# at all. Created and chowned before switching users, so the mountpoint underneath it is already
+# writable regardless of what Docker sets on the volume itself.
+# Owner-only (0700): the volume holds member data — uploaded avatars (data/avatars) — so nothing
+# else in the container, nor another UID, should read it.
 RUN mkdir -p /app/data/avatars && chown -R passport:passport /app/data && chmod -R 700 /app/data
 
 USER passport

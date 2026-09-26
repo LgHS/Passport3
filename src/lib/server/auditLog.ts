@@ -34,7 +34,7 @@ export interface AuditEvent {
 
 interface AuditEventRow {
 	id: number;
-	created_at: string;
+	created_at: Date;
 	actor_label: string;
 	source: string;
 	action: string;
@@ -45,29 +45,22 @@ interface AuditEventRow {
 
 // Best-effort, deliberately never throws: an action that already succeeded (the profile got
 // updated, the invitation got sent) must never be reported as failed just because writing its
-// audit trail afterwards hit a snag — same reasoning as mattermostBot.ts's notifications.
-export function logAuditEvent(
+// audit trail afterwards hit a snag — same reasoning as mattermostBot.ts's notifications. The
+// try/catch wraps the await itself (not just the query's construction), so a Postgres outage
+// during the write is caught here too, not left to propagate.
+export async function logAuditEvent(
 	actor: AuditActor,
 	source: AuditSource,
 	action: string,
 	target: { pk?: number; email?: string },
 	details?: Record<string, unknown>
-): void {
+): Promise<void> {
 	try {
-		getDb()
-			.prepare(
-				`INSERT INTO audit_events (actor_sub, actor_label, source, action, target_pk, target_email, details)
-				 VALUES (?, ?, ?, ?, ?, ?, ?)`
-			)
-			.run(
-				actor.sub,
-				actor.label,
-				source,
-				action,
-				target.pk ?? null,
-				target.email ?? null,
-				details ? JSON.stringify(details) : null
-			);
+		const sql = await getDb();
+		await sql`
+			INSERT INTO audit_events (actor_sub, actor_label, source, action, target_pk, target_email, details)
+			VALUES (${actor.sub}, ${actor.label}, ${source}, ${action}, ${target.pk ?? null}, ${target.email ?? null}, ${details ? JSON.stringify(details) : null})
+		`;
 	} catch (err) {
 		console.error('Failed to write audit event', err);
 	}
@@ -89,7 +82,7 @@ function parseDetails(details: string | null, eventId: number): Record<string, u
 function rowToEvent(r: AuditEventRow): AuditEvent {
 	return {
 		id: r.id,
-		createdAt: r.created_at,
+		createdAt: r.created_at.toISOString(),
 		actorLabel: r.actor_label,
 		source: r.source as AuditSource,
 		action: r.action,
@@ -99,27 +92,23 @@ function rowToEvent(r: AuditEventRow): AuditEvent {
 	};
 }
 
-export function listAuditEvents(limit = 200): AuditEvent[] {
-	const rows = getDb()
-		.prepare(
-			`SELECT id, created_at, actor_label, source, action, target_pk, target_email, details
-			 FROM audit_events ORDER BY id DESC LIMIT ?`
-		)
-		.all(limit) as AuditEventRow[];
-
+export async function listAuditEvents(limit = 200): Promise<AuditEvent[]> {
+	const sql = await getDb();
+	const rows = await sql<AuditEventRow[]>`
+		SELECT id, created_at, actor_label, source, action, target_pk, target_email, details
+		FROM audit_events ORDER BY id DESC LIMIT ${limit}
+	`;
 	return rows.map(rowToEvent);
 }
 
 // The member-facing "my history" view — both 'admin' events targeting this pk (an admin edited
 // their profile via /admin) and 'user' events they generated themselves (target_pk is always set
 // to their own pk for those, per logAuditEvent's convention).
-export function listAuditEventsForTarget(pk: number, limit = 200): AuditEvent[] {
-	const rows = getDb()
-		.prepare(
-			`SELECT id, created_at, actor_label, source, action, target_pk, target_email, details
-			 FROM audit_events WHERE target_pk = ? ORDER BY id DESC LIMIT ?`
-		)
-		.all(pk, limit) as AuditEventRow[];
-
+export async function listAuditEventsForTarget(pk: number, limit = 200): Promise<AuditEvent[]> {
+	const sql = await getDb();
+	const rows = await sql<AuditEventRow[]>`
+		SELECT id, created_at, actor_label, source, action, target_pk, target_email, details
+		FROM audit_events WHERE target_pk = ${pk} ORDER BY id DESC LIMIT ${limit}
+	`;
 	return rows.map(rowToEvent);
 }

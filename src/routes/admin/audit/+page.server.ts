@@ -13,7 +13,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	// v1: most recent 200, no pagination yet — add one if/when this actually fills up enough to
 	// need it rather than building it ahead of time.
-	const events = listAuditEvents(200);
+	const events = await listAuditEvents(200);
 
 	// Resolve each *unique* target once (repeat targets across events are common — an admin
 	// editing the same member's profile then their tag, say), profileCache.ts also dedupes this

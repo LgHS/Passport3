@@ -10,7 +10,7 @@ import { refreshMattermostCache } from '$lib/server/mattermost';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
-	return { birthdaySettings: getBirthdaySettings() };
+	return { birthdaySettings: await getBirthdaySettings() };
 };
 
 export const actions: Actions = {
@@ -25,7 +25,7 @@ export const actions: Actions = {
 			return fail(400, { birthdayError: 'Heure invalide (0 à 23).', enabled, hour });
 		}
 
-		updateBirthdaySettings({ enabled, hour });
+		await updateBirthdaySettings({ enabled, hour });
 
 		return { birthdaySuccess: true, enabled, hour };
 	},
@@ -51,7 +51,7 @@ export const actions: Actions = {
 			return fail(500, { avatarsError: 'La génération des avatars a échoué, réessayez.' });
 		}
 		if (result.generated > 0) {
-			logAuditEvent({ sub: admin.sub, label: displayName(admin) }, 'admin', 'avatars.pregenerate', {}, {
+			await logAuditEvent({ sub: admin.sub, label: displayName(admin) }, 'admin', 'avatars.pregenerate', {}, {
 				generated: result.generated
 			});
 		}

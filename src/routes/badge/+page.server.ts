@@ -61,7 +61,7 @@ export const actions: Actions = {
 		// Deliberately no `details` — the badge UUID is a live physical-access credential, not
 		// something to duplicate into the audit log even as a "before" value. Just the fact that a
 		// regeneration happened, same posture as emergency contacts elsewhere in this feature.
-		logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'badge.regenerate', { pk });
+		await logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'badge.regenerate', { pk });
 
 		return { success: true, uuid };
 	}
