@@ -115,7 +115,7 @@
 		</div>
 
 		{#if status}
-			<p class="mt-2 flex items-center justify-center gap-4 text-xs text-gray-500">
+			<p class="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-gray-500">
 				<span class="flex items-center gap-1.5">
 					<span
 						class="h-2 w-2 shrink-0 rounded-full {status.authentik.healthy ? 'bg-green-600' : 'bg-red-600'}"
@@ -141,6 +141,13 @@
 					{:else}
 						<i>(cache jamais rempli)</i>
 					{/if}
+				</span>
+				<span class="flex items-center gap-1.5">
+					<span
+						class="h-2 w-2 shrink-0 rounded-full {status.database.healthy ? 'bg-green-600' : 'bg-red-600'}"
+						aria-hidden="true"
+					></span>
+					Base de données <i>+{status.database.latencyMs}ms</i>
 				</span>
 			</p>
 		{/if}

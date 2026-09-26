@@ -57,7 +57,9 @@ const migrations: Migration[] = [
 					description TEXT,
 					link TEXT,
 					quantity INTEGER NOT NULL DEFAULT 1,
-					estimated_amount REAL,
+					-- DOUBLE PRECISION, not REAL: Postgres' REAL is 4 bytes (~7 significant digits),
+					-- unlike SQLite's 8-byte REAL this column was first written for.
+					estimated_amount DOUBLE PRECISION,
 					type TEXT NOT NULL
 				)
 			`;
@@ -147,6 +149,16 @@ const migrations: Migration[] = [
 					variant INTEGER NOT NULL
 				)
 			`;
+		}
+	},
+	{
+		version: 9,
+		name: 'drop member_avatars and avatar_variants',
+		up: async (sql) => {
+			// Avatars no longer use the database at all (see avatars.ts): whether a member uploaded
+			// a photo is read from the disk, and their chosen colour is an Authentik attribute.
+			await sql`DROP TABLE member_avatars`;
+			await sql`DROP TABLE avatar_variants`;
 		}
 	}
 ];

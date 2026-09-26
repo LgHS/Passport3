@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin, requireAdminUser } from '$lib/server/auth';
-import { getInitialsByEmailHash } from '$lib/server/authentikAdmin';
+import { getAvatarInfoByEmailHash } from '$lib/server/authentikAdmin';
 import { pregenerateAvatars } from '$lib/server/avatars';
 import { logAuditEvent } from '$lib/server/auditLog';
 import { displayName } from '$lib/types';
@@ -46,7 +46,7 @@ export const actions: Actions = {
 		const admin = requireAdminUser(locals);
 		let result;
 		try {
-			result = await pregenerateAvatars(await getInitialsByEmailHash(true));
+			result = await pregenerateAvatars(await getAvatarInfoByEmailHash(true));
 		} catch {
 			return fail(500, { avatarsError: 'La génération des avatars a échoué, réessayez.' });
 		}
