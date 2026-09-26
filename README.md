@@ -175,34 +175,39 @@ picks up the `preprod` tag update within 5 minutes and redeploys automatically.
 
 ### Local data storage
 
-Passport3 has a small local SQLite database (`better-sqlite3`) for data that has no home in
-Authentik, Dolibarr, or GitHub — e.g. the audit trail of admin and member actions. Both `docker-compose.yml`
-and `docker-compose.preprod.yml` mount it on a named volume (`passport3-data`, at `/app/data`), set
-via the `DB_PATH` environment variable, so it survives container recreation — including a
-Watchtower-triggered redeploy. **This volume now holds real, non-reconstructible data and needs to
-be included in whatever backup routine the host already has** — unlike the rest of the container,
-which was previously fully stateless and disposable.
+Passport3 keeps a small PostgreSQL database for data that has no home in Authentik, Dolibarr, or
+GitHub — e.g. the audit trail of admin and member actions, the wishlist, and the birthday
+scheduler's settings. `docker-compose.yml` and `docker-compose.preprod.yml` both run their own
+`postgres` container (`docker-compose.yml`'s is also reachable from the host on `127.0.0.1:5432`,
+for `pnpm dev` running outside Docker; the preprod one is internal-only, never exposed on the
+host), backed by its own named volume (`passport3-postgres-data`) so it survives container
+recreation — including a Watchtower-triggered redeploy. Set `POSTGRES_USER`, `POSTGRES_PASSWORD`
+and `POSTGRES_DB` in `.env` (see `.env.example`) before starting it. **This volume now holds real,
+non-reconstructible data and needs to be included in whatever backup routine the host already
+has** — unlike the rest of the container, which was previously fully stateless and disposable.
 
-The database runs in WAL mode, so `passport3.db` alone is not a consistent snapshot while the
-container is running — recent transactions can still be sitting in `passport3.db-wal`. Either stop
-the container before copying just the `.db` file, or back up the whole volume (`.db`, `.db-wal`,
-`.db-shm` together) in one atomic snapshot.
+Back it up with `pg_dump`, e.g.:
 
-Uploaded profile photos live in the same volume, under `avatars/` next to the database (512×512
-JPEGs named after the md5 hash of the member's email, indexed by the `member_avatars` table) — back them up together.
-Passport is its own avatar service — Gravatar isn't used at all. Avatar URLs are public and keyed
-like Gravatar (`/avatars/<md5 of the lowercased email>.jpg`), and always return an image: the
-member's uploaded photo, or else an image of their initials (first two characters of their
-username, on a muted background picked from their hash), generated on first request with
-[resvg](https://github.com/thx/resvg-js) and cached under `avatars/generated/`. Other services can
-use them as their avatar source:
+```bash
+docker exec passport3-postgres pg_dump -U passport3 passport3 > backup.sql
+```
+
+Uploaded profile photos live separately, in their own named volume (`passport3-data`, at
+`/app/data`), under `avatars/` (512×512 JPEGs named after the md5 hash of the member's email,
+indexed by the `member_avatars` table in Postgres) — **both volumes need to be backed up**, not
+just the database one. Passport is its own avatar service — Gravatar isn't used at all. Avatar URLs
+are public and keyed like Gravatar (`/avatars/<md5 of the lowercased email>.jpg`), and always
+return an image: the member's uploaded photo, or else an image of their initials (first two
+characters of their username, on a muted background picked from their hash), generated on first
+request with [resvg](https://github.com/thx/resvg-js) and cached under `avatars/generated/`. Other
+services can use them as their avatar source:
 
 - **Authentik** — *System → Settings → Avatars*: `https://<passport>/avatars/%(mail_hash)s.jpg`
 - **BookStack** — `AVATAR_URL=https://<passport>/avatars/${hash}.jpg`
 
-The container runs with a read-only filesystem, no Linux capabilities and `no-new-privileges`
-(see `docker-compose*.yml`): the data volume and a `/tmp` tmpfs are the only writable places, and
-the data directory is readable only by the `passport` user.
+The `passport3` container runs with a read-only filesystem, no Linux capabilities and
+`no-new-privileges` (see `docker-compose*.yml`): the avatars volume and a `/tmp` tmpfs are the only
+writable places, and the data directory is readable only by the `passport` user.
 
 Tables are created by numbered, append-only migrations in `src/lib/server/migrations.ts` (run
 automatically on first connection) rather than by each feature module creating its own table ad

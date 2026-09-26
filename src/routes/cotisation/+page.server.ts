@@ -196,7 +196,7 @@ export const actions: Actions = {
 			// Masked to the last 4 digits — this is the flagship case an audit trail exists for
 			// (knowing who changed a payout IBAN, for fraud prevention), but the full number doesn't
 			// need to live a second time at rest here just to serve that purpose.
-			logAuditEvent(
+			await logAuditEvent(
 				{ sub: user.sub, label: displayName(user) },
 				'user',
 				'bankInfo.update',

@@ -51,7 +51,7 @@ export const actions: Actions = {
 			return fail(500, { error: "La sauvegarde a échoué, réessayez." });
 		}
 
-		logAuditEvent(
+		await logAuditEvent(
 			{ sub: user.sub, label: displayName(user) },
 			'user',
 			'trombinoscope.optin.update',

@@ -66,7 +66,8 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		notificationPreferences,
 		mattermost,
 		emergencyContacts,
-		usernameChangeInfo;
+		usernameChangeInfo,
+		avatarUrl;
 	try {
 		[
 			sessions,
@@ -75,7 +76,8 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 			notificationPreferences,
 			mattermost,
 			emergencyContacts,
-			usernameChangeInfo
+			usernameChangeInfo,
+			avatarUrl
 		] = await Promise.all([
 			listSessions(profile.username),
 			listMfaDevices(pk),
@@ -87,7 +89,8 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 			// account" — see feedback_distinguish-fetch-failure-from-empty.
 			lookupMattermostUsername(profile.email),
 			getEmergencyContacts(pk),
-			getUsernameChangeInfo(pk)
+			getUsernameChangeInfo(pk),
+			getLocalAvatarUrl(pk)
 		]);
 	} catch (err) {
 		if (err instanceof AuthentikUnavailableError) {
@@ -96,9 +99,7 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		throw err;
 	}
 
-	// Synchronous (better-sqlite3), and cheap at this scale — no need to bundle into the
-	// Promise.all above with the actual network calls.
-	const auditEvents = listAuditEventsForTarget(pk);
+	const auditEvents = await listAuditEventsForTarget(pk);
 
 	return {
 		profile,
@@ -114,7 +115,7 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		nextUsernameChangeAllowedAt: usernameChangeInfo.nextChangeAllowedAt,
 		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
 		// Whether profile.avatar is an uploaded photo (deletable) or generated initials.
-		hasLocalAvatar: getLocalAvatarUrl(pk) !== null,
+		hasLocalAvatar: avatarUrl !== null,
 		auditEvents
 	};
 };
@@ -137,8 +138,8 @@ export const actions: Actions = {
 		// The file is named after the email's hash (see avatars.ts), taken from Authentik's own
 		// record rather than the session token, since that's what Authentik itself hashes.
 		const profile = await getUserProfile(pk);
-		saveAvatar(pk, profile.email, bytes);
-		logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'avatar.update', { pk });
+		await saveAvatar(pk, profile.email, bytes);
+		await logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'avatar.update', { pk });
 		return { avatarUpdated: true };
 	},
 
@@ -147,15 +148,15 @@ export const actions: Actions = {
 	regenerateAvatar: async ({ locals }) => {
 		const pk = resolvePk(locals);
 		const profile = await getUserProfile(pk);
-		regenerateGeneratedAvatar(profile.email);
+		await regenerateGeneratedAvatar(profile.email);
 		return { avatarRegenerated: true };
 	},
 
 	deleteAvatar: async ({ locals }) => {
 		const pk = resolvePk(locals);
 		const user = locals.user!;
-		if (deleteAvatar(pk)) {
-			logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'avatar.delete', { pk });
+		if (await deleteAvatar(pk)) {
+			await logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'avatar.delete', { pk });
 		}
 		return { avatarDeleted: true };
 	},
@@ -215,7 +216,7 @@ export const actions: Actions = {
 		const mutation = await updateUserProfile(pk, { name: result.name, attributes: result.attributes });
 
 		if (mutation.changed) {
-			logAuditEvent(
+			await logAuditEvent(
 				{ sub: user.sub, label: displayName(user) },
 				'user',
 				'profile.update',
@@ -265,7 +266,7 @@ export const actions: Actions = {
 		}
 
 		if (usernameMutation) {
-			logAuditEvent(
+			await logAuditEvent(
 				{ sub: user.sub, label: displayName(user) },
 				'user',
 				'profile.username.update',
@@ -316,7 +317,7 @@ export const actions: Actions = {
 		const uuid = String(formData.get('uuid') ?? '');
 		await revokeSession(profile.username, uuid);
 
-		logAuditEvent(
+		await logAuditEvent(
 			{ sub: user.sub, label: displayName(user) },
 			'user',
 			'session.revoke',
@@ -346,7 +347,7 @@ export const actions: Actions = {
 		const devicePk = String(formData.get('pk') ?? '');
 		await deleteMfaDevice(pk, devicePk);
 
-		logAuditEvent(
+		await logAuditEvent(
 			{ sub: user.sub, label: displayName(user) },
 			'user',
 			'mfaDevice.delete',
@@ -399,7 +400,7 @@ export const actions: Actions = {
 		}
 
 		// Same privacy posture as the admin version — count only, never the actual contacts.
-		logAuditEvent(
+		await logAuditEvent(
 			{ sub: user.sub, label: displayName(user) },
 			'user',
 			'emergencyContacts.update',
