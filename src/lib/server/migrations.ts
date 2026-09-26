@@ -150,6 +150,16 @@ const migrations: Migration[] = [
 				)
 			`;
 		}
+	},
+	{
+		version: 9,
+		name: 'drop member_avatars and avatar_variants',
+		up: async (sql) => {
+			// Avatars no longer use the database at all (see avatars.ts): whether a member uploaded
+			// a photo is read from the disk, and their chosen colour is an Authentik attribute.
+			await sql`DROP TABLE member_avatars`;
+			await sql`DROP TABLE avatar_variants`;
+		}
 	}
 ];
 

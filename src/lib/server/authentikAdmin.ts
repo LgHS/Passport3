@@ -2,7 +2,8 @@ import { env } from '$env/dynamic/private';
 import { requireEnv } from '$lib/server/env';
 import { getCachedProfile, setCachedProfile } from '$lib/server/profileCache';
 import { getMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
-import { avatarUrlFor, emailHash, generatedAvatarUrl, getLocalAvatarUrls } from '$lib/server/avatars';
+import { avatarUrlFor, emailHash, type AvatarInfo } from '$lib/server/avatars';
+import { PALETTE_SIZE } from '$lib/server/initialsAvatar';
 import type { EmergencyContact, ProfileAttributeField, UserProfile } from '$lib/types';
 import { TAG_COLOR_PRESETS } from '$lib/tagColors';
 
@@ -163,10 +164,12 @@ function pickAttributes(source: Record<string, unknown>): Record<string, string>
 
 // Avatars come from Passport itself (see avatars.ts): the member's uploaded photo, or their
 // generated initials — never the Gravatar URL Authentik reports. Applied on every read rather than
-// baked into the cache, so an upload or delete shows up immediately.
+// baked into the cache, so an upload or delete shows up immediately. No database and no extra
+// Authentik call: a file check, plus the colour already held by the avatar-info cache.
 export async function getUserProfile(pk: number): Promise<UserProfile> {
 	const profile = await getAuthentikUserProfile(pk);
-	return { ...profile, avatar: await avatarUrlFor(pk, profile.email) };
+	const variant = profile.email ? peekAvatarVariant(emailHash(profile.email)) : 0;
+	return { ...profile, avatar: avatarUrlFor(profile.email, variant) };
 }
 
 async function getAuthentikUserProfile(pk: number): Promise<UserProfile> {
@@ -714,63 +717,102 @@ export interface AdminUserSummary {
 const EXCLUDED_USERNAMES = new Set(['lghsadm','akadmin']);
 const EXCLUDED_TYPES = new Set(['service_account', 'internal_service_account']);
 
-// Initials for the generated avatar (/avatars/[file]), keyed by the same email hash as the URL:
-// the first two characters of the username — same rule as the trombinoscope's initials fallback,
-// and never derived from the member's real name, which the avatar URL is public enough to leak.
+// Generated-avatar details (/avatars/[file]), keyed by the same email hash as the URL:
+// - initials: the first two characters of the username — same rule as the trombinoscope's
+//   initials fallback, and never derived from the member's real name, which the avatar URL is
+//   public enough to leak;
+// - variant: the background colour the member picked with "Changer de couleur", stored as an
+//   Authentik attribute (0, the colour derived from the hash, when never changed).
 // Refreshed every 15 minutes: one Authentik call covers every avatar request in between.
-const INITIALS_TTL_MS = 15 * 60 * 1000;
-let initialsByHash: { map: Map<string, string>; expiresAt: number } | null = null;
+const AVATAR_INFO_TTL_MS = 15 * 60 * 1000;
+let avatarInfoByHash: { map: Map<string, AvatarInfo>; expiresAt: number } | null = null;
+
+// Not part of PROFILE_ATTRIBUTE_FIELDS, same reasoning as rfid_uid/github_username: set by the
+// "Changer de couleur" button, never hand-typed.
+const AVATAR_COLOR_ATTRIBUTE = 'avatar_color';
 
 function initialsOf(username: string): string {
 	return [...username.trim()].slice(0, 2).join('').toUpperCase();
 }
 
+function avatarVariantOf(attributes: Record<string, unknown>): number {
+	const value = attributes[AVATAR_COLOR_ATTRIBUTE];
+	return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < PALETTE_SIZE ? value : 0;
+}
+
 // Guards for the public /avatars endpoint, which anyone can hit with any hash: concurrent requests
 // share a single in-flight Authentik call, and after a failure every lookup fails fast for a minute
 // instead of each request retrying against an Authentik that's down.
-const INITIALS_FAILURE_COOLDOWN_MS = 60 * 1000;
-let initialsInFlight: Promise<Map<string, string>> | null = null;
-let initialsFailedAt = 0;
+const AVATAR_INFO_FAILURE_COOLDOWN_MS = 60 * 1000;
+let avatarInfoInFlight: Promise<Map<string, AvatarInfo>> | null = null;
+let avatarInfoFailedAt = 0;
 
-async function loadInitialsByEmailHash(): Promise<Map<string, string>> {
+async function loadAvatarInfoByEmailHash(): Promise<Map<string, AvatarInfo>> {
 	const res = await authentikApiFetch('core/users/?page_size=500');
 	const data = (await res.json()) as { results: (AuthentikUserRecord & { type: string })[] };
-	const map = new Map<string, string>();
+	const map = new Map<string, AvatarInfo>();
 	for (const u of data.results) {
 		if (!u.email || EXCLUDED_USERNAMES.has(u.username) || EXCLUDED_TYPES.has(u.type)) continue;
 		const initials = initialsOf(u.username);
-		if (initials) map.set(emailHash(u.email), initials);
+		if (initials) map.set(emailHash(u.email), { initials, variant: avatarVariantOf(u.attributes) });
 	}
 	return map;
 }
 
 // `fresh` bypasses the 15-minute cache (and the failure cooldown) — for the admin's bulk
 // generation, which should reflect the current member list.
-export async function getInitialsByEmailHash(fresh = false): Promise<Map<string, string>> {
-	if (!fresh && initialsByHash && initialsByHash.expiresAt > Date.now()) return initialsByHash.map;
-	if (!fresh && Date.now() - initialsFailedAt < INITIALS_FAILURE_COOLDOWN_MS) {
+export async function getAvatarInfoByEmailHash(fresh = false): Promise<Map<string, AvatarInfo>> {
+	if (!fresh && avatarInfoByHash && avatarInfoByHash.expiresAt > Date.now()) return avatarInfoByHash.map;
+	if (!fresh && Date.now() - avatarInfoFailedAt < AVATAR_INFO_FAILURE_COOLDOWN_MS) {
 		throw new Error('Authentik user list recently unavailable.');
 	}
-	if (!initialsInFlight) {
-		initialsInFlight = loadInitialsByEmailHash()
+	if (!avatarInfoInFlight) {
+		avatarInfoInFlight = loadAvatarInfoByEmailHash()
 			.then((map) => {
-				initialsByHash = { map, expiresAt: Date.now() + INITIALS_TTL_MS };
-				initialsFailedAt = 0;
+				avatarInfoByHash = { map, expiresAt: Date.now() + AVATAR_INFO_TTL_MS };
+				avatarInfoFailedAt = 0;
 				return map;
 			})
 			.catch((err) => {
-				initialsFailedAt = Date.now();
+				avatarInfoFailedAt = Date.now();
 				throw err;
 			})
 			.finally(() => {
-				initialsInFlight = null;
+				avatarInfoInFlight = null;
 			});
 	}
-	return initialsInFlight;
+	return avatarInfoInFlight;
 }
 
-export async function getInitialsForEmailHash(hash: string): Promise<string | null> {
-	return (await getInitialsByEmailHash()).get(hash) ?? null;
+export async function getAvatarInfoForEmailHash(hash: string): Promise<AvatarInfo | null> {
+	return (await getAvatarInfoByEmailHash()).get(hash) ?? null;
+}
+
+// Whatever the cache currently holds, even expired, and never a fetch: only used for the `?c=`
+// cache-buster of Passport's own pages, which just has to change when the colour does.
+function peekAvatarVariant(hash: string): number {
+	return avatarInfoByHash?.map.get(hash)?.variant ?? 0;
+}
+
+// "Changer de couleur": moves the member's generated avatar to another colour of the palette, at
+// random but never the one currently shown. Read-merge-write, same reasoning as
+// updateUserProfile. The cache entry is updated in place, so the endpoint serves the new colour
+// right away instead of after the cache's 15 minutes.
+export async function changeAvatarColor(pk: number): Promise<void> {
+	const current = await authentikApiFetch(`core/users/${pk}/`);
+	const currentUser = (await current.json()) as AuthentikUserRecord;
+	const previous = avatarVariantOf(currentUser.attributes);
+	const next = (previous + 1 + Math.floor(Math.random() * (PALETTE_SIZE - 1))) % PALETTE_SIZE;
+	await authentikApiFetch(`core/users/${pk}/`, {
+		method: 'PATCH',
+		body: JSON.stringify({ attributes: { ...currentUser.attributes, [AVATAR_COLOR_ATTRIBUTE]: next } })
+	});
+	if (!currentUser.email) return;
+	// Loaded now if it wasn't yet (it then already has the new colour, read after the PATCH), so
+	// the page re-rendered after this action gets the new `?c=` cache-buster.
+	const map = await getAvatarInfoByEmailHash().catch(() => null);
+	const entry = map?.get(emailHash(currentUser.email));
+	if (entry) entry.variant = next;
 }
 
 // v1 simplification: single page, no pager UI — fine for a hackerspace-sized member list.
@@ -872,8 +914,6 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 		results: (AuthentikUserRecord & { is_active: boolean; type: string })[];
 	};
 
-	const localAvatars = await getLocalAvatarUrls();
-
 	const members = await Promise.all(
 		data.results
 			.filter(
@@ -914,9 +954,7 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 						optin.showPhone && typeof u.attributes.phoneNumber === 'string'
 							? u.attributes.phoneNumber
 							: null,
-					avatar: optin.showAvatar
-						? localAvatars.get(u.pk) ?? (u.email ? await generatedAvatarUrl(u.email) : null)
-						: null,
+					avatar: optin.showAvatar ? avatarUrlFor(u.email, avatarVariantOf(u.attributes)) : null,
 					tag: typeof tagValue === 'string' && tagValue.trim() ? tagValue : null,
 					tagColor:
 						typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue)

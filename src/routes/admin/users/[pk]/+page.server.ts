@@ -24,7 +24,7 @@ import {
 	validateTrombiEmail
 } from '$lib/server/profileValidation';
 import { requireAdminUser } from '$lib/server/auth';
-import { deleteAvatar, getLocalAvatarUrl } from '$lib/server/avatars';
+import { deleteAvatar, hasUploadedAvatar } from '$lib/server/avatars';
 import { logAuditEvent } from '$lib/server/auditLog';
 import { displayName } from '$lib/types';
 
@@ -39,7 +39,7 @@ function resolvePk(paramPk: string): number {
 export const load: PageServerLoad = async ({ params }) => {
 	const pk = resolvePk(params.pk);
 
-	const [profile, optin, tag, groups, emergencyContacts, rfidUid, hasLocalAvatar] = await Promise.all([
+	const [profile, optin, tag, groups, emergencyContacts, rfidUid] = await Promise.all([
 		getUserProfile(pk).catch(() => null),
 		getTrombinoscopeOptin(pk),
 		getTrombinoscopeTag(pk),
@@ -55,8 +55,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		// getRfidUid's own return already uses `null` to mean "no badge assigned" — that's a
 		// legitimate, distinct value from a fetch failure, so the failure case is `undefined` here
 		// rather than reusing `null` and collapsing the two meanings together.
-		getRfidUid(pk).catch(() => undefined),
-		getLocalAvatarUrl(pk).then((url) => url !== null)
+		getRfidUid(pk).catch(() => undefined)
 	]);
 	if (!profile) {
 		error(404, 'Membre introuvable.');
@@ -82,7 +81,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		emergencyContacts,
 		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
 		rfidUid,
-		hasLocalAvatar
+		hasLocalAvatar: hasUploadedAvatar(profile.email)
 	};
 };
 
@@ -261,7 +260,8 @@ export const actions: Actions = {
 	deleteAvatar: async ({ params, locals }) => {
 		const admin = requireAdminUser(locals);
 		const pk = resolvePk(params.pk);
-		if (await deleteAvatar(pk)) {
+		const profile = await getUserProfile(pk);
+		if (deleteAvatar(profile.email)) {
 			await logAuditEvent({ sub: admin.sub, label: displayName(admin) }, 'admin', 'avatar.delete', { pk });
 		}
 		return { avatarDeleted: true };

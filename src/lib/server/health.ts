@@ -1,3 +1,4 @@
+import { checkDatabase } from '$lib/server/db';
 import { requireEnv } from '$lib/server/env';
 import type { ServiceStatus, SystemStatus } from '$lib/types';
 
@@ -52,17 +53,24 @@ async function checkMattermost(): Promise<ServiceStatus> {
 	}
 }
 
+async function checkPostgres(): Promise<ServiceStatus> {
+	const start = Date.now();
+	const healthy = await checkDatabase(HEALTH_CHECK_TIMEOUT_MS);
+	return { healthy, latencyMs: Date.now() - start };
+}
+
 export async function getSystemStatus(): Promise<SystemStatus> {
 	if (cached && cached.expiresAt > Date.now()) {
 		return cached.status;
 	}
 
-	const [authentik, dolibarr, mattermost] = await Promise.all([
+	const [authentik, dolibarr, mattermost, database] = await Promise.all([
 		checkAuthentik(),
 		checkDolibarr(),
-		checkMattermost()
+		checkMattermost(),
+		checkPostgres()
 	]);
-	const status: SystemStatus = { authentik, dolibarr, mattermost };
+	const status: SystemStatus = { authentik, dolibarr, mattermost, database };
 	cached = { status, expiresAt: Date.now() + CACHE_TTL_MS };
 	return status;
 }

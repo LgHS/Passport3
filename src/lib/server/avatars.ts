@@ -1,13 +1,17 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DATA_DIR, getDb } from '$lib/server/db';
-import { PALETTE_SIZE, renderInitialsAvatar } from '$lib/server/initialsAvatar';
+import { DATA_DIR } from '$lib/server/db';
+import { renderInitialsAvatar } from '$lib/server/initialsAvatar';
 
-// Member-uploaded profile photos, stored on local disk next to the database's own data (same
-// volume). A member with an uploaded photo gets it everywhere Passport shows an avatar (header,
-// /profile, admin, trombinoscope); without one, an image of their initials is generated instead
-// (see getGeneratedAvatar below). Gravatar is not used at all.
+// Member avatars, served by Passport itself at /avatars/<hash>.jpg — no database involved: the
+// disk says whether a member uploaded a photo, and Authentik (see authentikAdmin.ts's
+// getAvatarInfoByEmailHash) says what their generated initials look like. A Postgres outage
+// therefore never affects avatars.
+// - A member with an uploaded photo gets it everywhere Passport shows an avatar (header, /profile,
+//   admin, trombinoscope, and Authentik/BookStack through the same URL).
+// - Without one, an image of their initials is generated instead (see getGeneratedAvatar below).
+// Gravatar is not used at all.
 //
 // The browser does the square crop and resize itself (AvatarEditor.svelte) and sends a JPEG — the
 // server doesn't re-encode images, so it only accepts exactly that shape: a JPEG of
@@ -26,61 +30,38 @@ const GENERATED_DIR = join(AVATAR_DIR, 'generated');
 // Authentik's avatar setting (`https://<passport>/avatars/%(mail_hash)s.jpg`) and BookStack's
 // AVATAR_URL (`https://<passport>/avatars/${hash}.jpg`) use that exact hash. The flip side is that
 // the photo is as public as a Gravatar: anyone who knows a member's email can compute its URL.
-// If a member's email ever changes, their file has to be renamed along with it (saveAvatar does
-// this on the next upload; an email-change tool should call renameAvatar).
+// If a member's email ever changes, their file has to be renamed along with it (an email-change
+// tool should call renameAvatar).
 const AVATAR_FILE_RE = /^[a-f0-9]{32}\.jpg$/;
 
 export function emailHash(email: string): string {
 	return createHash('md5').update(email.trim().toLowerCase()).digest('hex');
 }
 
-// `?v=` changes with every upload, so Passport's own pages never show a stale photo even though
-// the file name itself stays the same for a given email. `updatedAt` is always an ISO string by
-// the time it reaches here (see getRow()'s conversion below), so this doesn't need to know
-// anything about the underlying column's real type.
-function avatarUrl(file: string, updatedAt: string): string {
-	return `/avatars/${file}?v=${Date.parse(updatedAt) || 0}`;
+export function isAvatarFileName(file: string): boolean {
+	return AVATAR_FILE_RE.test(file);
 }
 
-type AvatarRow = { member_pk: number; file: string; updated_at: string };
-
-async function getRow(pk: number): Promise<AvatarRow | undefined> {
-	const sql = await getDb();
-	const [row] = await sql<{ member_pk: number; file: string; updated_at: Date }[]>`
-		SELECT member_pk, file, updated_at FROM member_avatars WHERE member_pk = ${pk}
-	`;
-	return row ? { ...row, updated_at: row.updated_at.toISOString() } : undefined;
+function photoPath(hash: string): string {
+	return join(AVATAR_DIR, `${hash}.jpg`);
 }
 
-// The read helpers below never throw: showing an avatar is never worth failing a page over. If
-// Postgres is unreachable, members just get their generated initials (in the default colour)
-// instead of an error — the header, /profile, the trombinoscope and the public /avatars endpoint
-// (used by Authentik and BookStack) all keep working on Authentik alone.
-function logReadFailure(what: string, err: unknown): void {
-	console.error(`[avatars] ${what} failed, falling back`, err);
+export function hasUploadedAvatar(email: string | null | undefined): boolean {
+	return !!email && existsSync(photoPath(emailHash(email)));
 }
 
-export async function getLocalAvatarUrl(pk: number): Promise<string | null> {
+// URL of a member's avatar, whichever it is. The path itself never changes for a given email; the
+// query string only changes when the image does (the photo's modification time, or the chosen
+// colour), so a page that just re-rendered after an upload or a colour change shows the new image
+// instead of the one the browser already holds for that URL. Other pages and other services pick
+// up changes anyway: the endpoint makes every cache revalidate (ETag, see /avatars/[file]).
+export function avatarUrlFor(email: string | null | undefined, variant = 0): string | null {
+	if (!email) return null;
+	const hash = emailHash(email);
 	try {
-		const row = await getRow(pk);
-		return row ? avatarUrl(row.file, row.updated_at) : null;
-	} catch (err) {
-		logReadFailure('local avatar lookup', err);
-		return null;
-	}
-}
-
-// One query for the whole trombinoscope instead of one per member.
-export async function getLocalAvatarUrls(): Promise<Map<number, string>> {
-	try {
-		const sql = await getDb();
-		const rows = await sql<{ member_pk: number; file: string; updated_at: Date }[]>`
-			SELECT member_pk, file, updated_at FROM member_avatars
-		`;
-		return new Map(rows.map((row) => [row.member_pk, avatarUrl(row.file, row.updated_at.toISOString())]));
-	} catch (err) {
-		logReadFailure('local avatars lookup', err);
-		return new Map();
+		return `/avatars/${hash}.jpg?v=${Math.floor(statSync(photoPath(hash)).mtimeMs)}`;
+	} catch {
+		return `/avatars/${hash}.jpg${variant ? `?c=${variant}` : ''}`;
 	}
 }
 
@@ -116,116 +97,54 @@ export function validateAvatarUpload(bytes: Uint8Array): { ok: true } | { ok: fa
 	return { ok: true };
 }
 
-function removeFile(file: string): void {
-	if (!AVATAR_FILE_RE.test(file)) return;
-	rmSync(join(AVATAR_DIR, file), { force: true });
-}
-
 // Written to a random temp name then renamed over the final one, so a crash mid-write never leaves
 // a truncated file, and a reader never sees a half-written replacement. Owner-only permissions:
 // the volume holds member data.
-export async function saveAvatar(pk: number, email: string, bytes: Uint8Array): Promise<void> {
+export function saveAvatar(email: string, bytes: Uint8Array): void {
 	mkdirSync(AVATAR_DIR, { recursive: true, mode: 0o700 });
-	const file = `${emailHash(email)}.jpg`;
 	const tmpPath = join(AVATAR_DIR, `${randomBytes(8).toString('hex')}.tmp`);
 	writeFileSync(tmpPath, bytes, { mode: 0o600 });
-	renameSync(tmpPath, join(AVATAR_DIR, file));
-
-	const previous = await getRow(pk);
-	const sql = await getDb();
-	await sql`
-		INSERT INTO member_avatars (member_pk, file) VALUES (${pk}, ${file})
-		ON CONFLICT(member_pk) DO UPDATE SET file = EXCLUDED.file, updated_at = now()
-	`;
-	// Only differs when the member's email changed since their last upload.
-	if (previous && previous.file !== file) removeFile(previous.file);
+	renameSync(tmpPath, photoPath(emailHash(email)));
 }
 
 // For a future email-change tool: keeps the photo reachable under the new email's hash.
-export async function renameAvatar(pk: number, newEmail: string): Promise<void> {
-	const row = await getRow(pk);
-	if (!row) return;
-	const file = `${emailHash(newEmail)}.jpg`;
-	if (file === row.file) return;
-	renameSync(join(AVATAR_DIR, row.file), join(AVATAR_DIR, file));
-	const sql = await getDb();
-	await sql`UPDATE member_avatars SET file = ${file} WHERE member_pk = ${pk}`;
+export function renameAvatar(oldEmail: string, newEmail: string): void {
+	const from = photoPath(emailHash(oldEmail));
+	const to = photoPath(emailHash(newEmail));
+	if (from !== to && existsSync(from)) renameSync(from, to);
 }
 
 // Returns whether there was anything to delete, so callers only audit-log real changes.
-export async function deleteAvatar(pk: number): Promise<boolean> {
-	const previous = await getRow(pk);
-	if (!previous) return false;
-	const sql = await getDb();
-	await sql`DELETE FROM member_avatars WHERE member_pk = ${pk}`;
-	removeFile(previous.file);
+export function deleteAvatar(email: string): boolean {
+	const path = photoPath(emailHash(email));
+	if (!existsSync(path)) return false;
+	rmSync(path, { force: true });
 	return true;
 }
 
-// Null for anything that isn't one of our own file names (so a crafted path can never escape
-// AVATAR_DIR), or when that member has no uploaded photo.
-export function readAvatar(file: string): { bytes: Buffer; modifiedAt: Date } | null {
+// The uploaded photo's metadata only — enough to answer a conditional request (304) without
+// reading the file. Null for anything that isn't one of our own file names (so a crafted path can
+// never escape AVATAR_DIR), or when that member has no uploaded photo.
+export function statAvatar(file: string): { path: string; size: number; modifiedAt: Date } | null {
 	if (!AVATAR_FILE_RE.test(file)) return null;
 	const path = join(AVATAR_DIR, file);
 	try {
-		return { bytes: readFileSync(path), modifiedAt: statSync(path).mtime };
+		const stats = statSync(path);
+		return { path, size: stats.size, modifiedAt: stats.mtime };
 	} catch {
 		return null;
 	}
 }
 
-export function isAvatarFileName(file: string): boolean {
-	return AVATAR_FILE_RE.test(file);
-}
-
-async function getVariant(hash: string): Promise<number> {
-	try {
-		const sql = await getDb();
-		const [row] = await sql<{ variant: number }[]>`SELECT variant FROM avatar_variants WHERE email_hash = ${hash}`;
-		return row?.variant ?? 0;
-	} catch (err) {
-		logReadFailure('avatar colour lookup', err);
-		return 0;
-	}
-}
-
-// URL of a member's generated initials avatar. `?c=` changes with the chosen colour, so Passport's
-// own pages show a new colour right away despite the URL otherwise staying the same.
-export async function generatedAvatarUrl(email: string): Promise<string> {
-	const hash = emailHash(email);
-	const variant = await getVariant(hash);
-	return `/avatars/${hash}.jpg${variant ? `?c=${variant}` : ''}`;
-}
-
-// URL of a member's avatar, whichever it is: their uploaded photo, or their generated initials.
-export async function avatarUrlFor(pk: number, email: string | null | undefined): Promise<string | null> {
-	return (await getLocalAvatarUrl(pk)) ?? (email ? await generatedAvatarUrl(email) : null);
-}
-
-// "Changer de couleur": moves the member's generated avatar to another colour of the palette, at
-// random but never the one currently shown. The cached image is replaced on the next request.
-export async function regenerateGeneratedAvatar(email: string): Promise<void> {
-	const hash = emailHash(email);
-	const current = (await getVariant(hash)) % PALETTE_SIZE;
-	const next = (current + 1 + Math.floor(Math.random() * (PALETTE_SIZE - 1))) % PALETTE_SIZE;
-	const sql = await getDb();
-	await sql`
-		INSERT INTO avatar_variants (email_hash, variant) VALUES (${hash}, ${next})
-		ON CONFLICT(email_hash) DO UPDATE SET variant = EXCLUDED.variant
-	`;
-}
-
 // The initials and colour variant are part of the cached file name, so a new username or a new
 // colour gets a fresh image instead of a stale one; previous images are removed when it's written.
-// Async only because of the getVariant() read inside — no direct DB access of its own.
-async function generatedFile(hash: string, initials: string): Promise<{ file: string; path: string; variant: number }> {
-	const variant = await getVariant(hash);
-	const file = `${hash}-${Buffer.from(initials).toString('hex')}-${variant}.png`;
-	return { file, path: join(GENERATED_DIR, file), variant };
+// The file name also serves as the endpoint's ETag for generated images.
+export function generatedFileName(hash: string, initials: string, variant: number): string {
+	return `${hash}-${Buffer.from(initials).toString('hex')}-${variant}.png`;
 }
 
-async function writeGeneratedAvatar(hash: string, initials: string): Promise<Buffer> {
-	const { file, path, variant } = await generatedFile(hash, initials);
+function writeGeneratedAvatar(hash: string, initials: string, variant: number): Buffer {
+	const file = generatedFileName(hash, initials, variant);
 	const png = renderInitialsAvatar(hash, initials, variant);
 	mkdirSync(GENERATED_DIR, { recursive: true, mode: 0o700 });
 	for (const old of readdirSync(GENERATED_DIR)) {
@@ -233,14 +152,19 @@ async function writeGeneratedAvatar(hash: string, initials: string): Promise<Buf
 	}
 	const tmpPath = join(GENERATED_DIR, `${randomBytes(8).toString('hex')}.tmp`);
 	writeFileSync(tmpPath, png, { mode: 0o600 });
-	renameSync(tmpPath, path);
+	renameSync(tmpPath, join(GENERATED_DIR, file));
 	return png;
 }
 
-export async function getGeneratedAvatar(hash: string, initials: string): Promise<Buffer> {
-	const { path } = await generatedFile(hash, initials);
+export function getGeneratedAvatar(hash: string, initials: string, variant: number): Buffer {
+	const path = join(GENERATED_DIR, generatedFileName(hash, initials, variant));
 	if (existsSync(path)) return readFileSync(path);
-	return writeGeneratedAvatar(hash, initials);
+	return writeGeneratedAvatar(hash, initials, variant);
+}
+
+export interface AvatarInfo {
+	initials: string;
+	variant: number;
 }
 
 export interface PregenerateResult {
@@ -254,19 +178,15 @@ export interface PregenerateResult {
 // BookStack at Passport). Idempotent: images already cached are left alone.
 // Rendering is synchronous, so the loop hands control back to the event loop between images:
 // generating a few hundred avatars never freezes the server for other requests.
-export async function pregenerateAvatars(initialsByHash: Map<string, string>): Promise<PregenerateResult> {
-	const sql = await getDb();
-	const rows = await sql<{ file: string }[]>`SELECT file FROM member_avatars`;
-	const withPhoto = new Set(rows.map((row) => row.file.replace(/\.jpg$/, '')));
-
+export async function pregenerateAvatars(infoByHash: Map<string, AvatarInfo>): Promise<PregenerateResult> {
 	const result: PregenerateResult = { generated: 0, alreadyCached: 0, withPhoto: 0 };
-	for (const [hash, initials] of initialsByHash) {
-		if (withPhoto.has(hash)) {
+	for (const [hash, { initials, variant }] of infoByHash) {
+		if (existsSync(photoPath(hash))) {
 			result.withPhoto++;
-		} else if (existsSync((await generatedFile(hash, initials)).path)) {
+		} else if (existsSync(join(GENERATED_DIR, generatedFileName(hash, initials, variant)))) {
 			result.alreadyCached++;
 		} else {
-			await writeGeneratedAvatar(hash, initials);
+			writeGeneratedAvatar(hash, initials, variant);
 			result.generated++;
 			await new Promise((resolve) => setImmediate(resolve));
 		}

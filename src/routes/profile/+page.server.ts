@@ -18,16 +18,11 @@ import {
 	getUsernameChangeInfo,
 	updateUsername,
 	revokeAllSessions,
+	changeAvatarColor,
 	AuthentikUnavailableError
 } from '$lib/server/authentikAdmin';
 import { lookupMattermostUsername } from '$lib/server/mattermost';
-import {
-	deleteAvatar,
-	getLocalAvatarUrl,
-	regenerateGeneratedAvatar,
-	saveAvatar,
-	validateAvatarUpload
-} from '$lib/server/avatars';
+import { deleteAvatar, hasUploadedAvatar, saveAvatar, validateAvatarUpload } from '$lib/server/avatars';
 import {
 	validateProfileSubmission,
 	validateEmergencyContactsSubmission,
@@ -66,8 +61,7 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		notificationPreferences,
 		mattermost,
 		emergencyContacts,
-		usernameChangeInfo,
-		avatarUrl;
+		usernameChangeInfo;
 	try {
 		[
 			sessions,
@@ -76,8 +70,7 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 			notificationPreferences,
 			mattermost,
 			emergencyContacts,
-			usernameChangeInfo,
-			avatarUrl
+			usernameChangeInfo
 		] = await Promise.all([
 			listSessions(profile.username),
 			listMfaDevices(pk),
@@ -89,8 +82,7 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 			// account" — see feedback_distinguish-fetch-failure-from-empty.
 			lookupMattermostUsername(profile.email),
 			getEmergencyContacts(pk),
-			getUsernameChangeInfo(pk),
-			getLocalAvatarUrl(pk)
+			getUsernameChangeInfo(pk)
 		]);
 	} catch (err) {
 		if (err instanceof AuthentikUnavailableError) {
@@ -99,8 +91,8 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		throw err;
 	}
 
-	// Best-effort like the avatar lookups: a Postgres outage empties the history tab rather than
-	// taking the whole profile page (and every edit form on it) down with it.
+	// Best-effort: the history is the only part of this page stored in Postgres, so an outage
+	// empties this tab rather than taking the whole profile page (and every edit form on it) down.
 	const auditEvents = await listAuditEventsForTarget(pk).catch((err) => {
 		console.error('Failed to load audit history', err);
 		return [];
@@ -120,7 +112,7 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		nextUsernameChangeAllowedAt: usernameChangeInfo.nextChangeAllowedAt,
 		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
 		// Whether profile.avatar is an uploaded photo (deletable) or generated initials.
-		hasLocalAvatar: avatarUrl !== null,
+		hasLocalAvatar: hasUploadedAvatar(profile.email),
 		auditEvents
 	};
 };
@@ -143,7 +135,7 @@ export const actions: Actions = {
 		// The file is named after the email's hash (see avatars.ts), taken from Authentik's own
 		// record rather than the session token, since that's what Authentik itself hashes.
 		const profile = await getUserProfile(pk);
-		await saveAvatar(pk, profile.email, bytes);
+		saveAvatar(profile.email, bytes);
 		await logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'avatar.update', { pk });
 		return { avatarUpdated: true };
 	},
@@ -152,15 +144,15 @@ export const actions: Actions = {
 	// initials avatar. Not audit-logged — purely cosmetic, and trivially undone.
 	regenerateAvatar: async ({ locals }) => {
 		const pk = resolvePk(locals);
-		const profile = await getUserProfile(pk);
-		await regenerateGeneratedAvatar(profile.email);
+		await changeAvatarColor(pk);
 		return { avatarRegenerated: true };
 	},
 
 	deleteAvatar: async ({ locals }) => {
 		const pk = resolvePk(locals);
 		const user = locals.user!;
-		if (await deleteAvatar(pk)) {
+		const profile = await getUserProfile(pk);
+		if (deleteAvatar(profile.email)) {
 			await logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'avatar.delete', { pk });
 		}
 		return { avatarDeleted: true };

@@ -17,6 +17,9 @@ function createConnection(): postgres.Sql {
 		database: env.POSTGRES_DB,
 		user: env.POSTGRES_USER,
 		password: env.POSTGRES_PASSWORD,
+		// Seconds. postgres.js waits 30 by default, which would leave a page hanging that long
+		// when Postgres is unreachable instead of showing the "database unavailable" page.
+		connect_timeout: 5,
 		// Postgres reports COUNT/SUM/MAX as the bigint type (OID 20) so a value past
 		// Number.MAX_SAFE_INTEGER is never silently rounded — postgres.js defaults to returning it as
 		// a string for that reason. None of our aggregates get remotely close to that ceiling, and a
@@ -72,6 +75,55 @@ export function getDb(): Promise<postgres.Sql> {
 		if (dev) globalThis.__passportDbPromise = dbPromise;
 	}
 	return dbPromise;
+}
+
+// Errors meaning "Postgres can't be reached right now" rather than a bug in a query: network-level
+// failures (refused, unresolvable host, timeout, dropped connection — postgres.js's own codes plus
+// Node's socket errors) and the server-side codes Postgres uses while starting up, shutting down or
+// saturated. Used by hooks.server.ts's handleError to show one clear "database unavailable" page
+// instead of a generic server error, whichever route hit the outage.
+const UNAVAILABLE_CODES = new Set([
+	'ECONNREFUSED',
+	'ECONNRESET',
+	'ENOTFOUND',
+	'EAI_AGAIN',
+	'ETIMEDOUT',
+	'EHOSTUNREACH',
+	'CONNECT_TIMEOUT',
+	'CONNECTION_CLOSED',
+	'CONNECTION_ENDED',
+	'CONNECTION_DESTROYED',
+	'57P01', // admin_shutdown
+	'57P02', // crash_shutdown
+	'57P03', // cannot_connect_now
+	'53300' // too_many_connections
+]);
+
+export function isDatabaseUnavailable(err: unknown): boolean {
+	const code = (err as { code?: unknown } | null)?.code;
+	return typeof code === 'string' && UNAVAILABLE_CODES.has(code);
+}
+
+export const DATABASE_UNAVAILABLE_MESSAGE =
+	'La base de données de Passport est temporairement indisponible. Réessayez dans quelques instants.';
+
+// Footer status check (see health.ts). Never throws, and gives up after `timeoutMs` — including
+// while the connection itself is still being attempted.
+export async function checkDatabase(timeoutMs: number): Promise<boolean> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		await Promise.race([
+			getDb().then((sql) => sql`SELECT 1`),
+			new Promise((_, reject) => {
+				timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
+			})
+		]);
+		return true;
+	} catch {
+		return false;
+	} finally {
+		clearTimeout(timer);
+	}
 }
 
 // `adapter-node` already registers its own SIGTERM/SIGINT handlers: it closes the HTTP server,
