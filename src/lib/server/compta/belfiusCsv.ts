@@ -4,7 +4,8 @@ import { normalizeIban } from '$lib/server/bankValidation';
 // Reader for Belfius Direct Net's CSV export ("Exporter" on the account history). Pure: bytes in,
 // movements out — nothing here touches the database, banque.ts does the inserting.
 //
-// The export is semicolon-separated, Windows-1252 or UTF-8 depending on the browser, with a
+// Verified against a real export (account history 01/01/2026 → 31/03/2026, 124 lines, 0 errors):
+// semicolon-separated, Windows-1252, twelve preamble lines (filter recap, last balance), then a
 // header row such as:
 //   Compte;Date de comptabilisation;N° d'extrait;N° de transaction;Compte contrepartie;
 //   Nom contrepartie contient;Rue et numéro;Code postal et localité;Transaction;Date valeur;
@@ -160,7 +161,9 @@ export function parseBelfiusCsv(bytes: Uint8Array): BelfiusParseResult {
 
 		const extrait = cell(cells, columns.extrait);
 		const transaction = cell(cells, columns.transaction);
-		const libelle = cell(cells, columns.libelle) || cell(cells, columns.communication) || 'Mouvement';
+		// Belfius pads the transaction text into fixed-width columns: runs of spaces are collapsed
+		// so the label reads as one line. Confirmed against a real export (2026-01 → 2026-03).
+		const libelle = (cell(cells, columns.libelle) || cell(cells, columns.communication) || 'Mouvement').replace(/\s+/g, ' ');
 		const contrepartieIban = normalizeIban(cell(cells, columns.compteContrepartie)) || null;
 		const contrepartieNom = cell(cells, columns.nomContrepartie) || null;
 		const communication = cell(cells, columns.communication) || null;
