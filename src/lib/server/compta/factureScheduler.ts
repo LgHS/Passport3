@@ -1,6 +1,8 @@
 import { getDb } from '$lib/server/db';
 import { addUTCMonths, brusselsToday, parseIsoDate, parseMoney, toIsoDate } from './dates';
 import { createFacture, validerFacture } from './factures';
+import { envoyerFacture } from './factureMail';
+import { isMailConfigured } from './mailer';
 import type { Periodicite } from './cotisations';
 
 // Issues each organisation's dues invoice at the start of every period — docs/compta.md,
@@ -84,6 +86,13 @@ export async function issueDueInvoices(today: Date = brusselsToday()): Promise<n
 						cotisation: { type: 'facturee', debut, fin, sieges: a.sieges }
 					});
 					await validerFacture(facture.id, today);
+					// Sent right away when email is set up; a send failure is logged, never blocks the
+					// issuing — the treasurer sees "non envoyée" on the invoice and can resend by hand.
+					if (isMailConfigured()) {
+						await envoyerFacture(facture.id).catch((err) =>
+							console.error(`[factureScheduler] envoi de la facture ${facture.id} échoué:`, (err as Error).message)
+						);
+					}
 					// Advance only after the invoice exists, and on the autocommit connection (not the
 					// lock's transaction): a crash between the two re-issues at the next pass rather than
 					// silently skipping a period, and a failure on a later abonnement can't roll this back.

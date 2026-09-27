@@ -127,10 +127,14 @@ crédit (`type = 'note_de_credit'`, `facture_origine_id`). Statuts : `brouillon`
   0 % et aucun numéro de TVA. Il n'y a ni taux ni base par ligne à gérer.
 - **PDF** généré côté serveur sans navigateur (`pdfkit`) — le conteneur tourne en lecture seule
   sans capacités, Chromium n'y a pas sa place.
-- **UBL** : XML Peppol BIS Billing 3.0 téléchargeable à côté du PDF, déposé à la main sur
-  Doccle. Exonération en catégorie de taxe `E` avec la raison textuelle ; le code `VATEX`
-  exact pour le régime de franchise reste à confirmer avec le comptable avant l'écrire.
-- Factures **reçues** : métadonnées, PDF déposé, UBL importé si le fournisseur en fournit.
+- **UBL** : XML Peppol BIS Billing 3.0 (`Invoice` ou `CreditNote`) généré à la validation avec
+  le PDF, stocké en base, téléchargeable pour dépôt à la main sur Doccle, et joint à l'email.
+  Adresses électroniques en schéma `0208` (n° BCE) ou `EM` (email) faute de BCE. Exonération en
+  catégorie de taxe `E` avec la raison textuelle ; le code `VATEX` exact pour le régime de
+  franchise reste à confirmer avec le comptable avant de l'écrire.
+- Factures **reçues** : saisie (numéro du fournisseur, lignes, PDF déposé) ou **import d'un UBL**
+  fournisseur — tiers retrouvé par n° BCE/TVA ou nom, sinon créé ; lignes ramenées au TTC payé ;
+  PDF embarqué conservé.
 
 Un membre voit ses factures et, s'il est `est_administrateur` d'une société, celles de la
 société. La route `/cotisation/invoice/[id]` garde son contrôle « c'est bien la mienne ».
@@ -167,9 +171,12 @@ Générés depuis les mouvements lettrés et les pièces — pas de plan comptab
 
 ## Emails et notifications
 
-Aucun envoi d'email n'existe dans Passport aujourd'hui (les invitations passent par Authentik).
-Un transport SMTP est ajouté pour les factures et rappels ; les détails (expéditeur, serveur)
-sont fixés plus tard. Mattermost (bot existant) sert aux notifications internes.
+Le transport SMTP (`SMTP_URL`, `SMTP_FROM`, `mailer.ts`) sert à envoyer une facture émise à son
+tiers — email du tiers plus les personnes « reçoit les factures » de la société — avec PDF et
+UBL joints (`factureMail.ts`). Le bouton est sur la facture ; le planificateur d'abonnements
+envoie lui-même dès l'émission quand SMTP est configuré, et la facture garde la trace de l'envoi
+(`envoyee_le`, `envoyee_a`). Sans configuration, rien ne part et l'interface le dit. Mattermost
+(bot existant) reste disponible pour les notifications internes.
 
 ## Migration depuis Dolibarr
 
@@ -202,5 +209,5 @@ Dolibarr a), puis `authentik_pk` fait foi.
 3. **Banque et caisse** : comptes, mouvements, import Belfius, lettrage (automatique sur la
    communication structurée, manuel sinon), virements internes ; import des comptes et écritures
    Dolibarr. *(livré)*
-4. **UBL**, factures reçues, SMTP.
+4. **UBL**, import d'UBL fournisseur, envoi des factures par email (SMTP). *(livré)*
 5. Notes de frais, livre journal et comptes annuels, désactivation Authentik automatique.
