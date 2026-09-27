@@ -386,6 +386,85 @@ const migrations: Migration[] = [
 					ADD COLUMN delai_paiement_jours INTEGER NOT NULL DEFAULT 30 CHECK (delai_paiement_jours >= 0)
 			`;
 		}
+	},
+	{
+		version: 12,
+		name: 'create compta: comptes, mouvements, imports_bancaires, lettrages',
+		up: async (sql) => {
+			// Bank and cash accounts with their movements, and the matching (lettrage) of movements
+			// against invoices, dues and expense claims — docs/compta.md, "Banque et caisse".
+			await sql`
+				CREATE TABLE comptes (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					type TEXT NOT NULL CHECK (type IN ('banque', 'caisse')),
+					nom TEXT NOT NULL,
+					iban TEXT,
+					-- Balance before the first recorded movement; the current balance is this plus the
+					-- sum of movements, computed on read.
+					solde_ouverture NUMERIC(12, 2) NOT NULL DEFAULT 0,
+					date_ouverture DATE NOT NULL DEFAULT CURRENT_DATE,
+					actif BOOLEAN NOT NULL DEFAULT true,
+					dolibarr_bank_id INTEGER UNIQUE
+				)
+			`;
+
+			// One row per statement file imported, for the audit trail and for "where did this
+			// movement come from".
+			await sql`
+				CREATE TABLE imports_bancaires (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					compte_id INTEGER NOT NULL REFERENCES comptes(id),
+					nom_fichier TEXT NOT NULL,
+					lignes INTEGER NOT NULL,
+					nouvelles INTEGER NOT NULL,
+					actor_sub TEXT NOT NULL
+				)
+			`;
+
+			await sql`
+				CREATE TABLE mouvements (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					compte_id INTEGER NOT NULL REFERENCES comptes(id),
+					date_valeur DATE NOT NULL,
+					-- Signed: money in is positive, money out negative.
+					montant NUMERIC(12, 2) NOT NULL,
+					libelle TEXT NOT NULL,
+					contrepartie_nom TEXT,
+					contrepartie_iban TEXT,
+					communication TEXT,
+					import_id INTEGER REFERENCES imports_bancaires(id),
+					-- Bank-side identity of the line (statement + transaction number, or a hash of the
+					-- row), so re-importing an overlapping export never duplicates a movement.
+					external_id TEXT,
+					-- Both legs of an internal transfer share the id of the first leg.
+					transfert_id INTEGER,
+					UNIQUE (compte_id, external_id)
+				)
+			`;
+			await sql`CREATE INDEX mouvements_compte_date ON mouvements (compte_id, date_valeur DESC, id DESC)`;
+
+			// One row per allocation of (part of) a movement to a target: a payment can settle
+			// several invoices, an invoice can be paid in several times.
+			await sql`
+				CREATE TABLE lettrages (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					mouvement_id INTEGER NOT NULL REFERENCES mouvements(id) ON DELETE CASCADE,
+					cible_type TEXT NOT NULL CHECK (cible_type IN ('facture', 'cotisation', 'note_de_frais', 'autre')),
+					-- NULL only for 'autre' (a free-text allocation: bank fees, a donation…).
+					cible_id INTEGER,
+					-- Always positive; the movement's sign says which way the money went.
+					montant NUMERIC(12, 2) NOT NULL CHECK (montant > 0),
+					libelle TEXT,
+					CHECK (cible_type = 'autre' OR cible_id IS NOT NULL)
+				)
+			`;
+			await sql`CREATE INDEX lettrages_mouvement ON lettrages (mouvement_id)`;
+			await sql`CREATE INDEX lettrages_cible ON lettrages (cible_type, cible_id)`;
+		}
 	}
 ];
 

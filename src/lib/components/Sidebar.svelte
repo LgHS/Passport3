@@ -264,6 +264,9 @@
 					>
 						Factures
 					</a>
+					<a href="/compta/banque" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/compta/banque')}">
+						Banque &amp; caisse
+					</a>
 					<a
 						href="/compta/parametres"
 						onclick={closeOverlay}
