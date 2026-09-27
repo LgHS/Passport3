@@ -579,6 +579,16 @@ export async function updateNotificationPreferences(
 export interface TrombinoscopeTag {
 	tag: string | null;
 	tagColor: string | null;
+	// Full version of the role, stored as `tagx` next to `tag`/`tagc` — e.g. tag "Président",
+	// extended role "Président, délégué à la gestion journalière". Only shown on the
+	// trombinoscope's member card; the short `tag` stays the badge on the grid.
+	tagExtended: string | null;
+}
+
+export const TAG_EXTENDED_MAX_LENGTH = 120;
+
+function nonEmptyString(value: unknown): string | null {
+	return typeof value === 'string' && value.trim() ? value : null;
 }
 
 export async function getTrombinoscopeTag(pk: number): Promise<TrombinoscopeTag> {
@@ -591,7 +601,8 @@ export async function getTrombinoscopeTag(pk: number): Promise<TrombinoscopeTag>
 	return {
 		tag: typeof tagValue === 'string' && tagValue.trim() ? tagValue : null,
 		tagColor:
-			typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue) ? tagColorValue : null
+			typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue) ? tagColorValue : null,
+		tagExtended: nonEmptyString(rawTrombi.tagx)
 	};
 }
 
@@ -622,12 +633,14 @@ export async function updateTrombinoscopeTag(
 		tagColor:
 			typeof beforeTagColorValue === 'string' && HEX_COLOR_RE.test(beforeTagColorValue)
 				? beforeTagColorValue
-				: null
+				: null,
+		tagExtended: nonEmptyString(rawTrombi.tagx)
 	};
 	const mergedTrombinoscope = {
 		...rawTrombi,
 		tag: tag.tag ?? '',
-		tagc: tag.tagColor ?? ''
+		tagc: tag.tagColor ?? '',
+		tagx: tag.tagExtended ?? ''
 	};
 
 	await authentikApiFetch(`core/users/${pk}/`, {
@@ -887,6 +900,8 @@ export interface DirectoryMember {
 	tag: string | null;
 	// Hex color without the `#`, validated — null falls back to the default black badge.
 	tagColor: string | null;
+	// Full version of the role (see TrombinoscopeTag.tagExtended) — only shown on the member card.
+	tagExtended: string | null;
 	// Signal/Telegram/Discord/Matrix, set on /profile (optional fields there). No dedicated
 	// trombinoscope opt-in for these: filling them in on an already-optional field *is* the
 	// consent, so presence is the only gate — same as tag/tagColor above, just gated by `visible`.
@@ -970,6 +985,7 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 					// with no auth — hiding it here specifically gave no real privacy.
 					avatar: avatarUrlFor(u.email, avatarVariantOf(u.attributes)),
 					tag: typeof tagValue === 'string' && tagValue.trim() ? tagValue : null,
+					tagExtended: nonEmptyString(rawTrombi.tagx),
 					tagColor:
 						typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue)
 							? tagColorValue

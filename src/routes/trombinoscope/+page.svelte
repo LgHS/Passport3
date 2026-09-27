@@ -596,6 +596,9 @@
 		<div class="space-y-3 p-4 text-sm">
 			<div>
 				<h2 id="member-card-title" class="text-base font-bold break-all">@{member.username}</h2>
+				{#if member.tagExtended}
+					<p class="font-bold">{member.tagExtended}</p>
+				{/if}
 				{#if fullName(member)}
 					<p class="text-gray-600">{fullName(member)}</p>
 				{/if}
@@ -649,7 +652,7 @@
 				</dl>
 			{/if}
 
-			{#if !fullName(member) && !member.email && !member.phone && !member.mattermostUsername && socialLinks(member).length === 0}
+			{#if !fullName(member) && !member.tagExtended && !member.email && !member.phone && !member.mattermostUsername && socialLinks(member).length === 0}
 				<p class="text-gray-500">Ce membre n'a partagé que son pseudo.</p>
 			{/if}
 		</div>

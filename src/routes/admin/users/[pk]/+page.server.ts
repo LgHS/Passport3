@@ -15,6 +15,7 @@ import {
 	updateEmergencyContacts,
 	MAX_EMERGENCY_CONTACTS,
 	getRfidUid,
+	TAG_EXTENDED_MAX_LENGTH,
 	regenerateRfidUid,
 	listMfaDevices
 } from '$lib/server/authentikAdmin';
@@ -172,6 +173,7 @@ export const actions: Actions = {
 		const pk = resolvePk(params.pk);
 		const formData = await request.formData();
 		const tag = String(formData.get('tag') ?? '').trim();
+		const tagExtended = String(formData.get('tagExtended') ?? '').trim();
 		const tagColor = String(formData.get('tagColor') ?? '')
 			.trim()
 			.replace(/^#/, '')
@@ -181,15 +183,28 @@ export const actions: Actions = {
 			return fail(400, {
 				tagError: 'Couleur invalide (format attendu : 6 caractères hexadécimaux, ex. ffd800).',
 				tag,
-				tagColor
+				tagColor,
+				tagExtended
+			});
+		}
+		if (tagExtended.length > TAG_EXTENDED_MAX_LENGTH) {
+			return fail(400, {
+				tagError: `Le rôle étendu ne peut pas dépasser ${TAG_EXTENDED_MAX_LENGTH} caractères.`,
+				tag,
+				tagColor,
+				tagExtended
 			});
 		}
 
 		let mutation;
 		try {
-			mutation = await updateTrombinoscopeTag(pk, { tag: tag || null, tagColor: tagColor || null });
+			mutation = await updateTrombinoscopeTag(pk, {
+				tag: tag || null,
+				tagColor: tagColor || null,
+				tagExtended: tagExtended || null
+			});
 		} catch {
-			return fail(500, { tagError: 'La sauvegarde du rôle a échoué, réessayez.', tag, tagColor });
+			return fail(500, { tagError: 'La sauvegarde du rôle a échoué, réessayez.', tag, tagColor, tagExtended });
 		}
 
 		await logAuditEvent(
@@ -200,7 +215,7 @@ export const actions: Actions = {
 			{ before: mutation.before, after: mutation.after }
 		);
 
-		return { tagSuccess: true, tag, tagColor };
+		return { tagSuccess: true, tag, tagColor, tagExtended };
 	},
 
 	updateEmergencyContacts: async ({ request, params, locals }) => {
