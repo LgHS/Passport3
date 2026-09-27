@@ -23,6 +23,20 @@
 	let pageCount = $derived(Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE)));
 	let pagedUsers = $derived(filteredUsers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE));
 
+	// Green = yes, grey = no, no dot at all = couldn't check (MFA only — the lookup is best-effort,
+	// see +page.server.ts).
+	function dotClass(value: boolean): string {
+		return value ? 'bg-green-600' : 'bg-gray-400';
+	}
+
+	function mfaLabel(hasMfa: boolean | null): string {
+		return hasMfa === null ? 'MFA inconnu' : hasMfa ? 'MFA actif' : 'Pas de MFA';
+	}
+
+	function emergencyLabel(hasEmergencyContact: boolean): string {
+		return hasEmergencyContact ? "Contact d'urgence renseigné" : "Pas de contact d'urgence";
+	}
+
 	function onSearch(value: string) {
 		query = value;
 		page = 1;
@@ -74,6 +88,19 @@
 						></span>
 						Trombinoscope {user.trombinoscopeVisible ? 'visible' : 'masqué'}
 					</p>
+					<p class="mt-1 flex items-center gap-1.5 text-xs font-bold uppercase">
+						{#if user.hasMfa !== null}
+							<span class="inline-block h-2 w-2 shrink-0 rounded-full {dotClass(user.hasMfa)}" aria-hidden="true"></span>
+						{/if}
+						{mfaLabel(user.hasMfa)}
+					</p>
+					<p class="mt-1 flex items-center gap-1.5 text-xs font-bold uppercase">
+						<span
+							class="inline-block h-2 w-2 shrink-0 rounded-full {dotClass(user.hasEmergencyContact)}"
+							aria-hidden="true"
+						></span>
+						{emergencyLabel(user.hasEmergencyContact)}
+					</p>
 				</a>
 			{/each}
 		</div>
@@ -87,6 +114,8 @@
 						<th class="border border-black px-3 py-2 text-center">Email</th>
 						<th class="border border-black px-3 py-2 text-center">Statut</th>
 						<th class="border border-black px-3 py-2 text-center">Trombi</th>
+						<th class="border border-black px-3 py-2 text-center">MFA</th>
+						<th class="border border-black px-3 py-2 text-center">Urgence</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -134,6 +163,36 @@
 										class="inline-block h-2 w-2 shrink-0 rounded-full {user.trombinoscopeVisible
 											? 'bg-green-600'
 											: 'bg-gray-400'}"
+										aria-hidden="true"
+									></span>
+								</a>
+							</td>
+							<td class="relative border border-black p-0">
+								<a
+									href="/admin/users/{user.pk}"
+									aria-label={mfaLabel(user.hasMfa)}
+									title={mfaLabel(user.hasMfa)}
+									class="no-underline-fx absolute inset-0 flex items-center justify-center transition-colors group-hover:bg-black group-hover:text-white"
+								>
+									{#if user.hasMfa === null}
+										<span aria-hidden="true">?</span>
+									{:else}
+										<span
+											class="inline-block h-2 w-2 shrink-0 rounded-full {dotClass(user.hasMfa)}"
+											aria-hidden="true"
+										></span>
+									{/if}
+								</a>
+							</td>
+							<td class="relative border border-black p-0">
+								<a
+									href="/admin/users/{user.pk}"
+									aria-label={emergencyLabel(user.hasEmergencyContact)}
+									title={emergencyLabel(user.hasEmergencyContact)}
+									class="no-underline-fx absolute inset-0 flex items-center justify-center transition-colors group-hover:bg-black group-hover:text-white"
+								>
+									<span
+										class="inline-block h-2 w-2 shrink-0 rounded-full {dotClass(user.hasEmergencyContact)}"
 										aria-hidden="true"
 									></span>
 								</a>

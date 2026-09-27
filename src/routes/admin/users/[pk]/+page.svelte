@@ -182,6 +182,16 @@
 					<span class="text-gray-500">Pas de compte lié ou actif</span>
 				{/if}
 			</p>
+			<p>
+				<span class="font-bold uppercase">MFA :</span>
+				{#if data.mfaTypes === null}
+					<span class="text-gray-500">Impossible de vérifier pour le moment</span>
+				{:else if data.mfaTypes.length > 0}
+					{data.mfaTypes.join(', ')}
+				{:else}
+					<span class="text-gray-500">Aucun</span>
+				{/if}
+			</p>
 		</div>
 	</div>
 
