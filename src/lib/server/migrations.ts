@@ -160,6 +160,31 @@ const migrations: Migration[] = [
 			await sql`DROP TABLE member_avatars`;
 			await sql`DROP TABLE avatar_variants`;
 		}
+	},
+	{
+		version: 10,
+		name: 'create tasks',
+		up: async (sql) => {
+			// Workshop to-do board (replaces the post-its on the wall). One assignee per task:
+			// assigned_by_sub is null when the assignee volunteered, set when an admin imposed it
+			// (an imposed task can't be released by its assignee).
+			await sql`
+				CREATE TABLE tasks (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					author_sub TEXT NOT NULL,
+					author_label TEXT NOT NULL,
+					title TEXT NOT NULL,
+					description TEXT,
+					due_date DATE,
+					status TEXT NOT NULL DEFAULT 'todo',
+					assignee_sub TEXT,
+					assignee_label TEXT,
+					assigned_by_sub TEXT,
+					done_at TIMESTAMPTZ
+				)
+			`;
+		}
 	}
 ];
 

@@ -197,6 +197,13 @@
 				</svg>
 				Trombinoscope
 			</a>
+			<a href="/tasks" onclick={closeOverlay} class="{itemClass} {itemStateClass('/tasks')}">
+				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+					<rect x="3.5" y="3.5" width="13" height="13" rx="1" />
+					<path d="M6.5 10l2.5 2.5 4.5-5" stroke-linecap="round" stroke-linejoin="round" />
+				</svg>
+				Tâches
+			</a>
 			<a href="/wishlist" onclick={closeOverlay} class="{itemClass} {itemStateClass('/wishlist')}">
 				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
 					<rect x="3" y="8.5" width="14" height="8" rx="1" />
