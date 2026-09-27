@@ -39,7 +39,7 @@ function resolvePk(paramPk: string): number {
 export const load: PageServerLoad = async ({ params }) => {
 	const pk = resolvePk(params.pk);
 
-	const [profile, optin, tag, groups, emergencyContacts, rfidUid] = await Promise.all([
+	const [profile, optin, tag, groups, emergencyContacts, rfidUid, hasLocalAvatar] = await Promise.all([
 		getUserProfile(pk).catch(() => null),
 		getTrombinoscopeOptin(pk),
 		getTrombinoscopeTag(pk),
@@ -55,7 +55,8 @@ export const load: PageServerLoad = async ({ params }) => {
 		// getRfidUid's own return already uses `null` to mean "no badge assigned" — that's a
 		// legitimate, distinct value from a fetch failure, so the failure case is `undefined` here
 		// rather than reusing `null` and collapsing the two meanings together.
-		getRfidUid(pk).catch(() => undefined)
+		getRfidUid(pk).catch(() => undefined),
+		getLocalAvatarUrl(pk).then((url) => url !== null)
 	]);
 	if (!profile) {
 		error(404, 'Membre introuvable.');
@@ -81,7 +82,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		emergencyContacts,
 		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
 		rfidUid,
-		hasLocalAvatar: getLocalAvatarUrl(pk) !== null
+		hasLocalAvatar
 	};
 };
 
@@ -106,7 +107,7 @@ export const actions: Actions = {
 		const mutation = await updateUserProfile(pk, { name: result.name, attributes: result.attributes });
 
 		if (mutation.changed) {
-			logAuditEvent(
+			await logAuditEvent(
 				{ sub: admin.sub, label: displayName(admin) },
 				'admin',
 				'profile.update',
@@ -147,7 +148,7 @@ export const actions: Actions = {
 			return fail(500, { optinError: "La sauvegarde de la visibilité a échoué, réessayez." });
 		}
 
-		logAuditEvent(
+		await logAuditEvent(
 			{ sub: admin.sub, label: displayName(admin) },
 			'admin',
 			'trombinoscope.optin.update',
@@ -186,7 +187,7 @@ export const actions: Actions = {
 			return fail(500, { tagError: 'La sauvegarde du rôle a échoué, réessayez.', tag, tagColor });
 		}
 
-		logAuditEvent(
+		await logAuditEvent(
 			{ sub: admin.sub, label: displayName(admin) },
 			'admin',
 			'trombinoscope.tag.update',
@@ -221,7 +222,7 @@ export const actions: Actions = {
 		// not even the member's own data) — just how many entries there were and how many there are
 		// now. Same stricter-than-usual posture as the rest of this feature's admin-only visibility
 		// rule.
-		logAuditEvent(
+		await logAuditEvent(
 			{ sub: admin.sub, label: displayName(admin) },
 			'admin',
 			'emergencyContacts.update',
@@ -250,7 +251,7 @@ export const actions: Actions = {
 
 		// Deliberately no UUID in `details` — same posture as the member's own /badge regenerate
 		// action: a live physical-access credential is too sensitive to duplicate into the log.
-		logAuditEvent({ sub: admin.sub, label: displayName(admin) }, 'admin', 'badge.regenerate', { pk });
+		await logAuditEvent({ sub: admin.sub, label: displayName(admin) }, 'admin', 'badge.regenerate', { pk });
 
 		return { rfidRegenerated: true };
 	},
@@ -260,8 +261,8 @@ export const actions: Actions = {
 	deleteAvatar: async ({ params, locals }) => {
 		const admin = requireAdminUser(locals);
 		const pk = resolvePk(params.pk);
-		if (deleteAvatar(pk)) {
-			logAuditEvent({ sub: admin.sub, label: displayName(admin) }, 'admin', 'avatar.delete', { pk });
+		if (await deleteAvatar(pk)) {
+			await logAuditEvent({ sub: admin.sub, label: displayName(admin) }, 'admin', 'avatar.delete', { pk });
 		}
 		return { avatarDeleted: true };
 	}

@@ -1,9 +1,9 @@
-import type Database from 'better-sqlite3';
+import type postgres from 'postgres';
 
 interface Migration {
 	version: number;
 	name: string;
-	up: (db: Database.Database) => void;
+	up: (sql: postgres.TransactionSql) => Promise<void>;
 }
 
 // Append-only: a migration that already shipped must never be edited, reordered, or removed — a
@@ -16,11 +16,11 @@ const migrations: Migration[] = [
 	{
 		version: 1,
 		name: 'create audit_events',
-		up: (db) => {
-			db.exec(`
+		up: async (sql) => {
+			await sql`
 				CREATE TABLE audit_events (
-					id INTEGER PRIMARY KEY AUTOINCREMENT,
-					created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 					actor_sub TEXT NOT NULL,
 					actor_label TEXT NOT NULL,
 					action TEXT NOT NULL,
@@ -28,29 +28,29 @@ const migrations: Migration[] = [
 					target_email TEXT,
 					details TEXT
 				)
-			`);
+			`;
 			// Speeds up listAuditEventsForTarget()'s WHERE target_pk = ? ORDER BY id DESC — without
 			// it, that query is a full table scan. Negligible today, but cheap before the table grows.
-			db.exec(`CREATE INDEX audit_events_target_pk_id ON audit_events(target_pk, id DESC)`);
+			await sql`CREATE INDEX audit_events_target_pk_id ON audit_events(target_pk, id DESC)`;
 		}
 	},
 	{
 		version: 2,
 		name: 'add audit_events.source',
-		up: (db) => {
+		up: async (sql) => {
 			// 'admin' backfill for every pre-existing row: this column didn't exist before the
 			// admin/user distinction did, so every row logged before it shipped was an admin action.
-			db.exec(`ALTER TABLE audit_events ADD COLUMN source TEXT NOT NULL DEFAULT 'admin'`);
+			await sql`ALTER TABLE audit_events ADD COLUMN source TEXT NOT NULL DEFAULT 'admin'`;
 		}
 	},
 	{
 		version: 3,
 		name: 'create wishlist_items and wishlist_votes',
-		up: (db) => {
-			db.exec(`
+		up: async (sql) => {
+			await sql`
 				CREATE TABLE wishlist_items (
-					id INTEGER PRIMARY KEY AUTOINCREMENT,
-					created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 					author_sub TEXT NOT NULL,
 					author_label TEXT NOT NULL,
 					title TEXT NOT NULL,
@@ -60,28 +60,29 @@ const migrations: Migration[] = [
 					estimated_amount REAL,
 					type TEXT NOT NULL
 				)
-			`);
-			// References wishlist_items, so must be created after it — foreign_keys is ON.
-			db.exec(`
+			`;
+			// References wishlist_items, so must be created after it. Postgres enforces foreign keys
+			// unconditionally (unlike SQLite, which needed `PRAGMA foreign_keys = ON`).
+			await sql`
 				CREATE TABLE wishlist_votes (
-					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 					item_id INTEGER NOT NULL REFERENCES wishlist_items(id) ON DELETE CASCADE,
 					voter_sub TEXT NOT NULL,
 					voter_label TEXT NOT NULL,
 					value INTEGER NOT NULL,
-					created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 					UNIQUE(item_id, voter_sub)
 				)
-			`);
+			`;
 		}
 	},
 	{
 		version: 4,
 		name: 'add wishlist_items.status and resolved_at',
-		up: (db) => {
+		up: async (sql) => {
 			// Every pre-existing row predates resolution, hence the 'pending' default/backfill.
-			db.exec(`ALTER TABLE wishlist_items ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'`);
-			db.exec(`ALTER TABLE wishlist_items ADD COLUMN resolved_at TEXT`);
+			await sql`ALTER TABLE wishlist_items ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'`;
+			await sql`ALTER TABLE wishlist_items ADD COLUMN resolved_at TIMESTAMPTZ`;
 		}
 	},
 	{
@@ -90,90 +91,98 @@ const migrations: Migration[] = [
 		// the migrations backfill TODO in project memory for why this collision was expected.
 		version: 5,
 		name: 'create birthday_settings',
-		up: (db) => {
+		up: async (sql) => {
 			// Single-row settings table (CHECK(id = 1) keeps it that way) rather than a generic
 			// key/value table — there's exactly one setting pair to store today.
-			db.exec(`
+			await sql`
 				CREATE TABLE birthday_settings (
 					id INTEGER PRIMARY KEY CHECK (id = 1),
-					enabled INTEGER NOT NULL DEFAULT 0,
+					enabled BOOLEAN NOT NULL DEFAULT false,
 					hour INTEGER NOT NULL DEFAULT 9
 				)
-			`);
-			db.exec('INSERT INTO birthday_settings (id, enabled, hour) VALUES (1, 0, 9)');
+			`;
+			await sql`INSERT INTO birthday_settings (id, enabled, hour) VALUES (1, false, 9)`;
 		}
 	},
 	{
 		version: 6,
 		name: 'create birthday_sent',
-		up: (db) => {
-			db.exec(`
+		up: async (sql) => {
+			await sql`
 				CREATE TABLE birthday_sent (
 					member_pk INTEGER NOT NULL,
 					year INTEGER NOT NULL,
-					sent_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+					sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 					PRIMARY KEY (member_pk, year)
 				)
-			`);
+			`;
 		}
 	},
 	{
 		version: 7,
 		name: 'create member_avatars',
-		up: (db) => {
+		up: async (sql) => {
 			// One row per member who uploaded a photo — no row means "show generated initials". The
 			// file is named after the md5 hash of the member's email (see avatars.ts), so Authentik
 			// and BookStack can reference it from the email alone, like a Gravatar.
-			db.exec(`
+			await sql`
 				CREATE TABLE member_avatars (
 					member_pk INTEGER PRIMARY KEY,
 					file TEXT NOT NULL,
-					updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+					updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 				)
-			`);
+			`;
 		}
 	},
 	{
 		version: 8,
 		name: 'create avatar_variants',
-		up: (db) => {
+		up: async (sql) => {
 			// Background colour picked by a member for their generated initials avatar ("Changer de
 			// couleur" on /profile), keyed by the same email hash as the avatar URL. No row means the
 			// default colour derived from the hash itself.
-			db.exec(`
+			await sql`
 				CREATE TABLE avatar_variants (
 					email_hash TEXT PRIMARY KEY,
 					variant INTEGER NOT NULL
 				)
-			`);
+			`;
 		}
 	}
 ];
 
-export function runMigrations(db: Database.Database): void {
-	db.exec(`
+// Arbitrary, fixed constant identifying Passport3's own migration lock — only matters if another
+// application ever takes an advisory lock with this exact number on the very same Postgres
+// instance, which isn't the case here.
+const MIGRATION_LOCK_ID = 727300001;
+
+export async function runMigrations(sql: postgres.Sql): Promise<void> {
+	await sql`
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version INTEGER PRIMARY KEY,
 			name TEXT NOT NULL,
-			applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+			applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 		)
-	`);
+	`;
 
-	const applied = new Set(
-		(db.prepare('SELECT version FROM schema_migrations').all() as { version: number }[]).map(
-			(row) => row.version
-		)
-	);
+	const sorted = [...migrations].sort((a, b) => a.version - b.version);
+	for (const migration of sorted) {
+		await sql.begin(async (tx) => {
+			// Held only for this transaction, released automatically on commit/rollback. Guards
+			// against two processes starting at the same time (a redeploy, more than one replica) both
+			// applying the same migration — db.ts's promise memoization only protects a single
+			// process, this is the cross-process equivalent.
+			await tx`SELECT pg_advisory_xact_lock(${MIGRATION_LOCK_ID})`;
 
-	const pending = [...migrations].sort((a, b) => a.version - b.version);
-	for (const migration of pending) {
-		if (applied.has(migration.version)) continue;
-		db.transaction(() => {
-			migration.up(db);
-			db.prepare('INSERT INTO schema_migrations (version, name) VALUES (?, ?)').run(
-				migration.version,
-				migration.name
-			);
-		})();
+			// Re-read after acquiring the lock, not before: another process may have applied this
+			// exact migration while this one was waiting for the lock.
+			const [already] = await tx<{ version: number }[]>`
+				SELECT version FROM schema_migrations WHERE version = ${migration.version}
+			`;
+			if (already) return;
+
+			await migration.up(tx);
+			await tx`INSERT INTO schema_migrations (version, name) VALUES (${migration.version}, ${migration.name})`;
+		});
 	}
 }

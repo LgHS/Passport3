@@ -26,7 +26,7 @@ export const actions: Actions = {
 
 		const { inviteUrl } = await createInvitation({ email, singleUse, expiresAt });
 
-		logAuditEvent(
+		await logAuditEvent(
 			{ sub: admin.sub, label: displayName(admin) },
 			'admin',
 			'invitation.create',

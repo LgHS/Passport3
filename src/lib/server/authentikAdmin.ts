@@ -166,7 +166,7 @@ function pickAttributes(source: Record<string, unknown>): Record<string, string>
 // baked into the cache, so an upload or delete shows up immediately.
 export async function getUserProfile(pk: number): Promise<UserProfile> {
 	const profile = await getAuthentikUserProfile(pk);
-	return { ...profile, avatar: avatarUrlFor(pk, profile.email) };
+	return { ...profile, avatar: await avatarUrlFor(pk, profile.email) };
 }
 
 async function getAuthentikUserProfile(pk: number): Promise<UserProfile> {
@@ -867,7 +867,7 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 		results: (AuthentikUserRecord & { is_active: boolean; type: string })[];
 	};
 
-	const localAvatars = getLocalAvatarUrls();
+	const localAvatars = await getLocalAvatarUrls();
 
 	const members = await Promise.all(
 		data.results
@@ -911,7 +911,7 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 							: null,
 					// No opt-in gate: the avatar is already public on its own at /avatars/<hash>.jpg,
 					// with no auth — hiding it here specifically gave no real privacy.
-					avatar: localAvatars.get(u.pk) ?? (u.email ? generatedAvatarUrl(u.email) : null),
+					avatar: localAvatars.get(u.pk) ?? (u.email ? await generatedAvatarUrl(u.email) : null),
 					tag: typeof tagValue === 'string' && tagValue.trim() ? tagValue : null,
 					tagColor:
 						typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue)

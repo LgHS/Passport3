@@ -39,7 +39,7 @@ export interface WishlistItem {
 
 interface WishlistItemRow {
 	id: number;
-	created_at: string;
+	created_at: Date;
 	author_sub: string;
 	author_label: string;
 	title: string;
@@ -49,7 +49,7 @@ interface WishlistItemRow {
 	estimated_amount: number | null;
 	type: string;
 	status: string;
-	resolved_at: string | null;
+	resolved_at: Date | null;
 }
 
 interface WishlistVoteRow {
@@ -59,64 +59,63 @@ interface WishlistVoteRow {
 	value: number;
 }
 
-export function createWishlistItem(author: WishlistAuthor, input: WishlistItemInput): number {
-	const result = getDb()
-		.prepare(
-			`INSERT INTO wishlist_items (author_sub, author_label, title, description, link, quantity, estimated_amount, type)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-		)
-		.run(
-			author.sub,
-			author.label,
-			input.title,
-			input.description,
-			input.link,
-			input.quantity,
-			input.estimatedAmount,
-			input.type
-		);
-	return Number(result.lastInsertRowid);
+export async function createWishlistItem(author: WishlistAuthor, input: WishlistItemInput): Promise<number> {
+	const sql = await getDb();
+	const [row] = await sql<{ id: number }[]>`
+		INSERT INTO wishlist_items (author_sub, author_label, title, description, link, quantity, estimated_amount, type)
+		VALUES (${author.sub}, ${author.label}, ${input.title}, ${input.description}, ${input.link}, ${input.quantity}, ${input.estimatedAmount}, ${input.type})
+		RETURNING id
+	`;
+	return row.id;
 }
 
-export function updateWishlistItem(itemId: number, input: WishlistItemInput): void {
-	getDb()
-		.prepare(
-			`UPDATE wishlist_items
-			 SET title = ?, description = ?, link = ?, quantity = ?, estimated_amount = ?, type = ?
-			 WHERE id = ?`
-		)
-		.run(input.title, input.description, input.link, input.quantity, input.estimatedAmount, input.type, itemId);
+export async function updateWishlistItem(itemId: number, input: WishlistItemInput): Promise<void> {
+	const sql = await getDb();
+	await sql`
+		UPDATE wishlist_items
+		SET title = ${input.title}, description = ${input.description}, link = ${input.link},
+		    quantity = ${input.quantity}, estimated_amount = ${input.estimatedAmount}, type = ${input.type}
+		WHERE id = ${itemId}
+	`;
 }
 
-export function setWishlistItemStatus(itemId: number, status: WishlistStatus): void {
+export async function setWishlistItemStatus(itemId: number, status: WishlistStatus): Promise<void> {
 	// Reverting to 'pending' clears resolved_at back to null — it's not "resolved" anymore, so a
-	// stale date shouldn't linger for the next time it gets decided.
-	const resolvedAtExpr = status === 'pending' ? 'NULL' : "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
-	getDb()
-		.prepare(`UPDATE wishlist_items SET status = ?, resolved_at = ${resolvedAtExpr} WHERE id = ?`)
-		.run(status, itemId);
+	// stale date shouldn't linger for the next time it gets decided. A bound parameter now, not an
+	// interpolated SQL fragment — simpler than the SQLite version, not just safer.
+	const resolvedAt = status === 'pending' ? null : new Date();
+	const sql = await getDb();
+	await sql`UPDATE wishlist_items SET status = ${status}, resolved_at = ${resolvedAt} WHERE id = ${itemId}`;
 }
 
 // Toggle model: voting the same direction again removes the vote, voting the other direction
 // switches it, voting fresh inserts it. One row per (item, voter) enforced by a UNIQUE constraint.
-export function castVote(itemId: number, voter: WishlistAuthor, value: 1 | -1): void {
-	const db = getDb();
-	const existing = db
-		.prepare(`SELECT value FROM wishlist_votes WHERE item_id = ? AND voter_sub = ?`)
-		.get(itemId, voter.sub) as { value: number } | undefined;
+// Wrapped in a transaction so the read-then-branch below is at least atomic with itself; this
+// narrows but doesn't fully close the race at READ COMMITTED isolation (two truly concurrent votes
+// from the same voter on the same item could both see "no existing row" and both attempt the
+// INSERT branch) — the UNIQUE constraint then turns that into a thrown error rather than
+// corruption, which is an acceptable residual risk for a double-click/double-tab edge case.
+export async function castVote(itemId: number, voter: WishlistAuthor, value: 1 | -1): Promise<void> {
+	const sql = await getDb();
+	await sql.begin(async (tx) => {
+		const [existing] = await tx<{ value: number }[]>`
+			SELECT value FROM wishlist_votes WHERE item_id = ${itemId} AND voter_sub = ${voter.sub}
+		`;
 
-	if (existing?.value === value) {
-		db.prepare(`DELETE FROM wishlist_votes WHERE item_id = ? AND voter_sub = ?`).run(itemId, voter.sub);
-	} else if (existing) {
-		db.prepare(
-			`UPDATE wishlist_votes SET value = ?, voter_label = ?, created_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-			 WHERE item_id = ? AND voter_sub = ?`
-		).run(value, voter.label, itemId, voter.sub);
-	} else {
-		db.prepare(
-			`INSERT INTO wishlist_votes (item_id, voter_sub, voter_label, value) VALUES (?, ?, ?, ?)`
-		).run(itemId, voter.sub, voter.label, value);
-	}
+		if (existing?.value === value) {
+			await tx`DELETE FROM wishlist_votes WHERE item_id = ${itemId} AND voter_sub = ${voter.sub}`;
+		} else if (existing) {
+			await tx`
+				UPDATE wishlist_votes SET value = ${value}, voter_label = ${voter.label}, created_at = now()
+				WHERE item_id = ${itemId} AND voter_sub = ${voter.sub}
+			`;
+		} else {
+			await tx`
+				INSERT INTO wishlist_votes (item_id, voter_sub, voter_label, value)
+				VALUES (${itemId}, ${voter.sub}, ${voter.label}, ${value})
+			`;
+		}
+	});
 }
 
 export interface WishlistItemForAuth {
@@ -135,26 +134,25 @@ export interface WishlistItemForAuth {
 // query — avoids a separate vote-count round trip just to check "is this still vote-free". Also
 // doubles as the "before" snapshot for the audit trail on edit/delete, since it already has every
 // field those need.
-export function getWishlistItemForAuth(itemId: number): WishlistItemForAuth | null {
-	const row = getDb()
-		.prepare(
-			`SELECT i.author_sub, i.status, i.title, i.description, i.link, i.quantity, i.estimated_amount, i.type,
-			        (SELECT COUNT(*) FROM wishlist_votes v WHERE v.item_id = i.id) AS vote_count
-			 FROM wishlist_items i WHERE i.id = ?`
-		)
-		.get(itemId) as
-		| {
-				author_sub: string;
-				status: string;
-				title: string;
-				description: string | null;
-				link: string | null;
-				quantity: number;
-				estimated_amount: number | null;
-				type: string;
-				vote_count: number;
-		  }
-		| undefined;
+export async function getWishlistItemForAuth(itemId: number): Promise<WishlistItemForAuth | null> {
+	const sql = await getDb();
+	const [row] = await sql<
+		{
+			author_sub: string;
+			status: string;
+			title: string;
+			description: string | null;
+			link: string | null;
+			quantity: number;
+			estimated_amount: number | null;
+			type: string;
+			vote_count: number;
+		}[]
+	>`
+		SELECT i.author_sub, i.status, i.title, i.description, i.link, i.quantity, i.estimated_amount, i.type,
+		       (SELECT COUNT(*)::int FROM wishlist_votes v WHERE v.item_id = i.id) AS vote_count
+		FROM wishlist_items i WHERE i.id = ${itemId}
+	`;
 
 	return row
 		? {
@@ -171,18 +169,17 @@ export function getWishlistItemForAuth(itemId: number): WishlistItemForAuth | nu
 		: null;
 }
 
-export function deleteWishlistItem(itemId: number): void {
-	getDb().prepare(`DELETE FROM wishlist_items WHERE id = ?`).run(itemId);
+export async function deleteWishlistItem(itemId: number): Promise<void> {
+	const sql = await getDb();
+	await sql`DELETE FROM wishlist_items WHERE id = ${itemId}`;
 }
 
 // One query for the items, one for every vote across all of them (not N+1 per item) — the same
 // batch-fetch shape as the audit log's target-label resolution.
-export function listWishlistItems(viewerSub: string | null): WishlistItem[] {
-	const db = getDb();
-	const items = db.prepare(`SELECT * FROM wishlist_items ORDER BY id DESC`).all() as WishlistItemRow[];
-	const votes = db
-		.prepare(`SELECT item_id, voter_sub, voter_label, value FROM wishlist_votes`)
-		.all() as WishlistVoteRow[];
+export async function listWishlistItems(viewerSub: string | null): Promise<WishlistItem[]> {
+	const sql = await getDb();
+	const items = await sql<WishlistItemRow[]>`SELECT * FROM wishlist_items ORDER BY id DESC`;
+	const votes = await sql<WishlistVoteRow[]>`SELECT item_id, voter_sub, voter_label, value FROM wishlist_votes`;
 
 	const votesByItem = new Map<number, WishlistVoteRow[]>();
 	for (const vote of votes) {
@@ -197,7 +194,7 @@ export function listWishlistItems(viewerSub: string | null): WishlistItem[] {
 
 		return {
 			id: item.id,
-			createdAt: item.created_at,
+			createdAt: item.created_at.toISOString(),
 			authorSub: item.author_sub,
 			authorLabel: item.author_label,
 			title: item.title,
@@ -207,7 +204,7 @@ export function listWishlistItems(viewerSub: string | null): WishlistItem[] {
 			estimatedAmount: item.estimated_amount,
 			type: item.type as WishlistType,
 			status: item.status as WishlistStatus,
-			resolvedAt: item.resolved_at,
+			resolvedAt: item.resolved_at ? item.resolved_at.toISOString() : null,
 			upVoters: itemVotes.filter((v) => v.value === 1).map((v) => v.voter_label),
 			downVoters: itemVotes.filter((v) => v.value === -1).map((v) => v.voter_label),
 			myVote: (myVote as 1 | -1 | null) ?? null

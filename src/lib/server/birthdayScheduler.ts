@@ -38,16 +38,20 @@ function pickTemplate(): string {
 }
 
 // The birthday_sent table itself is created by src/lib/server/migrations.ts (run once from
-// db.ts's getDb()) — see that file's migration 2.
+// db.ts's getDb()) — see that file's migration 6.
 
-function alreadySentThisYear(pk: number, year: number): boolean {
-	return !!getDb()
-		.prepare('SELECT 1 FROM birthday_sent WHERE member_pk = ? AND year = ?')
-		.get(pk, year);
+async function alreadySentThisYear(pk: number, year: number): Promise<boolean> {
+	const sql = await getDb();
+	const rows = await sql`SELECT 1 FROM birthday_sent WHERE member_pk = ${pk} AND year = ${year}`;
+	return rows.length > 0;
 }
 
-function markSent(pk: number, year: number): void {
-	getDb().prepare('INSERT OR IGNORE INTO birthday_sent (member_pk, year) VALUES (?, ?)').run(pk, year);
+async function markSent(pk: number, year: number): Promise<void> {
+	const sql = await getDb();
+	await sql`
+		INSERT INTO birthday_sent (member_pk, year) VALUES (${pk}, ${year})
+		ON CONFLICT (member_pk, year) DO NOTHING
+	`;
 }
 
 // Watchtower redeploys the container on every release, which would reset an in-memory-only "did I
@@ -85,7 +89,7 @@ function nowInBrussels(): { hour: number; monthDay: string; year: number } {
 }
 
 async function checkAndAnnounceBirthdays(): Promise<void> {
-	const settings = getBirthdaySettings();
+	const settings = await getBirthdaySettings();
 	if (!settings.enabled) return;
 
 	const { hour, monthDay, year } = nowInBrussels();
@@ -100,14 +104,14 @@ async function checkAndAnnounceBirthdays(): Promise<void> {
 	for (const member of members) {
 		// `birthday` is "MM-DD" or "YYYY-MM-DD" — the last 5 characters are always "MM-DD" either way.
 		if (member.birthday.slice(-5) !== monthDay) continue;
-		if (alreadySentThisYear(member.pk, year)) continue;
+		if (await alreadySentThisYear(member.pk, year)) continue;
 
 		const mattermost = await lookupMattermostUsername(member.email);
 		if (!mattermost.username) continue; // no linked account, nothing to @-mention
 
 		const message = pickTemplate().replace('{mention}', `@${mattermost.username}`);
 		const sent = await postToChannel(channelId, message);
-		if (sent) markSent(member.pk, year);
+		if (sent) await markSent(member.pk, year);
 	}
 }
 

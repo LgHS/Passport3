@@ -42,7 +42,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	// Swap the raw authorSub for two precomputed decisions — the client only ever needs "can I
 	// edit/delete this", not the Authentik subject id behind it.
-	const items = listWishlistItems(user.sub).map(({ authorSub, ...item }) => {
+	const items = (await listWishlistItems(user.sub)).map(({ authorSub, ...item }) => {
 		const isOwnPendingItem = item.status === 'pending' && authorSub === user.sub;
 		return {
 			...item,
@@ -62,11 +62,11 @@ export const actions: Actions = {
 			return fail(400, { error: result.error });
 		}
 
-		const itemId = createWishlistItem({ sub: user.sub, label: usernameLabel(user) }, result.input);
+		const itemId = await createWishlistItem({ sub: user.sub, label: usernameLabel(user) }, result.input);
 
 		// Always 'user' — creating is always on one's own behalf, there's no "admin creates on
 		// someone else's account" equivalent here the way there is for edit/delete.
-		logAuditEvent(
+		await logAuditEvent(
 			{ sub: user.sub, label: displayName(user) },
 			'user',
 			'wishlist.create',
@@ -85,7 +85,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Requête invalide.' });
 		}
 
-		const item = getWishlistItemForAuth(itemId);
+		const item = await getWishlistItemForAuth(itemId);
 		if (!item) {
 			return fail(404, { error: 'Proposition introuvable.' });
 		}
@@ -105,12 +105,12 @@ export const actions: Actions = {
 			return fail(400, { error: result.error });
 		}
 
-		updateWishlistItem(itemId, result.input);
+		await updateWishlistItem(itemId, result.input);
 
 		// 'user' when the author edits their own (still vote-free) proposal, 'admin' when an admin
 		// edits someone else's — the authorization check above already guarantees admin-only for
 		// the latter case.
-		logAuditEvent(
+		await logAuditEvent(
 			{ sub: user.sub, label: displayName(user) },
 			item.authorSub === user.sub ? 'user' : 'admin',
 			'wishlist.edit',
@@ -141,7 +141,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Requête de vote invalide.' });
 		}
 
-		const item = getWishlistItemForAuth(itemId);
+		const item = await getWishlistItemForAuth(itemId);
 		if (!item) {
 			return fail(404, { error: 'Proposition introuvable.' });
 		}
@@ -149,7 +149,7 @@ export const actions: Actions = {
 			return fail(403, { error: 'Cette proposition a déjà été tranchée, le vote est clos.' });
 		}
 
-		castVote(itemId, { sub: user.sub, label: usernameLabel(user) }, direction === 'up' ? 1 : -1);
+		await castVote(itemId, { sub: user.sub, label: usernameLabel(user) }, direction === 'up' ? 1 : -1);
 		return { voted: true };
 	},
 
@@ -164,7 +164,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Requête invalide.' });
 		}
 
-		const item = getWishlistItemForAuth(itemId);
+		const item = await getWishlistItemForAuth(itemId);
 		if (!item) {
 			return fail(404, { error: 'Proposition introuvable.' });
 		}
@@ -175,9 +175,9 @@ export const actions: Actions = {
 			return fail(403, { error: "Vous n'avez pas le droit de supprimer cette proposition." });
 		}
 
-		deleteWishlistItem(itemId);
+		await deleteWishlistItem(itemId);
 
-		logAuditEvent(
+		await logAuditEvent(
 			{ sub: user.sub, label: displayName(user) },
 			item.authorSub === user.sub ? 'user' : 'admin',
 			'wishlist.delete',
@@ -203,14 +203,14 @@ export const actions: Actions = {
 			return fail(400, { error: 'Requête invalide.' });
 		}
 
-		const item = getWishlistItemForAuth(itemId);
+		const item = await getWishlistItemForAuth(itemId);
 		if (!item) {
 			return fail(404, { error: 'Proposition introuvable.' });
 		}
 
-		setWishlistItemStatus(itemId, status);
+		await setWishlistItemStatus(itemId, status);
 
-		logAuditEvent(
+		await logAuditEvent(
 			{ sub: user.sub, label: displayName(user) },
 			'admin',
 			'wishlist.resolve',

@@ -61,7 +61,7 @@ export const actions: Actions = {
 			return fail(400, { error: result.error });
 		}
 
-		logAuditEvent(
+		await logAuditEvent(
 			{ sub: user.sub, label: displayName(user) },
 			'user',
 			'github.invite',
@@ -82,7 +82,7 @@ export const actions: Actions = {
 		const before = await getGithubUsername(pk);
 		await setGithubUsername(pk, '');
 
-		logAuditEvent(
+		await logAuditEvent(
 			{ sub: user.sub, label: displayName(user) },
 			'user',
 			'github.disconnect',

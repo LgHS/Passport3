@@ -44,7 +44,7 @@ export const GET: RequestHandler = async ({ params }) => {
 	const hash = params.file.replace(/\.jpg$/, '');
 	const initials = await getInitialsForEmailHash(hash).catch(() => null);
 	if (initials) {
-		return new Response(new Uint8Array(getGeneratedAvatar(hash, initials)), {
+		return new Response(new Uint8Array(await getGeneratedAvatar(hash, initials)), {
 			headers: { ...headers, 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=3600' }
 		});
 	}
