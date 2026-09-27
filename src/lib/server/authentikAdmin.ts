@@ -389,7 +389,6 @@ export async function revokeAllSessions(username: string): Promise<void> {
 
 export interface TrombinoscopeOptin {
 	visible: boolean;
-	showAvatar: boolean;
 	showChat: boolean;
 	showFirstname: boolean;
 	showLastname: boolean;
@@ -405,11 +404,9 @@ export interface TrombinoscopeOptin {
 
 const TROMBINOSCOPE_DEFAULTS: TrombinoscopeOptin = {
 	visible: false,
-	// showAvatar/showChat default to true, unlike every other field here — a deliberate choice,
-	// applies retroactively to members who opted into the trombinoscope before these fields
-	// existed (their stored attribute has no such key, so this default fills it in on next read
-	// either way).
-	showAvatar: true,
+	// showChat defaults to true, unlike every other field here — a deliberate choice, applies
+	// retroactively to members who opted into the trombinoscope before this field existed (their
+	// stored attribute has no such key, so this default fills it in on next read either way).
 	showChat: true,
 	showFirstname: false,
 	showLastname: false,
@@ -432,7 +429,6 @@ const TROMBINOSCOPE_ATTRIBUTE = 'trombinoscope';
 // verify the assignment inside it, now that trombiEmail (a string) also lives on this type.
 const BOOLEAN_OPTIN_KEYS = [
 	'visible',
-	'showAvatar',
 	'showChat',
 	'showFirstname',
 	'showLastname',
@@ -468,7 +464,6 @@ export async function getTrombinoscopeOptin(pk: number): Promise<TrombinoscopeOp
 export function optinFromFormData(formData: FormData): TrombinoscopeOptin {
 	return {
 		visible: formData.has('visible'),
-		showAvatar: formData.has('showAvatar'),
 		showChat: formData.has('showChat'),
 		showFirstname: formData.has('showFirstname'),
 		showLastname: formData.has('showLastname'),
@@ -954,7 +949,9 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 						optin.showPhone && typeof u.attributes.phoneNumber === 'string'
 							? u.attributes.phoneNumber
 							: null,
-					avatar: optin.showAvatar ? avatarUrlFor(u.email, avatarVariantOf(u.attributes)) : null,
+					// No opt-in gate: the avatar is already public on its own at /avatars/<hash>.jpg,
+					// with no auth — hiding it here specifically gave no real privacy.
+					avatar: avatarUrlFor(u.email, avatarVariantOf(u.attributes)),
 					tag: typeof tagValue === 'string' && tagValue.trim() ? tagValue : null,
 					tagColor:
 						typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue)

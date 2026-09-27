@@ -101,7 +101,6 @@
 	// à une tête), donc pas de case décochable pour ce champ-là (et pas de clé correspondante côté
 	// Authentik, voir TrombinoscopeOptin).
 	const fieldOptins: { key: keyof typeof fieldOptinState; label: string }[] = [
-		{ key: 'showAvatar', label: 'Avatar' },
 		{ key: 'showChat', label: 'Pseudo Chat' },
 		{ key: 'showFirstname', label: 'Prénom' },
 		{ key: 'showLastname', label: 'Nom' },
@@ -110,7 +109,6 @@
 	];
 	// svelte-ignore state_referenced_locally
 	let fieldOptinState = $state({
-		showAvatar: form?.optin?.showAvatar ?? data.myOptin.showAvatar,
 		showChat: form?.optin?.showChat ?? data.myOptin.showChat,
 		showFirstname: form?.optin?.showFirstname ?? data.myOptin.showFirstname,
 		showLastname: form?.optin?.showLastname ?? data.myOptin.showLastname,
