@@ -59,6 +59,18 @@ const FETCH_TIMEOUT_MS = 5_000;
 // bug the same way that one already is.
 export class AuthentikUnavailableError extends Error {}
 
+// A 4xx from the Authentik API: a genuine request problem (bad payload, missing object…), not an
+// outage. Carries the HTTP status so callers can react to a specific one (e.g. 404) without
+// parsing the message.
+export class AuthentikRequestError extends Error {
+	constructor(
+		message: string,
+		readonly status: number
+	) {
+		super(message);
+	}
+}
+
 export function getAuthentikAccountUrl(): string {
 	return `${authentikOrigin()}/if/user/`;
 }
@@ -145,7 +157,7 @@ async function authentikApiFetch(path: string, init?: RequestInit): Promise<Resp
 		if (res.status >= 500) {
 			throw new AuthentikUnavailableError(`Authentik API request to ${path} failed (${res.status}): ${body}`);
 		}
-		throw new Error(`Authentik API request to ${path} failed (${res.status}): ${body}`);
+		throw new AuthentikRequestError(`Authentik API request to ${path} failed (${res.status}): ${body}`, res.status);
 	}
 
 	return res;
@@ -1196,9 +1208,7 @@ export async function listUserPksWithMfa(): Promise<Set<number>> {
 				} catch (err) {
 					// A device type this Authentik version doesn't have (e.g. email, added later) — no
 					// devices of that type, rather than failing the whole column.
-					const notFound =
-						err instanceof Error && !(err instanceof AuthentikUnavailableError) && err.message.includes('(404)');
-					if (notFound) break;
+					if (err instanceof AuthentikRequestError && err.status === 404) break;
 					throw err;
 				}
 				const data = (await res.json()) as {
