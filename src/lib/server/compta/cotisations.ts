@@ -325,6 +325,10 @@ export interface Situation {
 	// Where the current coverage comes from: null for one's own cotisation, the organisation's
 	// display name when inherited (see docs/compta.md, "Droit de membre").
 	via: string | null;
+	// Every active cotisation covering today, by source: null = the person's own, else the
+	// organisation's name. More than one entry = covered twice over (own dues and a company's),
+	// which the pages say explicitly rather than hiding one of the two.
+	sourcesAujourdhui: (string | null)[];
 	isInactive: boolean;
 	gaps: CotisationGap[];
 	subscriptions: CotisationHistorique[];
@@ -395,7 +399,7 @@ export function computeSituation(
 	const coverage = mergePeriodes(active.map((h) => ({ debut: h.start, fin: addUTCDays(h.end, 1) })));
 	const gaps = detectCotisationGaps(coverage, today);
 
-	const base = { gaps, subscriptions: history, delaiGraceJours, isInactive: false, finGrace: null, via: null };
+	const base = { gaps, subscriptions: history, delaiGraceJours, isInactive: false, finGrace: null, via: null, sourcesAujourdhui: [] as (string | null)[] };
 
 	if (tiers.exempteCotisation) {
 		return { ...base, status: 'non_applicable', datefin: null };
@@ -408,10 +412,11 @@ export function computeSituation(
 	if (current) {
 		// Who is paying for today: the active cotisation whose period contains today, preferring
 		// the member's own over an inherited one when both do.
-		const source = active
+		const couvrant = active
 			.filter((h) => h.start.getTime() <= today.getTime() && today.getTime() <= h.end.getTime())
-			.sort((a, b) => Number(a.via !== null) - Number(b.via !== null))[0];
-		return { ...base, status: 'a_jour', datefin: addUTCDays(current.fin, -1), via: source?.via ?? null };
+			.sort((a, b) => Number(a.via !== null) - Number(b.via !== null));
+		const sourcesAujourdhui = [...new Set(couvrant.map((h) => h.via))];
+		return { ...base, status: 'a_jour', datefin: addUTCDays(current.fin, -1), via: couvrant[0]?.via ?? null, sourcesAujourdhui };
 	}
 
 	// Not covered today. A future-only coverage (paid in advance for a period starting later) is

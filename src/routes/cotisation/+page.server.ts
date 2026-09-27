@@ -23,9 +23,9 @@ async function resolveOwnTiers(locals: App.Locals): Promise<Tiers | null> {
 	return resolveTiersForUser(locals.user);
 }
 
-// The organisations shown in the IBAN form: id and name for the field, current IBAN as its value.
+// The organisations linked from the bank section: id and name, and whether an IBAN is set.
 function bankOrganisation(t: Tiers) {
-	return { id: t.id, nom: tiersDisplayName(t), iban: t.iban };
+	return { id: t.id, nom: tiersDisplayName(t), ibanSet: t.iban !== null };
 }
 
 // "No tiers found" is a plausible business state (not yet registered in the books), rendered by
@@ -36,6 +36,7 @@ const NO_MEMBER_RESULT = {
 	datefin: null,
 	finGrace: null,
 	via: null,
+	sources: [] as (string | null)[],
 	subscriptions: [],
 	gaps: [],
 	isInactive: false,
@@ -96,22 +97,20 @@ export const load: PageServerLoad = async ({ locals }) => {
 		subscriptions: situation.subscriptions,
 		gaps: situation.gaps,
 		isInactive: situation.isInactive,
+		sources: situation.sourcesAujourdhui,
 		bankInfo: {
 			perso: tiers.iban,
-			// One IBAN per organisation the member administers — the page renders one field each,
-			// and none of this section when the list is empty (a "classic" member).
+			// The organisations the member administers: each has its own page, where its IBAN is
+			// edited. Empty for a "classic" member.
 			organisations: organisations.map(bankOrganisation)
 		},
 		invoices
 	};
 };
 
-// Field name for an organisation's IBAN input — shared with the page through the form data only.
-function organisationField(id: number): string {
-	return `ibanOrg-${id}`;
-}
-
 export const actions: Actions = {
+	// Only the member's own IBAN is edited here; an organisation's IBAN lives on its own page
+	// (/societes/[id]), for its administrators.
 	updateBankInfo: async ({ request, locals }) => {
 		const tiers = await resolveOwnTiers(locals);
 		if (!tiers) {
@@ -119,73 +118,35 @@ export const actions: Actions = {
 		}
 		const user = locals.user!;
 		const pk = authentikPk(user);
-		const organisations = await listOrganisationsAdministrees(tiers.id);
 
 		const formData = await request.formData();
 		const ibanPerso = normalizeIban(String(formData.get('ibanPerso') ?? ''));
-		// Only the organisations this member administers *now* are read from the form — a stray
-		// field for any other id is ignored, never written.
-		const ibanOrganisations: Record<number, string> = {};
-		for (const org of organisations) {
-			ibanOrganisations[org.id] = normalizeIban(String(formData.get(organisationField(org.id)) ?? ''));
-		}
-		const echo = { ibanPerso, ibanOrganisations };
-
 		// Empty is a valid submission — it means "clear this IBAN" — but anything non-empty has to
 		// be a real, checksum-valid IBAN before it's written into the books.
 		if (ibanPerso && !isValidIban(ibanPerso)) {
-			return fail(400, { error: 'IBAN personnel invalide (vérifiez le numéro).', ...echo });
+			return fail(400, { error: 'IBAN personnel invalide (vérifiez le numéro).', ibanPerso });
 		}
-		for (const org of organisations) {
-			const iban = ibanOrganisations[org.id];
-			if (iban && !isValidIban(iban)) {
-				return fail(400, { error: `IBAN de ${tiersDisplayName(org)} invalide (vérifiez le numéro).`, ...echo });
-			}
+		if (ibanPerso === normalizeIban(tiers.iban ?? '')) {
+			return { success: true, ibanPerso };
 		}
-
-		// Only what actually changed gets checked and written. Canonicalised on both sides: the
-		// stored value may be null, the submitted one is '' for "none".
-		const changes: { tiers: Tiers; label: string; before: string; after: string }[] = [];
-		if (ibanPerso !== normalizeIban(tiers.iban ?? '')) {
-			changes.push({ tiers, label: 'perso', before: tiers.iban ?? '', after: ibanPerso });
-		}
-		for (const org of organisations) {
-			const after = ibanOrganisations[org.id];
-			if (after !== normalizeIban(org.iban ?? '')) {
-				changes.push({ tiers: org, label: tiersDisplayName(org), before: org.iban ?? '', after });
-			}
-		}
-
 		// Stop a member from entering someone else's IBAN. Their own tiers and the organisations
 		// they administer are excluded — a person and their one-person company legitimately share
-		// one (the "indépendant" case). Only checked for values that changed: an unchanged value
-		// was vetted when it was set.
-		const ownIds = [tiers.id, ...organisations.map((o) => o.id)];
-		for (const change of changes) {
-			if (change.after && (await findIbanOwnerConflict(change.after, ownIds))) {
-				return fail(400, { error: 'Cet IBAN est déjà utilisé.', ...echo });
-			}
+		// one (the "indépendant" case).
+		const organisations = await listOrganisationsAdministrees(tiers.id);
+		if (ibanPerso && (await findIbanOwnerConflict(ibanPerso, [tiers.id, ...organisations.map((o) => o.id)]))) {
+			return fail(400, { error: 'Cet IBAN est déjà utilisé.', ibanPerso });
 		}
-
-		for (const change of changes) {
-			await updateTiersIban(change.tiers.id, change.after);
-		}
-
-		if (changes.length > 0) {
-			// Masked to the last 4 digits — this is the flagship case an audit trail exists for
-			// (knowing who changed a payout IBAN, for fraud prevention), but the full number doesn't
-			// need to live a second time at rest here just to serve that purpose.
-			await logAuditEvent(
-				{ sub: user.sub, label: displayName(user) },
-				'user',
-				'bankInfo.update',
-				pk ? { pk } : { email: user.email },
-				{
-					changes: changes.map((c) => ({ tiers: c.label, before: maskIban(c.before), after: maskIban(c.after) }))
-				}
-			);
-		}
-
-		return { success: true, ...echo };
+		await updateTiersIban(tiers.id, ibanPerso);
+		// Masked to the last 4 digits — this is the flagship case an audit trail exists for
+		// (knowing who changed a payout IBAN, for fraud prevention), but the full number doesn't
+		// need to live a second time at rest here just to serve that purpose.
+		await logAuditEvent(
+			{ sub: user.sub, label: displayName(user) },
+			'user',
+			'bankInfo.update',
+			pk ? { pk } : { email: user.email },
+			{ before: maskIban(tiers.iban ?? ''), after: maskIban(ibanPerso) }
+		);
+		return { success: true, ibanPerso };
 	}
 };

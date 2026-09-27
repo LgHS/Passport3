@@ -11,17 +11,7 @@
 	// rationale as the badge UUID field: the input owns its value once the user starts typing.
 	// svelte-ignore state_referenced_locally
 	let ibanPersoValue = $state(form?.ibanPerso ?? data.bankInfo?.perso ?? '');
-	// One value per organisation the member administers, keyed by tiers id (see the server's
-	// organisationField()). Same seeding rule as ibanPersoValue.
-	// svelte-ignore state_referenced_locally
-	let ibanOrgValues = $state<Record<number, string>>(
-		Object.fromEntries(
-			(data.bankInfo?.organisations ?? []).map((org) => [
-				org.id,
-				form?.ibanOrganisations?.[org.id] ?? org.iban ?? ''
-			])
-		)
-	);
+	// Administers at least one organisation: its IBAN is edited on the organisation's page.
 	const isPro = $derived((data.bankInfo?.organisations.length ?? 0) > 0);
 
 	// Groups into 4-character blocks as you type (BE71 0961 2345 6769) so a long IBAN stays
@@ -37,9 +27,6 @@
 		return isPro
 			? 'Compte avec lequel vous payez vos consommations.'
 			: 'Compte avec lequel vous payez vos cotisations et consommations.';
-	}
-	function ibanOrgTooltip(nom: string): string {
-		return `Compte avec lequel ${nom} paie ses cotisations et factures du hackerspace.`;
 	}
 
 	const dateFormat = new Intl.DateTimeFormat('fr-BE', { dateStyle: 'medium' });
@@ -164,6 +151,8 @@
 	{/if}
 	{#if subscription.statut === 'attendue'}
 		<span class="text-orange-600">(en attente de paiement)</span>
+	{:else if subscription.statut === 'annulee'}
+		<span class="text-gray-500">(annulée)</span>
 	{/if}
 {/snippet}
 
@@ -192,7 +181,12 @@
 					finGrace={data.finGrace}
 					isInactive={data.isInactive}
 				/>
-				{#if data.via}
+				{#if data.sources.length > 1}
+					<p class="mt-2 text-sm text-gray-600">
+						Vous êtes couvert·e à la fois par
+						{data.sources.map((s) => (s === null ? 'votre cotisation personnelle' : s)).join(' et par ')}.
+					</p>
+				{:else if data.via}
 					<p class="mt-2 text-sm text-gray-600">
 						Votre cotisation est prise en charge par <span class="font-bold">{data.via}</span>.
 					</p>
@@ -425,7 +419,7 @@
 		{:else}
 			{#if form?.success}
 				<p class="mb-4 border-4 border-black bg-lghs-yellow px-4 py-3 text-sm font-bold">
-					{isPro ? 'Les IBAN ont été mis à jour.' : "L'IBAN a été mis à jour."}
+					L'IBAN a été mis à jour.
 				</p>
 			{/if}
 			{#if form?.error}
@@ -471,24 +465,6 @@
 					<p class="mt-1 text-xs text-gray-500">{ibanPersoTooltip(isPro)}</p>
 				</div>
 
-				{#each data.bankInfo.organisations as org (org.id)}
-					<div class="mb-4">
-						<label class="mb-1 block text-sm font-bold uppercase" for="ibanOrg-{org.id}">
-							IBAN {org.nom}
-						</label>
-						<input
-							id="ibanOrg-{org.id}"
-							name="ibanOrg-{org.id}"
-							type="text"
-							placeholder="BE71 0961 2345 6769"
-							value={ibanOrgValues[org.id] ?? ''}
-							oninput={(e) => (ibanOrgValues[org.id] = formatIbanInput(e.currentTarget.value))}
-							class="w-full border border-black px-3 py-2 font-mono text-sm uppercase placeholder:text-gray-300 placeholder:normal-case"
-						/>
-						<p class="mt-1 text-xs text-gray-500">{ibanOrgTooltip(org.nom)}</p>
-					</div>
-				{/each}
-
 				<button
 					type="submit"
 					disabled={submittingBankInfo}
@@ -497,6 +473,21 @@
 					{submittingBankInfo ? 'Enregistrement…' : 'Enregistrer'}
 				</button>
 			</form>
+
+			{#if isPro}
+				<h2 class="mt-8 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Mes sociétés</h2>
+				<p class="mb-3 text-sm text-gray-600">
+					Vous administrez ces sociétés : leur IBAN, leurs factures et leurs personnes liées se gèrent sur leur page.
+				</p>
+				<ul class="space-y-2">
+					{#each data.bankInfo.organisations as org (org.id)}
+						<li class="border border-black p-3 text-sm">
+							<a href="/societes/{org.id}" class="font-bold">{org.nom}</a>
+							{#if !org.ibanSet}<span class="ml-2 text-xs text-red-700">IBAN à renseigner</span>{/if}
+						</li>
+					{/each}
+				</ul>
+			{/if}
 		{/if}
 	</section>
 </div>
