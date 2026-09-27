@@ -249,6 +249,10 @@
 	</section>
 {:else if activeTab === 'sessions'}
 	<section class="w-full">
+		<p class="mb-4 text-sm text-gray-600">
+			Les appareils et navigateurs actuellement connectés à votre compte. Si l'un d'eux ne vous
+			est pas familier, révoquez-le : il sera immédiatement déconnecté.
+		</p>
 		{#if data.sessions.length > 0}
 			<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->
 			<div class="space-y-2 sm:hidden">
