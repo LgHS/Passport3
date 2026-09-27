@@ -66,7 +66,7 @@
 	// them: Incidents must always be one glance away.
 	const SECTIONS_STORAGE_KEY = 'sidebar-closed-sections';
 	const SECTION_PATHS: Record<string, string[]> = {
-		account: ['/profile', '/cotisation', '/notes-de-frais', '/badge', '/permissions', '/github'],
+		account: ['/profile', '/cotisation', '/notes-de-frais', '/societes', '/badge', '/permissions', '/github'],
 		hackerspace: ['/trombinoscope', '/tasks', '/wishlist'],
 		admin: ['/admin'],
 		compta: ['/compta']

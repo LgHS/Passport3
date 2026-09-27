@@ -105,7 +105,10 @@ Le statut affiché en découle, avec le **délai de grâce** `compta_settings.de
 | `en_attente` | jamais eu de couverture |
 
 Le statut se calcule aussi bien pour la personne que pour la société (sans la partie « lien »),
-et la raison est conservée pour l'affichage (« via votre cotisation » / « via Société X »).
+et la raison est conservée pour l'affichage (« via votre cotisation » / « via Société X »). Une
+personne liée à une société **et** qui paie aussi sa propre cotisation cumule les deux : la
+couverture est l'union des périodes, l'historique montre les deux origines, et `/cotisation` dit
+explicitement « couvert·e à la fois par votre cotisation personnelle et par Société X ».
 
 **Membre ⇔ compte Authentik.** Quand `compta_settings.desactivation_auto` est activé (réglage
 trésorerie, désactivé par défaut), `adhesionSync.ts` désactive toutes les six heures le compte
@@ -144,8 +147,12 @@ crédit (`type = 'note_de_credit'`, `facture_origine_id`). Statuts : `brouillon`
   fournisseur — tiers retrouvé par n° BCE/TVA ou nom, sinon créé ; lignes ramenées au TTC payé ;
   PDF embarqué conservé.
 
-Un membre voit ses factures et, s'il est `est_administrateur` d'une société, celles de la
-société. La route `/cotisation/invoice/[id]` garde son contrôle « c'est bien la mienne ».
+Un membre voit ses factures sur `/cotisation` et, s'il est `est_administrateur` d'une société,
+celles de la société sur la page de celle-ci, `/societes/[id]` — qui porte aussi la cotisation de
+la société, ses sièges, ses personnes liées et **son IBAN** (l'IBAN d'une société n'est jamais sur
+la fiche d'une personne ; la trésorerie le modifie aussi depuis la fiche tiers). La route
+`/cotisation/invoice/[id]` garde son contrôle « c'est bien la mienne ou celle d'une société que
+j'administre ».
 
 ## Banque et caisse
 
