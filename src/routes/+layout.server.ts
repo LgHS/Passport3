@@ -1,13 +1,12 @@
 import type { LayoutServerLoad } from './$types';
 import { getUserProfile, type UserProfile } from '$lib/server/authentikAdmin';
-import { getCotisationStatus } from '$lib/server/dolibarr';
+import { getCotisationStatusForUser } from '$lib/server/compta/cotisations';
 import { getSystemStatus } from '$lib/server/health';
 import { getMattermostCacheStatus } from '$lib/server/mattermost';
 import { authentikPk, type CotisationStatus, type SystemStatus } from '$lib/types';
 
 export const load: LayoutServerLoad = async ({ locals }) => {
 	const pk = locals.user ? authentikPk(locals.user) : null;
-	const email = locals.user?.email;
 
 	// Synchronous and never triggers a fetch itself — see getMattermostCacheStatus()'s own comment
 	// for why this doesn't belong in the Promise.all below with the two live checks.
@@ -22,10 +21,10 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 					return null;
 				})
 			: Promise.resolve<UserProfile | null>(null),
-		email
-			? getCotisationStatus(email).catch((): CotisationStatus | null => {
+		locals.user
+			? getCotisationStatusForUser(locals.user).catch((): CotisationStatus | null => {
 					// Same rationale: the topbar just hides itself rather than breaking every page
-					// over a transient Dolibarr API hiccup.
+					// over a Postgres hiccup (the pages that need the database report it themselves).
 					return null;
 				})
 			: Promise.resolve<CotisationStatus | null>(null),

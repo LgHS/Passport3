@@ -127,6 +127,7 @@
 				<CotisationStatusBlock
 					status={data.cotisation.status}
 					datefin={data.cotisation.datefin}
+					finGrace={data.cotisation.finGrace}
 					isInactive={data.cotisation.isInactive}
 				/>
 				<a href="/cotisation" class="mt-2 inline-block text-sm">Voir le détail →</a>

@@ -4,10 +4,13 @@
 	let {
 		status,
 		datefin,
+		finGrace = null,
 		isInactive = false
 	}: {
 		status: CotisationStatus | null;
 		datefin: Date | null;
+		// Last day access stays open after coverage ended — only meaningful with status en_grace.
+		finGrace?: Date | null;
 		isInactive?: boolean;
 	} = $props();
 
@@ -20,6 +23,8 @@
 		switch (status) {
 			case 'a_jour':
 				return `Votre cotisation est valide jusqu'au ${formatDate(datefin)}.`;
+			case 'en_grace':
+				return `Votre cotisation a expiré le ${formatDate(datefin)}. Votre accès reste ouvert jusqu'au ${formatDate(finGrace)} pour vous laisser le temps de la renouveler. Si vous avez déjà payé ou si vous avez un ordre permanent, comptez quelques jours pour que ce soit traité.`;
 			case 'expiree':
 				return datefin
 					? `Votre cotisation a expiré le ${formatDate(datefin)}. Merci de la renouveler. Si vous avez déjà payé ou si vous avez un ordre permanent, comptez quelques jours pour que ce soit traité. Généralement le 1er mercredi du mois si cela ne passe pas automatiquement.`
@@ -59,7 +64,7 @@
 			<p class="text-sm text-gray-600">{statusExplanation(status, datefin)}</p>
 			{#if isInactive}
 				<p class="mt-2 text-sm font-bold">
-					Après 3 mois sans cotisation, votre compte est considéré comme inactif.
+					Le délai de renouvellement est dépassé : votre compte est considéré comme inactif.
 				</p>
 			{/if}
 		</div>

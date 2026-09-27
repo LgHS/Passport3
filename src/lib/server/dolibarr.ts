@@ -26,7 +26,9 @@ export class DolibarrApiError extends Error {
 	}
 }
 
-async function dolibarrApiFetch(path: string, init?: RequestInit): Promise<Response> {
+// Exported for the one-shot Dolibarr import (compta/importDolibarr.ts); everything else in the
+// app goes through the typed helpers below.
+export async function dolibarrApiFetch(path: string, init?: RequestInit): Promise<Response> {
 	// Deliberately outside the try below: a missing/invalid DOLIBARR_URL or DOLIBARR_API_KEY is a
 	// persistent configuration error, not an outage — letting it fall into the network catch would
 	// mislabel it as "temporarily unavailable" and hide the real, non-retriable cause.

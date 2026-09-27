@@ -160,7 +160,139 @@ const migrations: Migration[] = [
 			await sql`DROP TABLE member_avatars`;
 			await sql`DROP TABLE avatar_variants`;
 		}
+	},
+	{
+		version: 10,
+		name: 'create compta: tiers, tiers_liens, abonnements, cotisations, compta_settings',
+		up: async (sql) => {
+			// The accounting module's foundation — see docs/compta.md for the model these tables
+			// implement. Column names are French on purpose: they mirror the vocabulary the treasury
+			// and the CA use (tiers, cotisation, abonnement), which is also what the UI shows.
+			await sql`
+				CREATE TABLE tiers (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					nature TEXT NOT NULL CHECK (nature IN ('personne_physique', 'personne_morale')),
+					-- Family name for a person, legal name for an organisation.
+					nom TEXT NOT NULL,
+					prenom TEXT,
+					email TEXT,
+					telephone TEXT,
+					adresse TEXT,
+					code_postal TEXT,
+					ville TEXT,
+					pays TEXT NOT NULL DEFAULT 'BE',
+					-- Belgian enterprise number (BCE/KBO), organisations only.
+					numero_entreprise TEXT,
+					-- One IBAN per tiers: a person's own, or an organisation's. The old Dolibarr split
+					-- (ibanPerso on the member, ibanPro on the third party) maps to two tiers here.
+					iban TEXT,
+					-- Authentik user pk (= the OIDC \`sub\`), persons with a Passport account only. UNIQUE:
+					-- one account is one person.
+					authentik_pk INTEGER UNIQUE,
+					-- Dolibarr's "member type without subscription" (membre d'honneur): a member who owes
+					-- nothing, status non_applicable.
+					exempte_cotisation BOOLEAN NOT NULL DEFAULT false,
+					-- Roles are cumulative facts, not a type (see docs/compta.md, "Tiers"). Adhérent,
+					-- sponsor and membre aren't columns: they follow from cotisations and liens.
+					est_client BOOLEAN NOT NULL DEFAULT false,
+					est_fournisseur BOOLEAN NOT NULL DEFAULT false,
+					actif BOOLEAN NOT NULL DEFAULT true,
+					notes TEXT,
+					-- Import keys, so the Dolibarr import can be re-run without duplicating anything.
+					-- A Dolibarr member and its billing third party may both land on one tiers.
+					dolibarr_member_id INTEGER UNIQUE,
+					dolibarr_soc_id INTEGER UNIQUE
+				)
+			`;
+			// Login-time lookup falls back to the email when authentik_pk isn't linked yet (the
+			// Dolibarr import only knows emails) — and the UI searches by name.
+			await sql`CREATE INDEX tiers_lower_email ON tiers (lower(email))`;
+			await sql`CREATE INDEX tiers_lower_nom ON tiers (lower(nom))`;
+
+			await sql`
+				CREATE TABLE tiers_liens (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					organisation_id INTEGER NOT NULL REFERENCES tiers(id) ON DELETE CASCADE,
+					personne_id INTEGER NOT NULL REFERENCES tiers(id) ON DELETE CASCADE,
+					-- Cumulative roles within the organisation (docs/compta.md, "Liens").
+					est_employe BOOLEAN NOT NULL DEFAULT false,
+					est_administrateur BOOLEAN NOT NULL DEFAULT false,
+					est_contact BOOLEAN NOT NULL DEFAULT false,
+					destinataire_factures BOOLEAN NOT NULL DEFAULT false,
+					-- Does this person take one of the organisation's membership seats?
+					herite_adhesion BOOLEAN NOT NULL DEFAULT false,
+					-- A link is closed (jusqua set), never deleted, when someone leaves: the history of
+					-- who was covered by which company is part of the books.
+					depuis DATE NOT NULL DEFAULT CURRENT_DATE,
+					jusqua DATE,
+					CHECK (jusqua IS NULL OR jusqua > depuis),
+					CHECK (organisation_id <> personne_id),
+					UNIQUE (organisation_id, personne_id)
+				)
+			`;
+			await sql`CREATE INDEX tiers_liens_personne ON tiers_liens (personne_id)`;
+
+			await sql`
+				CREATE TABLE abonnements (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					tiers_id INTEGER NOT NULL REFERENCES tiers(id),
+					-- Invoice line label, e.g. "Affiliation Hackerspace 12 mois".
+					libelle TEXT NOT NULL,
+					-- NUMERIC, never a float, for money. postgres.js hands it back as a string; the
+					-- compta modules convert it at the boundary.
+					prix NUMERIC(12, 2) NOT NULL CHECK (prix >= 0),
+					periodicite TEXT NOT NULL CHECK (periodicite IN ('mois', 'annee')),
+					-- Seats granted per period, "défini au contrat".
+					sieges INTEGER NOT NULL DEFAULT 1 CHECK (sieges >= 0),
+					-- Start of the next period to invoice; the scheduler advances it after issuing.
+					prochaine_echeance DATE NOT NULL,
+					actif BOOLEAN NOT NULL DEFAULT true
+				)
+			`;
+			await sql`CREATE INDEX abonnements_tiers ON abonnements (tiers_id)`;
+
+			await sql`
+				CREATE TABLE cotisations (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					tiers_id INTEGER NOT NULL REFERENCES tiers(id),
+					type TEXT NOT NULL CHECK (type IN ('libre', 'facturee', 'sponsoring')),
+					-- Covered period is [debut, fin): \`fin\` is the first day NOT covered, so consecutive
+					-- cotisations share a boundary exactly and adjacency needs no tolerance (Dolibarr
+					-- stored an inclusive end at 23:00, hence the old 24h tolerance).
+					debut DATE NOT NULL,
+					fin DATE NOT NULL,
+					montant NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (montant >= 0),
+					sieges INTEGER NOT NULL DEFAULT 1 CHECK (sieges >= 0),
+					-- attendue = invoiced, not paid yet (grants nothing); active = paid, or a \`libre\`
+					-- one created from a matched payment; annulee = never counts.
+					statut TEXT NOT NULL DEFAULT 'active' CHECK (statut IN ('attendue', 'active', 'annulee')),
+					abonnement_id INTEGER REFERENCES abonnements(id),
+					-- facture_id comes with the factures table (phase 2).
+					paye_le DATE,
+					note TEXT,
+					dolibarr_subscription_id INTEGER UNIQUE,
+					CHECK (fin > debut)
+				)
+			`;
+			await sql`CREATE INDEX cotisations_tiers_debut ON cotisations (tiers_id, debut)`;
+
+			// Single-row settings table, same pattern as birthday_settings.
+			await sql`
+				CREATE TABLE compta_settings (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					-- Days after coverage ends before a member is deactivated (status en_grace → expiree).
+					delai_grace_jours INTEGER NOT NULL DEFAULT 90 CHECK (delai_grace_jours >= 0)
+				)
+			`;
+			await sql`INSERT INTO compta_settings (id) VALUES (1)`;
+		}
 	}
+
 ];
 
 // Arbitrary, fixed constant identifying Passport3's own migration lock — only matters if another

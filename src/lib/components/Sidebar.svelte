@@ -4,6 +4,7 @@
 	import {
 		displayName,
 		isAdmin,
+		isTresorier,
 		COTISATION_STATUS_LABEL,
 		COTISATION_STATUS_COLOR,
 		type AppUser,
@@ -235,6 +236,36 @@
 					</a>
 					<a href="/admin/audit" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/admin/audit')}">
 						Audit logs
+					</a>
+				{/if}
+			{/if}
+
+			{#if isTresorier(user)}
+				<a
+					href="/compta"
+					onclick={closeOverlay}
+					class="{itemClass} {itemStateClass('/compta')} {isAdmin(user) ? '' : 'mt-4'}"
+				>
+					<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+						<rect x="3.5" y="3.5" width="13" height="13" rx="1" />
+						<path d="M6.5 7.5 H13.5 M6.5 10.5 H10 M6.5 13.5 H9" stroke-linecap="round" />
+						<path d="M12 11.5 L13.5 13 L16 10.5" stroke-linecap="round" stroke-linejoin="round" />
+					</svg>
+					Compta
+				</a>
+				{#if isActive('/compta')}
+					<a href="/compta/tiers" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/compta/tiers')}">
+						Tiers
+					</a>
+					<a
+						href="/compta/parametres"
+						onclick={closeOverlay}
+						class="{subItemClass} {itemStateClass('/compta/parametres')}"
+					>
+						Paramètres
+					</a>
+					<a href="/compta/import" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/compta/import')}">
+						Import Dolibarr
 					</a>
 				{/if}
 			{/if}
