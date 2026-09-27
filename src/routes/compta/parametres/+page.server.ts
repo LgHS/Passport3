@@ -27,7 +27,8 @@ export const actions: Actions = {
 			emetteurNumeroEntreprise: str('emetteurNumeroEntreprise'),
 			emetteurEmail: str('emetteurEmail'),
 			emetteurIban,
-			mentionTva: str('mentionTva')
+			mentionTva: str('mentionTva'),
+			desactivationAuto: formData.has('desactivationAuto')
 		};
 
 		if (!Number.isInteger(delaiGraceJours) || delaiGraceJours < 0 || delaiGraceJours > 365) {
@@ -43,7 +44,8 @@ export const actions: Actions = {
 		await updateComptaSettings(values);
 		await logAuditEvent({ sub: tresorier.sub, label: displayName(tresorier) }, 'admin', 'compta.settings.update', {}, {
 			delaiGraceJours,
-			delaiPaiementJours
+			delaiPaiementJours,
+			desactivationAuto: values.desactivationAuto
 		});
 		return { success: true, values };
 	}

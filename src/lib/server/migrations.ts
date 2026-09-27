@@ -474,6 +474,42 @@ const migrations: Migration[] = [
 			// invoice, and what stops the scheduler from sending a subscription invoice twice.
 			await sql`ALTER TABLE factures ADD COLUMN envoyee_le TIMESTAMPTZ, ADD COLUMN envoyee_a TEXT`;
 		}
+	},
+	{
+		version: 14,
+		name: 'create notes_de_frais; automatic Authentik deactivation',
+		up: async (sql) => {
+			// Expense claims: a member submits, the treasury accepts or refuses, and the refund is a
+			// bank movement matched against the claim (lettrages, cible note_de_frais) — docs/compta.md.
+			await sql`
+				CREATE TABLE notes_de_frais (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					tiers_id INTEGER NOT NULL REFERENCES tiers(id),
+					date DATE NOT NULL,
+					libelle TEXT NOT NULL,
+					montant NUMERIC(12, 2) NOT NULL CHECK (montant > 0),
+					statut TEXT NOT NULL DEFAULT 'soumise' CHECK (statut IN ('soumise', 'acceptee', 'refusee', 'remboursee')),
+					-- The receipt, in the row like invoice PDFs.
+					justificatif BYTEA,
+					justificatif_nom TEXT,
+					justificatif_type TEXT,
+					decision_le TIMESTAMPTZ,
+					decision_par TEXT,
+					motif TEXT,
+					remboursee_le DATE
+				)
+			`;
+			await sql`CREATE INDEX notes_de_frais_tiers ON notes_de_frais (tiers_id, id DESC)`;
+			await sql`CREATE INDEX notes_de_frais_statut ON notes_de_frais (statut)`;
+
+			// Off by default: switching it on (from /compta/parametres) makes adhesionSync.ts deactivate
+			// the Authentik account of members whose dues expired past the grace period, and reactivate
+			// those it deactivated once they're covered again.
+			await sql`ALTER TABLE compta_settings ADD COLUMN desactivation_auto BOOLEAN NOT NULL DEFAULT false`;
+			// Only accounts Passport itself deactivated are ever reactivated by it.
+			await sql`ALTER TABLE tiers ADD COLUMN desactive_le TIMESTAMPTZ`;
+		}
 	}
 ];
 

@@ -105,9 +105,12 @@ Le statut affiché en découle, avec le **délai de grâce** `compta_settings.de
 Le statut se calcule aussi bien pour la personne que pour la société (sans la partie « lien »),
 et la raison est conservée pour l'affichage (« via votre cotisation » / « via Société X »).
 
-**Membre ⇔ compte Authentik.** Quand un statut passe à `expiree`, Passport désactive le compte
-Authentik ; un lien avec siège sur une personne sans compte déclenche une invitation
-(`createInvitation`, existant). La détection des trous de cotisation (mois non perçus) est
+**Membre ⇔ compte Authentik.** Quand `compta_settings.desactivation_auto` est activé (réglage
+trésorerie, désactivé par défaut), `adhesionSync.ts` désactive toutes les six heures le compte
+Authentik des personnes en `expiree`, et réactive celles qu'il avait lui-même désactivées
+(`tiers.desactive_le`) dès qu'elles sont à nouveau couvertes. Admins et trésoriers ne sont jamais
+désactivés ; chaque action va dans l'audit. L'invitation automatique d'une personne sans compte
+reste manuelle (`/admin/invite`). La détection des trous de cotisation (mois non perçus) est
 reprise telle quelle de l'ancien `dolibarr.ts`, adaptée aux fins exclusives.
 
 ## Factures
@@ -159,15 +162,22 @@ société. La route `/cotisation/invoice/[id]` garde son contrôle « c'est bien
 
 ## Notes de frais
 
-Tout membre soumet une note (libellé, montant, justificatif, date). La trésorerie accepte ou
-refuse depuis un tableau ; une note acceptée devient une cible de lettrage pour le remboursement
-sur l'IBAN du tiers.
+Tout membre soumet une note depuis `/notes-de-frais` (date, libellé, montant, justificatif
+conservé en base). La trésorerie accepte ou refuse (avec motif) depuis `/compta/notes-de-frais` ;
+une note acceptée devient une cible de lettrage : le virement de remboursement (sortie d'argent)
+lui est affecté et elle passe « remboursée ». Statuts : `soumise` → `acceptee` | `refusee` ;
+`acceptee` → `remboursee`.
 
 ## Sorties comptables
 
-Petite ASBL, comptabilité simplifiée (AR du 26 juin 2003) : livre journal des recettes et
-dépenses, état du patrimoine, et l'état des recettes/dépenses au format de dépôt au greffe.
-Générés depuis les mouvements lettrés et les pièces — pas de plan comptable en partie double.
+Petite ASBL, comptabilité simplifiée (AR du 26 juin 2003) : `/compta/journal`, par exercice
+civil, donne le **livre journal** (tous les mouvements de tous les comptes, virements internes
+exclus, chacun rangé d'après ses lettrages), l'**état des recettes et dépenses** par rubrique
+(cotisations, dons et sponsoring, ventes et prestations, autres recettes ; achats et services,
+remboursements de frais, autres dépenses ; « non lettré » à part, pour ce qui reste à qualifier)
+et l'**état du patrimoine** au 31/12 (soldes des comptes, créances = factures émises non payées,
+dettes = factures reçues et notes de frais acceptées non payées). Export CSV du journal pour le
+comptable. Pas de plan comptable en partie double.
 
 ## Emails et notifications
 
@@ -210,4 +220,4 @@ Dolibarr a), puis `authentik_pk` fait foi.
    communication structurée, manuel sinon), virements internes ; import des comptes et écritures
    Dolibarr. *(livré)*
 4. **UBL**, import d'UBL fournisseur, envoi des factures par email (SMTP). *(livré)*
-5. Notes de frais, livre journal et comptes annuels, désactivation Authentik automatique.
+5. Notes de frais, livre journal et comptes annuels, désactivation Authentik automatique. *(livré)*

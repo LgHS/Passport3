@@ -16,7 +16,9 @@
 	});
 
 	// Which allocation form is open: an invoice, a free-amount dues payment, or "something else".
-	let mode = $state<'facture' | 'cotisation' | 'autre'>('facture');
+	let mode = $state<'facture' | 'cotisation' | 'note_de_frais' | 'autre'>('facture');
+	let noteId = $state<number | null>(null);
+	const noteChoisie = $derived(data.notes.find((n) => n.id === noteId) ?? null);
 	let factureId = $state<number | null>(null);
 	const factureChoisie = $derived(data.factures.find((f) => f.id === factureId) ?? null);
 	// Default allocation: what's left on the movement, capped by what the invoice still owes.
@@ -87,6 +89,8 @@
 			<button type="button" onclick={() => (mode = 'facture')} class="{tab} {mode === 'facture' ? 'bg-black text-white' : ''}">Facture</button>
 			{#if m.montant > 0}
 				<button type="button" onclick={() => (mode = 'cotisation')} class="{tab} {mode === 'cotisation' ? 'bg-black text-white' : ''}">Cotisation libre</button>
+			{:else if data.notes.length > 0}
+				<button type="button" onclick={() => (mode = 'note_de_frais')} class="{tab} {mode === 'note_de_frais' ? 'bg-black text-white' : ''}">Note de frais</button>
 			{/if}
 			<button type="button" onclick={() => (mode = 'autre')} class="{tab} {mode === 'autre' ? 'bg-black text-white' : ''}">Autre</button>
 		</div>
@@ -108,6 +112,24 @@
 				<div>
 					<label class={labelClass} for="montant">Montant (€)</label>
 					<input id="montant" name="montant" type="text" inputmode="decimal" value={montantDefaut.toFixed(2)} class={inputClass} />
+				</div>
+				<div class="sm:col-span-3"><button type="submit" class="btn-primary px-4 py-2">Lettrer</button></div>
+			</form>
+		{:else if mode === 'note_de_frais'}
+			<form method="POST" action="?/lettrer" class="grid gap-3 border border-black p-4 sm:grid-cols-3" use:enhance>
+				<input type="hidden" name="cibleType" value="note_de_frais" />
+				<div class="sm:col-span-2">
+					<label class={labelClass} for="note-cible">Note de frais acceptée</label>
+					<select id="note-cible" name="cibleId" required bind:value={noteId} class={inputClass}>
+						<option value={null}>—</option>
+						{#each data.notes as n (n.id)}
+							<option value={n.id}>{n.tiersNom} — {n.libelle} — {amountFormat.format(n.montant)}{data.tiersSuggere && n.tiersId === data.tiersSuggere.id ? ' ★' : ''}</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label class={labelClass} for="montant-note">Montant (€)</label>
+					<input id="montant-note" name="montant" type="text" inputmode="decimal" value={(noteChoisie ? Math.min(m.reste, noteChoisie.montant) : m.reste).toFixed(2)} class={inputClass} />
 				</div>
 				<div class="sm:col-span-3"><button type="submit" class="btn-primary px-4 py-2">Lettrer</button></div>
 			</form>

@@ -198,6 +198,13 @@
 				</svg>
 				Trombinoscope
 			</a>
+			<a href="/notes-de-frais" onclick={closeOverlay} class="{itemClass} {itemStateClass('/notes-de-frais')}">
+				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+					<path d="M5 3.5h7l3 3v10H5z" stroke-linejoin="round" />
+					<path d="M12 3.5v3h3 M7.5 10h5 M7.5 13h5" stroke-linecap="round" />
+				</svg>
+				Notes de frais
+			</a>
 			<a href="/wishlist" onclick={closeOverlay} class="{itemClass} {itemStateClass('/wishlist')}">
 				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
 					<rect x="3" y="8.5" width="14" height="8" rx="1" />
@@ -266,6 +273,16 @@
 					</a>
 					<a href="/compta/banque" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/compta/banque')}">
 						Banque &amp; caisse
+					</a>
+					<a
+						href="/compta/notes-de-frais"
+						onclick={closeOverlay}
+						class="{subItemClass} {itemStateClass('/compta/notes-de-frais')}"
+					>
+						Notes de frais
+					</a>
+					<a href="/compta/journal" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/compta/journal')}">
+						Journal &amp; comptes
 					</a>
 					<a
 						href="/compta/parametres"
