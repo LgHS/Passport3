@@ -1,19 +1,19 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { getFacture, readFacturePdf } from '$lib/server/compta/factures';
 import { listOrganisationsAdministrees, resolveTiersForUser } from '$lib/server/compta/tiers';
-import { getOwnedInvoiceDocument, DolibarrUnavailableError } from '$lib/server/dolibarr';
 
-// Streams a member's own Dolibarr invoice PDF (phase-1 bridge: invoices stay in Dolibarr until the
-// factures table lands, see docs/compta.md). Never trusts the route param on its own —
-// getOwnedInvoiceDocument() re-fetches the invoice from Dolibarr and checks it actually belongs to
-// one of the caller's own Dolibarr third parties before returning anything.
+// Streams a member's own invoice PDF. Never trusts the route param on its own — the invoice is
+// loaded and its tiers checked against the caller's own tiers and the organisations they
+// administer before anything is returned, so a member can't guess another member's invoice id.
+// "Not found" and "not yours" are the same 404 on purpose.
 export const GET: RequestHandler = async ({ params, locals }) => {
 	if (!locals.user) {
 		redirect(302, '/login');
 	}
 
-	const invoiceId = Number(params.id);
-	if (!Number.isInteger(invoiceId) || invoiceId <= 0) {
+	const factureId = Number(params.id);
+	if (!Number.isInteger(factureId) || factureId <= 0) {
 		error(404, 'Facture introuvable.');
 	}
 
@@ -21,36 +21,23 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	if (!tiers) {
 		error(404, 'Facture introuvable.');
 	}
-
-	// The member's own third party (a person invoiced directly) and those of the organisations
-	// they administer — the same set /cotisation lists invoices for.
 	const organisations = await listOrganisationsAdministrees(tiers.id);
-	const socIds = [tiers, ...organisations].map((t) => t.dolibarrSocId).filter((id): id is number => id !== null);
+	const allowed = new Set([tiers.id, ...organisations.map((o) => o.id)]);
 
-	try {
-		for (const socId of socIds) {
-			const document = await getOwnedInvoiceDocument(socId, invoiceId);
-			if (!document) continue;
-
-			// Cast needed: current TS lib typings for BodyInit don't accept the generic
-			// Uint8Array<ArrayBufferLike> shape, even though a Response genuinely accepts any
-			// Uint8Array at runtime.
-			return new Response(document.content as BodyInit, {
-				headers: {
-					'Content-Type': document.contentType,
-					// Escaped defensively even though `filename` comes from Dolibarr's own trusted
-					// response, not directly from user input — cheap insurance against a stray `"`
-					// ever breaking the header.
-					'Content-Disposition': `attachment; filename="${document.filename.replace(/"/g, "'")}"`
-				}
-			});
-		}
-	} catch (err) {
-		if (err instanceof DolibarrUnavailableError) {
-			error(503, 'Service temporairement indisponible. Réessayez dans quelques instants.');
-		}
-		throw err;
+	const facture = await getFacture(factureId);
+	if (!facture || facture.sens !== 'emise' || !allowed.has(facture.tiersId) || facture.statut === 'brouillon' || facture.statut === 'annulee') {
+		error(404, 'Facture introuvable.');
+	}
+	const pdf = await readFacturePdf(facture.id);
+	if (!pdf) {
+		error(404, 'Facture introuvable.');
 	}
 
-	error(404, 'Facture introuvable.');
+	const name = (facture.numero ?? facture.referenceExterne ?? `facture-${facture.id}`).replace(/[^A-Za-z0-9._-]/g, '_');
+	return new Response(pdf as BodyInit, {
+		headers: {
+			'Content-Type': 'application/pdf',
+			'Content-Disposition': `attachment; filename="${name}.pdf"`
+		}
+	});
 };

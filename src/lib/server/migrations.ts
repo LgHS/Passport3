@@ -291,8 +291,102 @@ const migrations: Migration[] = [
 			`;
 			await sql`INSERT INTO compta_settings (id) VALUES (1)`;
 		}
-	}
+	},
+	{
+		version: 11,
+		name: 'create compta: factures, facture_lignes, facture_sequences; invoice settings',
+		up: async (sql) => {
+			// Issued and received invoices in one table, told apart by `sens` — see docs/compta.md,
+			// "Factures". An issued invoice is mutable while `brouillon`; validation numbers it,
+			// renders its PDF and freezes it (corrections go through a note de crédit).
+			await sql`
+				CREATE TABLE factures (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					sens TEXT NOT NULL CHECK (sens IN ('emise', 'recue')),
+					type TEXT NOT NULL DEFAULT 'facture' CHECK (type IN ('facture', 'note_de_credit')),
+					tiers_id INTEGER NOT NULL REFERENCES tiers(id),
+					-- Ours (AAAA-NNNN, assigned at validation) for an issued invoice; the supplier's
+					-- number for a received one.
+					numero TEXT,
+					statut TEXT NOT NULL DEFAULT 'brouillon'
+						CHECK (statut IN ('brouillon', 'validee', 'payee', 'annulee')),
+					date_emission DATE,
+					date_echeance DATE,
+					-- No VAT (franchise regime): the total is the sum of the lines, full stop.
+					total NUMERIC(12, 2) NOT NULL DEFAULT 0,
+					-- Short subject printed under the header, and free text printed at the bottom.
+					objet TEXT,
+					note TEXT,
+					-- Belgian structured communication (+++NNN/NNNN/NNNNN+++) derived from the number,
+					-- for automatic matching of the payment (phase 3).
+					communication_structuree TEXT,
+					-- The invoice a note de crédit cancels.
+					facture_origine_id INTEGER REFERENCES factures(id),
+					-- Number the document had in the previous system (Dolibarr ref), for the archive.
+					reference_externe TEXT,
+					-- The documents themselves, in the database rather than on the data volume: one store
+					-- to back up, and a row can never point at a missing file. The PDF of an issued invoice
+					-- is generated once at validation and never regenerated: what was sent must stay
+					-- reproducible. Never selected in lists (see factures.ts's has_pdf), only on download.
+					pdf BYTEA,
+					ubl BYTEA,
+					payee_le DATE,
+					-- Optional dues block: when set, validation creates the matching cotisation
+					-- (attendue) and payment activates it. cotisation_fin is exclusive like
+					-- cotisations.fin.
+					cotisation_type TEXT CHECK (cotisation_type IN ('facturee', 'sponsoring')),
+					cotisation_debut DATE,
+					cotisation_fin DATE,
+					cotisation_sieges INTEGER,
+					dolibarr_invoice_id INTEGER UNIQUE,
+					dolibarr_supplier_invoice_id INTEGER UNIQUE,
+					CHECK (cotisation_type IS NULL OR (cotisation_debut IS NOT NULL AND cotisation_fin IS NOT NULL AND cotisation_fin > cotisation_debut))
+				)
+			`;
+			// Our own numbering must be unique; two suppliers may well reuse a number between them.
+			await sql`CREATE UNIQUE INDEX factures_numero_emise ON factures (numero) WHERE sens = 'emise'`;
+			await sql`CREATE INDEX factures_tiers_date ON factures (tiers_id, date_emission DESC)`;
 
+			await sql`
+				CREATE TABLE facture_lignes (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					facture_id INTEGER NOT NULL REFERENCES factures(id) ON DELETE CASCADE,
+					ordre INTEGER NOT NULL,
+					libelle TEXT NOT NULL,
+					quantite NUMERIC(12, 3) NOT NULL DEFAULT 1,
+					prix_unitaire NUMERIC(12, 2) NOT NULL,
+					total NUMERIC(12, 2) NOT NULL
+				)
+			`;
+			await sql`CREATE INDEX facture_lignes_facture ON facture_lignes (facture_id, ordre)`;
+
+			// One row per year: the last number handed out. Read and bumped under an advisory lock
+			// at validation (factures.ts), which is what makes the sequence gapless.
+			await sql`
+				CREATE TABLE facture_sequences (
+					annee INTEGER PRIMARY KEY,
+					dernier INTEGER NOT NULL DEFAULT 0
+				)
+			`;
+
+			await sql`ALTER TABLE cotisations ADD COLUMN facture_id INTEGER REFERENCES factures(id)`;
+
+			// What the PDF prints about the issuer, editable from /compta/parametres. Defaults are
+			// what the footer already shows; the address is for the treasury to fill in.
+			await sql`
+				ALTER TABLE compta_settings
+					ADD COLUMN emetteur_nom TEXT NOT NULL DEFAULT 'Liège Hackerspace ASBL',
+					ADD COLUMN emetteur_adresse TEXT NOT NULL DEFAULT '',
+					ADD COLUMN emetteur_numero_entreprise TEXT NOT NULL DEFAULT '0649.448.256',
+					ADD COLUMN emetteur_email TEXT NOT NULL DEFAULT 'compta@lghs.be',
+					ADD COLUMN emetteur_iban TEXT NOT NULL DEFAULT '',
+					ADD COLUMN mention_tva TEXT NOT NULL DEFAULT 'Régime particulier de franchise des petites entreprises — TVA non applicable (art. 56bis CTVA)',
+					ADD COLUMN delai_paiement_jours INTEGER NOT NULL DEFAULT 30 CHECK (delai_paiement_jours >= 0)
+			`;
+		}
+	}
 ];
 
 // Arbitrary, fixed constant identifying Passport3's own migration lock — only matters if another

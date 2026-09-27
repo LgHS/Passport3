@@ -114,7 +114,7 @@ reprise telle quelle de l'ancien `dolibarr.ts`, adaptée aux fins exclusives.
 
 `factures` (`sens` : `emise` | `recue`) et `facture_lignes`. Une facture émise est en
 `brouillon` tant qu'elle se modifie ; à la **validation** elle reçoit son numéro, son PDF est
-généré et stocké dans `DATA_DIR`, et elle devient immuable — une correction passe par une note de
+généré et stocké dans Postgres (colonne `bytea`, une seule chose à sauvegarder), et elle devient immuable — une correction passe par une note de
 crédit (`type = 'note_de_credit'`, `facture_origine_id`). Statuts : `brouillon` → `validee` →
 `payee`, ou `annulee` (brouillon seulement).
 
@@ -182,8 +182,8 @@ application ; il est idempotent (clefs `dolibarr_*_id`) et peut être rejoué. C
 | souscription `[dateh, datef]` | cotisation `[debut, datef + 1 jour)` |
 | tiers `client` / `fournisseur` | `est_client` / `est_fournisseur` |
 | facture client (statut ≥ validée) | facture `emise`, PDF archivé, numéro Dolibarr conservé dans `reference_externe` |
-| facture fournisseur | facture `recue` |
-| compte bancaire | `comptes` |
+| facture fournisseur | facture `recue`, numéro du fournisseur, montant TTC payé |
+| compte bancaire | `comptes` (phase 3) |
 
 Le rapprochement adhérent ↔ compte Authentik se fait par email à l'import (c'est tout ce que
 Dolibarr a), puis `authentik_pk` fait foi.
@@ -191,10 +191,10 @@ Dolibarr a), puis `authentik_pk` fait foi.
 ## Phases
 
 1. **Tiers, liens, cotisations, abonnements, rôle Trésorier, import Dolibarr** ; le statut de
-   cotisation, l'historique et les IBAN sont lus dans Postgres. Les factures restent lues dans
-   Dolibarr jusqu'à la phase 2.
-2. **Factures émises** : lignes, numérotation, PDF, abonnements et génération planifiée ;
-   import des factures Dolibarr ; `dolibarr.ts` disparaît.
+   cotisation, l'historique et les IBAN sont lus dans Postgres. *(livré)*
+2. **Factures émises et reçues** : lignes, numérotation, PDF, notes de crédit, abonnements et
+   génération planifiée ; import des factures Dolibarr ; plus rien ne lit Dolibarr au runtime,
+   `dolibarr.ts` ne sert plus qu'à l'import. *(livré)*
 3. **Banque et caisse** : comptes, mouvements, import Belfius, lettrage, virements internes.
 4. **UBL**, factures reçues, SMTP.
 5. Notes de frais, livre journal et comptes annuels, désactivation Authentik automatique.

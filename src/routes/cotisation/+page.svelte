@@ -182,11 +182,7 @@
 	<section class="w-full md:w-2/3">
 		<h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma cotisation</h1>
 
-		{#if data.unavailable}
-			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-				Service de cotisation temporairement indisponible. Réessayez dans quelques instants.
-			</p>
-		{:else if data.status === null}
+		{#if data.status === null}
 			<CotisationStatusBlock status={null} datefin={null} />
 		{:else}
 			<div class="mb-6">
@@ -295,14 +291,7 @@
 				</p>
 			{/if}
 
-			{#if data.invoicesUnavailable}
-				<h2 class="mt-8 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">
-					Factures
-				</h2>
-				<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-					Liste des factures temporairement indisponible. Réessayez dans quelques instants.
-				</p>
-			{:else if data.invoices.length > 0}
+			{#if data.invoices.length > 0}
 				<h2 class="mt-8 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">
 					Factures
 				</h2>
@@ -415,9 +404,8 @@
 				</div>
 
 				<p class="mt-3 text-sm text-gray-600">
-					Si vous êtes enregistré·e sur le réseau Peppol, la facture vous est également envoyée
-					par ce biais. Si le bouton de téléchargement est inactif, la facture est abandonnée ou
-					dans un état anormal. Pour toute question, contactez
+					Si le bouton de téléchargement est inactif, la facture est annulée ou son document n'est
+					pas disponible. Pour toute question, contactez
 					<a href="mailto:compta@lghs.be">compta@lghs.be</a>.
 				</p>
 			{/if}
@@ -430,11 +418,7 @@
 			Renseigner vos coordonnées bancaires facilite l'automatisation des tâches de comptabilité.
 		</p>
 
-		{#if data.unavailable}
-			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-500">
-				Service temporairement indisponible. Réessayez dans quelques instants.
-			</p>
-		{:else if data.bankInfo === null}
+		{#if data.bankInfo === null}
 			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-500">
 				Compte introuvable.
 			</p>

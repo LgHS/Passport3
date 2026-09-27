@@ -3,11 +3,13 @@ import { dev } from '$app/environment';
 import { OidcUnavailableError, verifyIdToken } from '$lib/server/authentik';
 import { clearSessionCookie, SESSION_COOKIE } from '$lib/server/session';
 import { startBirthdayScheduler } from '$lib/server/birthdayScheduler';
+import { startFactureScheduler } from '$lib/server/compta/factureScheduler';
 import { DATABASE_UNAVAILABLE_MESSAGE, isDatabaseUnavailable } from '$lib/server/db';
 
 // Module scope, not inside `handle` below — runs exactly once per server process, unlike `handle`
 // which runs on every request.
 startBirthdayScheduler();
+startFactureScheduler();
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const sessionCookie = event.cookies.get(SESSION_COOKIE);

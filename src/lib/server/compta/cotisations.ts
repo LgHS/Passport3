@@ -28,6 +28,7 @@ export interface Cotisation {
 	sieges: number;
 	statut: CotisationStatut;
 	abonnementId: number | null;
+	factureId: number | null;
 	payeLe: Date | null;
 	note: string | null;
 	dolibarrSubscriptionId: number | null;
@@ -42,6 +43,7 @@ export interface CotisationInput {
 	sieges: number;
 	statut: CotisationStatut;
 	abonnementId: number | null;
+	factureId: number | null;
 	payeLe: Date | null;
 	note: string | null;
 }
@@ -57,6 +59,7 @@ interface CotisationRow {
 	sieges: number;
 	statut: CotisationStatut;
 	abonnement_id: number | null;
+	facture_id: number | null;
 	paye_le: string | null;
 	note: string | null;
 	dolibarr_subscription_id: number | null;
@@ -74,6 +77,7 @@ function rowToCotisation(r: CotisationRow): Cotisation {
 		sieges: r.sieges,
 		statut: r.statut,
 		abonnementId: r.abonnement_id,
+		factureId: r.facture_id,
 		payeLe: r.paye_le ? parseIsoDate(r.paye_le) : null,
 		note: r.note,
 		dolibarrSubscriptionId: r.dolibarr_subscription_id
@@ -82,7 +86,7 @@ function rowToCotisation(r: CotisationRow): Cotisation {
 
 // DATE columns come back as text so parseIsoDate() pins them to UTC midnight itself.
 const COTISATION_COLUMNS = `id, created_at, tiers_id, type, debut::text AS debut, fin::text AS fin, montant,
-	sieges, statut, abonnement_id, paye_le::text AS paye_le, note, dolibarr_subscription_id`;
+	sieges, statut, abonnement_id, facture_id, paye_le::text AS paye_le, note, dolibarr_subscription_id`;
 
 export async function listCotisations(tiersId: number): Promise<Cotisation[]> {
 	const sql = await getDb();
@@ -105,11 +109,11 @@ export async function getCotisation(id: number): Promise<Cotisation | null> {
 export async function createCotisation(input: CotisationInput): Promise<Cotisation> {
 	const sql = await getDb();
 	const [row] = await sql<CotisationRow[]>`
-		INSERT INTO cotisations (tiers_id, type, debut, fin, montant, sieges, statut, abonnement_id, paye_le, note)
+		INSERT INTO cotisations (tiers_id, type, debut, fin, montant, sieges, statut, abonnement_id, facture_id, paye_le, note)
 		VALUES (
 			${input.tiersId}, ${input.type}, ${toIsoDate(input.debut)}, ${toIsoDate(input.fin)}, ${input.montant},
-			${input.sieges}, ${input.statut}, ${input.abonnementId}, ${input.payeLe ? toIsoDate(input.payeLe) : null},
-			${input.note}
+			${input.sieges}, ${input.statut}, ${input.abonnementId}, ${input.factureId},
+			${input.payeLe ? toIsoDate(input.payeLe) : null}, ${input.note}
 		)
 		RETURNING ${sql.unsafe(COTISATION_COLUMNS)}
 	`;
@@ -122,7 +126,8 @@ export async function updateCotisation(id: number, input: CotisationInput): Prom
 		UPDATE cotisations SET
 			type = ${input.type}, debut = ${toIsoDate(input.debut)}, fin = ${toIsoDate(input.fin)},
 			montant = ${input.montant}, sieges = ${input.sieges}, statut = ${input.statut},
-			abonnement_id = ${input.abonnementId}, paye_le = ${input.payeLe ? toIsoDate(input.payeLe) : null},
+			abonnement_id = ${input.abonnementId}, facture_id = ${input.factureId},
+			paye_le = ${input.payeLe ? toIsoDate(input.payeLe) : null},
 			note = ${input.note}
 		WHERE id = ${id}
 		RETURNING ${sql.unsafe(COTISATION_COLUMNS)}

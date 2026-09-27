@@ -9,7 +9,7 @@ It provides a single, user-friendly interface for members to manage their identi
 Passport3 acts as a custom frontend for several internal services, including:
 
 - **Authentik** for authentication and identity management
-- **Dolibarr** for memberships, subscriptions, and payments
+- **Its own accounting module** for third parties, memberships, invoices and (soon) bank matching — see `docs/compta.md`
 - **GitHub** for requesting access to the hackerspace's organization
 - **Access control systems** for physical access to the hackerspace
 - Additional community and member-management services
@@ -49,19 +49,13 @@ Passport3 provides a custom member-facing interface while relying on Authentik f
 - Groups and roles
 - Security and session management
 
-### Dolibarr
+### Accounting (compta)
 
-Dolibarr is used for administrative and financial membership management.
-
-Passport3 communicates with Dolibarr to retrieve or manage:
-
-- Member records
-- Membership subscriptions
-- Subscription expiration dates
-- Payments
-- Invoices and supporting documents
-- Administrative membership status
-- Personal and professional bank account details (IBAN)
+Passport3 keeps the association's books itself (it replaced Dolibarr): third parties (persons and
+organisations, with their links and roles), memberships and dues, issued and received invoices
+with their PDFs, and the resulting membership status shown to each member. The module lives under
+`/compta`, restricted to the `Trésorier` Authentik group (`PUBLIC_AUTHENTIK_TRESORIER_GROUP`), and
+is described in `docs/compta.md`. A one-shot import from Dolibarr is available at `/compta/import`.
 
 ### GitHub
 

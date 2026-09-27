@@ -1,6 +1,7 @@
 import type postgres from 'postgres';
 import { getDb } from '$lib/server/db';
-import { dolibarrApiFetch, getMemberTypes, parseDolibarrDate } from '$lib/server/dolibarr';
+import { dolibarrApiFetch, downloadDolibarrDocument, getMemberTypes, parseDolibarrDate } from '$lib/server/dolibarr';
+import { attachPdf } from './factures';
 import { listUsers } from '$lib/server/authentikAdmin';
 import { normalizeIban } from '$lib/server/bankValidation';
 import { addUTCDays, brusselsToday, toIsoDate } from './dates';
@@ -24,6 +25,9 @@ export interface ImportReport {
 	tiers: ImportCounts;
 	liens: ImportCounts;
 	cotisations: ImportCounts;
+	factures: ImportCounts;
+	// Invoice PDFs fetched from Dolibarr and archived (never on a dry run).
+	pdfs: number;
 	// Persons whose Authentik account got linked by email during this run.
 	authentikLinked: number;
 	// Lines a treasurer should read: a member without a name, an email matched to no account, an
@@ -153,15 +157,19 @@ export async function importDolibarr(dryRun: boolean): Promise<ImportReport> {
 		tiers: { created: 0, updated: 0 },
 		liens: { created: 0, updated: 0 },
 		cotisations: { created: 0, updated: 0 },
+		factures: { created: 0, updated: 0 },
+		pdfs: 0,
 		authentikLinked: 0,
 		warnings: []
 	};
 
 	// Everything read up front, before the transaction opens — no HTTP inside the transaction.
-	const [types, members, thirdParties, authentikUsers] = await Promise.all([
+	const [types, members, thirdParties, invoices, supplierInvoices, authentikUsers] = await Promise.all([
 		getMemberTypes(),
 		fetchJson<RawMember[]>('members?limit=0'),
 		fetchJson<RawThirdParty[]>('thirdparties?limit=0'),
+		fetchJson<RawInvoice[]>('invoices?limit=0'),
+		fetchJson<RawSupplierInvoice[]>('supplierinvoices?limit=0'),
 		listUsers()
 	]);
 	const exemptTypeIds = new Set(types.filter((t) => !t.subscriptionRequired).map((t) => t.id));
@@ -191,12 +199,229 @@ export async function importDolibarr(dryRun: boolean): Promise<ImportReport> {
 			}
 			report.authentikLinked = await linkAuthentikAccounts(tx, authentikPkByEmail, report);
 
+			const tiersBySocId = new Map<number, number>();
+			for (const t of await tx<{ id: number; dolibarr_soc_id: number }[]>`SELECT id, dolibarr_soc_id FROM tiers WHERE dolibarr_soc_id IS NOT NULL`) {
+				tiersBySocId.set(t.dolibarr_soc_id, t.id);
+			}
+			for (const inv of invoices) await importInvoice(tx, inv, tiersBySocId, report);
+			for (const inv of supplierInvoices) await importSupplierInvoice(tx, inv, tiersBySocId, report);
+
 			if (dryRun) throw new DryRunRollback();
 		});
 	} catch (err) {
 		if (!(err instanceof DryRunRollback)) throw err;
 	}
+
+	// PDFs are fetched only once the rows are committed, and only the missing ones — a re-run
+	// doesn't re-download the archive. Each failure is a warning, not a failed import.
+	if (!dryRun) {
+		report.pdfs = await archiveInvoicePdfs(invoices, supplierInvoices, report);
+	}
 	return report;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Invoices
+
+interface RawInvoiceLine {
+	desc?: string | null;
+	description?: string | null;
+	product_label?: string | null;
+	qty?: string | number;
+	subprice?: string | number;
+	total_ttc?: string | number;
+}
+
+interface RawInvoice {
+	id: string | number;
+	ref: string;
+	socid?: string | number;
+	type?: string | number;
+	statut?: string | number;
+	status?: string | number;
+	paye?: string | number;
+	date?: string | number | null;
+	date_lim_reglement?: string | number | null;
+	total_ttc?: string | number;
+	note_public?: string | null;
+	last_main_doc?: string | null;
+	lines?: RawInvoiceLine[];
+}
+
+interface RawSupplierInvoice {
+	id: string | number;
+	ref: string;
+	ref_supplier?: string | null;
+	label?: string | null;
+	socid?: string | number;
+	statut?: string | number;
+	status?: string | number;
+	paye?: string | number;
+	date?: string | number | null;
+	date_echeance?: string | number | null;
+	total_ttc?: string | number;
+	last_main_doc?: string | null;
+	lines?: RawInvoiceLine[];
+}
+
+// Dolibarr FactureStatique: 0 draft, 1 validated, 2 paid (classée payée), 3 abandoned.
+function invoiceStatut(raw: string | number | undefined, paye: string | number | undefined): 'validee' | 'payee' | 'annulee' | null {
+	const statut = num(raw);
+	if (statut === 0 || statut === null) return null;
+	if (statut === 3) return 'annulee';
+	return statut === 2 || num(paye) === 1 ? 'payee' : 'validee';
+}
+
+// One line per Dolibarr line, at the amount actually charged: TTC totals for supplier invoices
+// (the ASBL pays VAT it can't recover), which equal HT on issued ones (no VAT charged).
+function lineValues(l: RawInvoiceLine): { libelle: string; quantite: number; prixUnitaire: number; total: number } {
+	const total = num(l.total_ttc) ?? 0;
+	const quantite = num(l.qty) || 1;
+	return {
+		libelle: text(l.desc) ?? text(l.description) ?? text(l.product_label) ?? '—',
+		quantite,
+		prixUnitaire: Math.round((total / quantite) * 100) / 100,
+		total
+	};
+}
+
+async function upsertFacture(
+	tx: postgres.TransactionSql,
+	key: { dolibarrInvoiceId: number | null; dolibarrSupplierInvoiceId: number | null },
+	f: {
+		sens: 'emise' | 'recue';
+		type: 'facture' | 'note_de_credit';
+		tiersId: number;
+		numero: string;
+		statut: 'validee' | 'payee' | 'annulee';
+		dateEmission: Date | null;
+		dateEcheance: Date | null;
+		total: number;
+		note: string | null;
+		referenceExterne: string;
+	},
+	lines: RawInvoiceLine[],
+	report: ImportReport
+): Promise<void> {
+	const [existing] = await tx<{ id: number }[]>`
+		SELECT id FROM factures
+		WHERE (${key.dolibarrInvoiceId}::int IS NOT NULL AND dolibarr_invoice_id = ${key.dolibarrInvoiceId})
+		   OR (${key.dolibarrSupplierInvoiceId}::int IS NOT NULL AND dolibarr_supplier_invoice_id = ${key.dolibarrSupplierInvoiceId})
+	`;
+	let id: number;
+	if (existing) {
+		id = existing.id;
+		await tx`
+			UPDATE factures SET tiers_id = ${f.tiersId}, statut = ${f.statut}, date_emission = ${f.dateEmission ? toIsoDate(f.dateEmission) : null},
+				date_echeance = ${f.dateEcheance ? toIsoDate(f.dateEcheance) : null}, total = ${f.total}, note = COALESCE(note, ${f.note}),
+				updated_at = now()
+			WHERE id = ${id}
+		`;
+		report.factures.updated += 1;
+	} else {
+		const [row] = await tx<{ id: number }[]>`
+			INSERT INTO factures (sens, type, tiers_id, numero, statut, date_emission, date_echeance, total, note, reference_externe,
+			                      dolibarr_invoice_id, dolibarr_supplier_invoice_id)
+			VALUES (${f.sens}, ${f.type}, ${f.tiersId}, ${f.numero}, ${f.statut}, ${f.dateEmission ? toIsoDate(f.dateEmission) : null},
+			        ${f.dateEcheance ? toIsoDate(f.dateEcheance) : null}, ${f.total}, ${f.note}, ${f.referenceExterne},
+			        ${key.dolibarrInvoiceId}, ${key.dolibarrSupplierInvoiceId})
+			RETURNING id
+		`;
+		id = row.id;
+		report.factures.created += 1;
+	}
+	await tx`DELETE FROM facture_lignes WHERE facture_id = ${id}`;
+	for (const [i, raw] of lines.entries()) {
+		const l = lineValues(raw);
+		await tx`
+			INSERT INTO facture_lignes (facture_id, ordre, libelle, quantite, prix_unitaire, total)
+			VALUES (${id}, ${i + 1}, ${l.libelle}, ${l.quantite}, ${l.prixUnitaire}, ${l.total})
+		`;
+	}
+}
+
+async function importInvoice(tx: postgres.TransactionSql, inv: RawInvoice, tiersBySocId: Map<number, number>, report: ImportReport): Promise<void> {
+	const statut = invoiceStatut(inv.statut ?? inv.status, inv.paye);
+	if (!statut) return; // draft: never issued, nothing to archive
+	const tiersId = tiersBySocId.get(num(inv.socid) ?? -1);
+	if (!tiersId) {
+		report.warnings.push(`Facture ${inv.ref} : tiers Dolibarr ${inv.socid} inconnu, ignorée.`);
+		return;
+	}
+	await upsertFacture(
+		tx,
+		{ dolibarrInvoiceId: Number(inv.id), dolibarrSupplierInvoiceId: null },
+		{
+			sens: 'emise',
+			// Dolibarr type 2 = avoir (credit note); everything else is imported as a plain invoice.
+			type: num(inv.type) === 2 ? 'note_de_credit' : 'facture',
+			tiersId,
+			// Dolibarr's own number is kept as the number: it's what the customer received.
+			numero: inv.ref,
+			statut,
+			dateEmission: calendarDay(inv.date),
+			dateEcheance: calendarDay(inv.date_lim_reglement),
+			total: num(inv.total_ttc) ?? 0,
+			note: text(inv.note_public),
+			referenceExterne: inv.ref
+		},
+		inv.lines ?? [],
+		report
+	);
+}
+
+async function importSupplierInvoice(tx: postgres.TransactionSql, inv: RawSupplierInvoice, tiersBySocId: Map<number, number>, report: ImportReport): Promise<void> {
+	const statut = invoiceStatut(inv.statut ?? inv.status, inv.paye);
+	if (!statut) return;
+	const tiersId = tiersBySocId.get(num(inv.socid) ?? -1);
+	if (!tiersId) {
+		report.warnings.push(`Facture fournisseur ${inv.ref} : tiers Dolibarr ${inv.socid} inconnu, ignorée.`);
+		return;
+	}
+	// Supplier references sometimes carry stray bidi marks from copy-pasting (seen on preprod).
+	const refSupplier = text(inv.ref_supplier)?.replace(/[\u202a-\u202e\u2066-\u2069]/g, '').trim();
+	await upsertFacture(
+		tx,
+		{ dolibarrInvoiceId: null, dolibarrSupplierInvoiceId: Number(inv.id) },
+		{
+			sens: 'recue',
+			type: 'facture',
+			tiersId,
+			numero: refSupplier || inv.ref,
+			statut,
+			dateEmission: calendarDay(inv.date),
+			dateEcheance: calendarDay(inv.date_echeance),
+			total: num(inv.total_ttc) ?? 0,
+			note: text(inv.label),
+			referenceExterne: inv.ref
+		},
+		inv.lines ?? [],
+		report
+	);
+	await tx`UPDATE tiers SET est_fournisseur = true WHERE id = ${tiersId} AND NOT est_fournisseur`;
+}
+
+async function archiveInvoicePdfs(invoices: RawInvoice[], supplierInvoices: RawSupplierInvoice[], report: ImportReport): Promise<number> {
+	const sql = await getDb();
+	const missing = await sql<{ id: number; dolibarr_invoice_id: number | null; dolibarr_supplier_invoice_id: number | null; reference_externe: string }[]>`
+		SELECT id, dolibarr_invoice_id, dolibarr_supplier_invoice_id, reference_externe FROM factures
+		WHERE pdf IS NULL AND (dolibarr_invoice_id IS NOT NULL OR dolibarr_supplier_invoice_id IS NOT NULL)
+	`;
+	const byInvoiceId = new Map(invoices.map((i) => [Number(i.id), i]));
+	const bySupplierId = new Map(supplierInvoices.map((i) => [Number(i.id), i]));
+	let archived = 0;
+	for (const row of missing) {
+		const raw = row.dolibarr_invoice_id !== null ? byInvoiceId.get(row.dolibarr_invoice_id) : bySupplierId.get(row.dolibarr_supplier_invoice_id ?? -1);
+		if (!raw?.last_main_doc) continue; // Dolibarr never generated one — nothing to archive
+		try {
+			const doc = await downloadDolibarrDocument(row.dolibarr_invoice_id !== null ? 'facture' : 'facture_fournisseur', raw.last_main_doc);
+			await attachPdf(row.id, Buffer.from(doc.content));
+			archived += 1;
+		} catch (err) {
+			report.warnings.push(`${row.reference_externe} : PDF non récupéré (${(err as Error).message.slice(0, 120)}).`);
+		}
+	}
+	return archived;
 }
 
 interface ImportContext {

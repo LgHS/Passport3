@@ -135,6 +135,7 @@ export const actions: Actions = {
 			sieges,
 			statut,
 			abonnementId: null,
+			factureId: null,
 			payeLe: statut === 'active' ? (payeLe ?? brusselsToday()) : payeLe,
 			note
 		});

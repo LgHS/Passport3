@@ -258,6 +258,13 @@
 						Tiers
 					</a>
 					<a
+						href="/compta/factures"
+						onclick={closeOverlay}
+						class="{subItemClass} {itemStateClass('/compta/factures')}"
+					>
+						Factures
+					</a>
+					<a
 						href="/compta/parametres"
 						onclick={closeOverlay}
 						class="{subItemClass} {itemStateClass('/compta/parametres')}"
