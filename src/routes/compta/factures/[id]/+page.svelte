@@ -102,7 +102,33 @@
 		<div class="flex flex-col gap-2">
 			{#if f.hasPdf}
 				<a href="/compta/factures/{f.id}/pdf" class="no-underline-fx btn-primary inline-block px-4 py-2 text-center">Télécharger le PDF</a>
-			{:else if f.sens === 'recue'}
+			{/if}
+			{#if f.hasUbl}
+				<a href="/compta/factures/{f.id}/ubl" class="no-underline-fx {btn} text-center" title="Peppol BIS 3.0 — à déposer sur Doccle">
+					Télécharger l'UBL{f.sens === 'recue' ? ' du fournisseur' : ' (Peppol)'}
+				</a>
+			{/if}
+			{#if f.sens === 'emise' && (f.statut === 'validee' || f.statut === 'payee')}
+				<form method="POST" action="?/envoyer" class="border border-black p-3 text-sm" use:enhance>
+					<p class="mb-2">
+						{#if f.envoyeeLe}
+							Envoyée le {new Intl.DateTimeFormat('fr-BE', { dateStyle: 'medium', timeStyle: 'short' }).format(f.envoyeeLe)}
+							à <span class="font-mono text-xs">{f.envoyeeA}</span>.
+						{:else}
+							<span class="text-orange-600">Pas encore envoyée.</span>
+						{/if}
+					</p>
+					{#if data.destinataires.length > 0}
+						<p class="mb-2 text-xs text-gray-600">Destinataires : <span class="font-mono">{data.destinataires.join(', ')}</span></p>
+					{:else}
+						<p class="mb-2 text-xs text-red-700">Aucune adresse email sur ce tiers ni sur une personne « reçoit les factures ».</p>
+					{/if}
+					<button type="submit" disabled={!data.mailConfigured || data.destinataires.length === 0} class="{btn} w-full" title={data.mailConfigured ? '' : 'SMTP non configuré'}>
+						{f.envoyeeLe ? 'Renvoyer par email' : 'Envoyer par email'}
+					</button>
+				</form>
+			{/if}
+			{#if !f.hasPdf && f.sens === 'recue'}
 				<form method="POST" action="?/attachPdf" enctype="multipart/form-data" class="border border-black p-3 text-sm" use:enhance>
 					<label class="mb-1 block text-xs font-bold uppercase" for="pdf">Joindre le PDF du fournisseur</label>
 					<input id="pdf" name="pdf" type="file" accept="application/pdf" required class="text-sm" />

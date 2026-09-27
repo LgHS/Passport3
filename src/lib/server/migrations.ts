@@ -702,6 +702,15 @@ const migrations: Migration[] = [
 			await sql`CREATE INDEX lettrages_mouvement ON lettrages (mouvement_id)`;
 			await sql`CREATE INDEX lettrages_cible ON lettrages (cible_type, cible_id)`;
 		}
+	},
+	{
+		version: 23,
+		name: 'factures: envoi par email',
+		up: async (sql) => {
+			// When and to whom an issued invoice was last emailed (factureMail.ts) — shown on the
+			// invoice, and what stops the scheduler from sending a subscription invoice twice.
+			await sql`ALTER TABLE factures ADD COLUMN envoyee_le TIMESTAMPTZ, ADD COLUMN envoyee_a TEXT`;
+		}
 	}
 ];
 

@@ -12,6 +12,8 @@ import {
 	validerFacture
 } from '$lib/server/compta/factures';
 import { factureInputFromForm } from '$lib/server/compta/factureForm';
+import { destinatairesDe, envoyerFacture } from '$lib/server/compta/factureMail';
+import { isMailConfigured, MailError } from '$lib/server/compta/mailer';
 import { listTiers, tiersDisplayName } from '$lib/server/compta/tiers';
 import { parseFormDate } from '$lib/server/compta/dates';
 import { logAuditEvent } from '$lib/server/auditLog';
@@ -33,7 +35,9 @@ export const load: PageServerLoad = async ({ params }) => {
 	const tiers = facture.statut === 'brouillon' ? await listTiers({ actifOnly: true }) : [];
 	return {
 		facture,
-		tiers: tiers.map((t) => ({ id: t.id, nom: tiersDisplayName(t), nature: t.nature }))
+		tiers: tiers.map((t) => ({ id: t.id, nom: tiersDisplayName(t), nature: t.nature })),
+		mailConfigured: isMailConfigured(),
+		destinataires: facture.sens === 'emise' ? await destinatairesDe(facture) : []
 	};
 };
 
@@ -137,6 +141,19 @@ export const actions: Actions = {
 		);
 		if (failed) return failed;
 		redirect(303, `/compta/factures/${id}`);
+	},
+
+	envoyer: async ({ params, locals }) => {
+		const tresorier = requireTresorierUser(locals);
+		const facture = await loadFacture(params);
+		try {
+			const to = await envoyerFacture(facture.id);
+			await audit(tresorier, 'compta.facture.envoyer', facture.id, { to });
+			return { success: `Envoyée à ${to.join(', ')}.` };
+		} catch (err) {
+			if (err instanceof MailError) return fail(400, { error: err.message });
+			throw err;
+		}
 	},
 
 	attachPdf: async ({ request, params, locals }) => {

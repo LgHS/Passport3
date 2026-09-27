@@ -2,6 +2,7 @@ import type postgres from 'postgres';
 import { getDb } from '$lib/server/db';
 import { addUTCDays, brusselsToday, parseIsoDate, parseMoney, toIsoDate } from './dates';
 import { renderFacturePdf } from './facturePdf';
+import { renderUbl } from './ubl';
 import { getComptaSettings, type ComptaSettings } from './settings';
 import { getTiers, tiersDisplayName, type Tiers, type TiersNature } from './tiers';
 
@@ -55,6 +56,9 @@ export interface Facture {
 	hasPdf: boolean;
 	hasUbl: boolean;
 	payeeLe: Date | null;
+	// Last email of the document (factureMail.ts): when, and to whom (comma-separated).
+	envoyeeLe: Date | null;
+	envoyeeA: string | null;
 	cotisation: FactureCotisation | null;
 	cotisationId: number | null;
 	lignes: FactureLigne[];
@@ -102,6 +106,8 @@ interface FactureRow {
 	has_pdf: boolean;
 	has_ubl: boolean;
 	payee_le: string | null;
+	envoyee_le: Date | null;
+	envoyee_a: string | null;
 	cotisation_type: FactureCotisationType | null;
 	cotisation_debut: string | null;
 	cotisation_fin: string | null;
@@ -127,7 +133,7 @@ const FACTURE_SELECT = `
 	       f.date_echeance::text AS date_echeance, f.total, f.objet, f.note, f.communication_structuree,
 	       f.facture_origine_id, o.numero AS facture_origine_numero, f.reference_externe,
 	       (f.pdf IS NOT NULL) AS has_pdf, (f.ubl IS NOT NULL) AS has_ubl,
-	       f.payee_le::text AS payee_le, f.cotisation_type, f.cotisation_debut::text AS cotisation_debut,
+	       f.payee_le::text AS payee_le, f.envoyee_le, f.envoyee_a, f.cotisation_type, f.cotisation_debut::text AS cotisation_debut,
 	       f.cotisation_fin::text AS cotisation_fin, f.cotisation_sieges,
 	       (SELECT c.id FROM cotisations c WHERE c.facture_id = f.id ORDER BY c.id LIMIT 1) AS cotisation_id
 	FROM factures f
@@ -161,6 +167,8 @@ function rowToFacture(r: FactureRow, lignes: LigneRow[]): Facture {
 		hasPdf: r.has_pdf,
 		hasUbl: r.has_ubl,
 		payeeLe: r.payee_le ? parseIsoDate(r.payee_le) : null,
+		envoyeeLe: r.envoyee_le,
+		envoyeeA: r.envoyee_a,
 		cotisation:
 			r.cotisation_type && r.cotisation_debut && r.cotisation_fin
 				? {
@@ -345,6 +353,23 @@ export async function readFacturePdf(id: number): Promise<Buffer | null> {
 	return row?.pdf ?? null;
 }
 
+export async function readFactureUbl(id: number): Promise<Buffer | null> {
+	const sql = await getDb();
+	const [row] = await sql<{ ubl: Buffer | null }[]>`SELECT ubl FROM factures WHERE id = ${id}`;
+	return row?.ubl ?? null;
+}
+
+// A supplier's UBL, kept as received next to the row it produced (see /compta/factures/nouvelle).
+export async function attachUbl(id: number, xml: Buffer): Promise<void> {
+	const sql = await getDb();
+	await sql`UPDATE factures SET ubl = ${xml}, updated_at = now() WHERE id = ${id}`;
+}
+
+export async function marquerEnvoyee(id: number, to: string[]): Promise<void> {
+	const sql = await getDb();
+	await sql`UPDATE factures SET envoyee_le = now(), envoyee_a = ${to.join(', ')}, updated_at = now() WHERE id = ${id}`;
+}
+
 // Attaches a document a human or the import supplies (a received invoice's PDF, an archived
 // one). An issued invoice's own PDF is written by validerFacture() and never replaced.
 export async function attachPdf(id: number, bytes: Buffer): Promise<void> {
@@ -402,8 +427,11 @@ export async function validerFacture(id: number, today: Date = brusselsToday()):
 		}
 		await tx`UPDATE tiers SET est_client = true, updated_at = now() WHERE id = ${facture.tiersId} AND NOT est_client`;
 
+		// Both documents are produced from the same frozen row: the UBL is what the customer's
+		// e-invoicing platform reads, the PDF what a human reads.
 		const pdf = await renderFacturePdf(facture, tiers, settings);
-		await tx`UPDATE factures SET pdf = ${pdf} WHERE id = ${id}`;
+		const ubl = Buffer.from(renderUbl(facture, tiers, settings), 'utf8');
+		await tx`UPDATE factures SET pdf = ${pdf}, ubl = ${ubl} WHERE id = ${id}`;
 	});
 	return (await getFacture(id)) as Facture;
 }
