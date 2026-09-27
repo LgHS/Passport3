@@ -135,8 +135,11 @@ crédit (`type = 'note_de_credit'`, `facture_origine_id`). Statuts : `brouillon`
 - **UBL** : XML Peppol BIS Billing 3.0 (`Invoice` ou `CreditNote`) généré à la validation avec
   le PDF, stocké en base, téléchargeable pour dépôt à la main sur Doccle, et joint à l'email.
   Adresses électroniques en schéma `0208` (n° BCE) ou `EM` (email) faute de BCE. Exonération en
-  catégorie de taxe `E` avec la raison textuelle ; le code `VATEX` exact pour le régime de
-  franchise reste à confirmer avec le comptable avant de l'écrire.
+  catégorie de taxe `E` avec la raison textuelle, **sans code `VATEX`** : la FAQ officielle
+  (efacture.belgium.be, « questions spécifiques ») indique que la reprise des exonérations propres
+  à la Belgique dans la liste VATEX est encore en négociation au niveau européen, et ne donne pas de
+  code pour la franchise. La raison textuelle suffit au schéma ; à revoir si un code belge est
+  publié.
 - Factures **reçues** : saisie (numéro du fournisseur, lignes, PDF déposé) ou **import d'un UBL**
   fournisseur — tiers retrouvé par n° BCE/TVA ou nom, sinon créé ; lignes ramenées au TTC payé ;
   PDF embarqué conservé.
