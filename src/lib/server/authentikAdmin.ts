@@ -705,6 +705,8 @@ export interface AdminUserSummary {
 	// per-member API call needed (see pickTrombinoscopeOptin()'s own defaulting for how a member
 	// who never touched this setting resolves to `false`, same as everywhere else it's read).
 	trombinoscopeVisible: boolean;
+	// Same bulk response: at least one well-formed emergency contact on file.
+	hasEmergencyContact: boolean;
 }
 
 // Not real members: Authentik's own outpost/internal service accounts, plus the break-glass
@@ -824,7 +826,10 @@ export async function listUsers(): Promise<AdminUserSummary[]> {
 			name,
 			email,
 			is_active,
-			trombinoscopeVisible: pickTrombinoscopeOptin(attributes[TROMBINOSCOPE_ATTRIBUTE]).visible
+			trombinoscopeVisible: pickTrombinoscopeOptin(attributes[TROMBINOSCOPE_ATTRIBUTE]).visible,
+			hasEmergencyContact:
+				Array.isArray(attributes[EMERGENCY_CONTACTS_ATTRIBUTE]) &&
+				(attributes[EMERGENCY_CONTACTS_ATTRIBUTE] as unknown[]).some(isEmergencyContact)
 		}));
 }
 
@@ -1171,6 +1176,45 @@ const DEVICE_TYPES: { suffix: string; label: string; endpoint: string }[] = [
 
 function deviceTypeInfo(type: string) {
 	return DEVICE_TYPES.find((t) => type.endsWith(t.suffix));
+}
+
+// Admin member list: which members have at least one MFA device, for everyone at once. The
+// unified `authenticators/admin/all/` endpoint only answers for one user at a time and doesn't
+// say whose device it is, so this reads the per-type admin endpoints instead — each device there
+// carries its owner — one call (or page) per device type rather than one call per member.
+// Counts every device type, recovery codes included, same as listMfaDevices() below and the
+// dashboard's MFA checklist item.
+export async function listUserPksWithMfa(): Promise<Set<number>> {
+	const perType = await Promise.all(
+		DEVICE_TYPES.map(async ({ endpoint }) => {
+			const pks: number[] = [];
+			let page = 1;
+			while (page) {
+				let res: Response;
+				try {
+					res = await authentikApiFetch(`authenticators/admin/${endpoint}/?page_size=500&page=${page}`);
+				} catch (err) {
+					// A device type this Authentik version doesn't have (e.g. email, added later) — no
+					// devices of that type, rather than failing the whole column.
+					const notFound =
+						err instanceof Error && !(err instanceof AuthentikUnavailableError) && err.message.includes('(404)');
+					if (notFound) break;
+					throw err;
+				}
+				const data = (await res.json()) as {
+					pagination: { next: number };
+					results: { user: { pk: number } | null }[];
+				};
+				for (const device of data.results) {
+					if (device.user) pks.push(device.user.pk);
+				}
+				// Authentik's pagination: the next page number, 0 on the last page.
+				page = data.pagination.next;
+			}
+			return pks;
+		})
+	);
+	return new Set(perType.flat());
 }
 
 export async function listMfaDevices(pk: number): Promise<MfaDevice[]> {
