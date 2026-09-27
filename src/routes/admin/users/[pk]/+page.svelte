@@ -61,6 +61,8 @@
 	let tagValue = $state(form?.tag ?? data.tag.tag ?? '');
 	// svelte-ignore state_referenced_locally
 	let tagColorValue = $state(form?.tagColor ?? data.tag.tagColor ?? '');
+	// svelte-ignore state_referenced_locally
+	let tagExtendedValue = $state(form?.tagExtended ?? data.tag.tagExtended ?? '');
 	// Live preview swatch — falls back to the trombinoscope's default black badge (see
 	// authentikAdmin.ts's HEX_COLOR_RE comment) when left empty or not yet valid.
 	let tagColorPreview = $derived(/^[0-9a-fA-F]{6}$/.test(tagColorValue) ? `#${tagColorValue}` : '#000000');
@@ -182,6 +184,16 @@
 					<span class="text-gray-500">Pas de compte lié ou actif</span>
 				{/if}
 			</p>
+			<p>
+				<span class="font-bold uppercase">MFA :</span>
+				{#if data.mfaTypes === null}
+					<span class="text-gray-500">Impossible de vérifier pour le moment</span>
+				{:else if data.mfaTypes.length > 0}
+					{data.mfaTypes.join(', ')}
+				{:else}
+					<span class="text-gray-500">Aucun</span>
+				{/if}
+			</p>
 		</div>
 	</div>
 
@@ -239,7 +251,7 @@
 
 				{#if fieldOptinState.showMail}
 					<div class="mt-3">
-						<label class="mb-1 block text-xs font-bold uppercase text-gray-600" for="trombiEmail">
+						<label class="mb-1 block text-sm font-bold uppercase" for="trombiEmail">
 							Email affiché (optionnel)
 						</label>
 						<input
@@ -262,7 +274,7 @@
 				{/if}
 			{/if}
 
-			<p class="mt-4 text-xs text-gray-600">
+			<p class="mt-4 text-sm text-gray-600">
 				Avant d'activer un nouveau champ, assurez-vous du consentement du membre concerné : ces
 				informations deviennent publiques dans le trombinoscope.
 			</p>
@@ -301,6 +313,22 @@
 					bind:value={tagValue}
 					class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-300"
 				/>
+			</div>
+			<div class="mb-4">
+				<label class="mb-1 block text-sm font-bold uppercase" for="tagExtended">Rôle étendu (optionnel)</label>
+				<input
+					id="tagExtended"
+					name="tagExtended"
+					type="text"
+					maxlength="120"
+					placeholder="Président, délégué à la gestion journalière"
+					bind:value={tagExtendedValue}
+					class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-300"
+				/>
+				<p class="mt-1 text-xs text-gray-500">
+					Affiché uniquement sur la fiche du membre dans le trombinoscope, le rôle court restant
+					l'étiquette de sa vignette.
+				</p>
 			</div>
 			<div>
 				<label class="mb-1 block text-sm font-bold uppercase" for="tagColor">Couleur</label>
@@ -358,7 +386,7 @@
 
 	{@render accordionHeader('Permissions', permissionsSectionOpen, () => (permissionsSectionOpen = !permissionsSectionOpen))}
 	{#if permissionsSectionOpen}
-		<p class="mt-3 mb-3 text-xs text-gray-500">
+		<p class="mt-3 mb-3 text-sm text-gray-600">
 			Les groupes ne peuvent être modifiés que par un admin du SSO, directement dans Authentik.
 		</p>
 		{#if data.groups === null}
@@ -436,11 +464,11 @@
 		<div class="mt-3 mb-4">
 			<span class="mb-1 block text-sm font-bold uppercase">Identifiant (UUID)</span>
 			{#if data.rfidUid === undefined}
-				<div class="border border-black bg-gray-100 px-3 py-2 text-sm text-gray-500">
+				<div class="border border-black bg-gray-100 px-3 py-2 text-sm text-gray-600">
 					Impossible de charger le badge pour le moment, réessayez plus tard.
 				</div>
 			{:else if data.rfidUid === null}
-				<div class="border border-black bg-gray-100 px-3 py-2 text-sm text-gray-500">
+				<div class="border border-black bg-gray-100 px-3 py-2 text-sm text-gray-600">
 					Aucun badge assigné.
 				</div>
 			{:else}
@@ -483,7 +511,7 @@
 			<div class="hazard-stripes h-2"></div>
 			<div class="p-6">
 				<p class="mb-3 text-sm font-bold uppercase">Attention, action irréversible</p>
-				<p class="mb-4 text-sm leading-relaxed">
+				<p class="mb-4 text-sm text-gray-600">
 					En régénérant l'UUID de ce membre, son (ses) badge(s) actuel(s) cessera(ont) de
 					fonctionner immédiatement. À n'utiliser qu'à sa demande explicite (badge perdu ou
 					copié), jamais par précaution.
@@ -513,7 +541,7 @@
 					<button
 						type="submit"
 						disabled={!rfidUnderstood || submittingRfid}
-						class="btn-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+						class="btn-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
 					>
 						{submittingRfid ? 'Régénération…' : 'Confirmer la régénération'}
 					</button>

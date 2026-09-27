@@ -249,6 +249,10 @@
 	</section>
 {:else if activeTab === 'sessions'}
 	<section class="w-full">
+		<p class="mb-4 text-sm text-gray-600">
+			Les appareils et navigateurs actuellement connectés à votre compte. Si l'un d'eux ne vous
+			est pas familier, révoquez-le : il sera immédiatement déconnecté.
+		</p>
 		{#if data.sessions.length > 0}
 			<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->
 			<div class="space-y-2 sm:hidden">
@@ -317,6 +321,11 @@
 	</section>
 {:else if activeTab === 'mfa'}
 	<section class="w-full">
+		<p class="mb-4 text-sm text-gray-600">
+			La double authentification protège votre compte même si votre mot de passe venait à être
+			compromis : il faudrait aussi avoir accès à votre téléphone ou votre clé de sécurité pour
+			s'y connecter.
+		</p>
 		<div class="relative mb-4 inline-block" data-add-mfa-menu>
 			<button
 				type="button"
@@ -480,7 +489,7 @@
 	</section>
 {:else if activeTab === 'audit'}
 	<section class="w-full">
-		<p class="mb-4 text-xs text-gray-500">
+		<p class="mb-4 text-sm text-gray-600">
 			L'historique des actions faites sur votre compte, par vous ou par un administrateur.
 			Certaines opérations menées directement dans nos autres outils internes (comme la
 			comptabilité) n'y transitent pas encore.

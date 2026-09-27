@@ -84,9 +84,13 @@
 		if (event.target === memberDialog) closeMember();
 	}
 
-	// Digits and a leading + only, for the tel: link — the displayed number keeps its formatting.
-	function telHref(phone: string): string {
-		return `tel:${phone.replace(/[^\d+]/g, '')}`;
+	// Phone numbers are stored in international format without the "+" (e.g. 32470000000, enforced
+	// by /profile's validation), which a tel: link can't dial as is — it needs the "+" in front.
+	// Shown with the "+" everywhere (grid, list, card), linked only on the card. Anything else (a
+	// value saved before that validation existed) is shown as stored, with no link rather than a
+	// broken one.
+	function internationalPhone(phone: string): string | null {
+		return /^[1-9]\d{7,14}$/.test(phone) ? `+${phone}` : null;
 	}
 
 	let searchQuery = $state('');
@@ -243,7 +247,7 @@
 
 				{#if fieldOptinState.showMail}
 					<div class="mt-3">
-						<label class="mb-1 block text-xs font-bold uppercase text-gray-600" for="trombiEmail">
+						<label class="mb-1 block text-sm font-bold uppercase" for="trombiEmail">
 							Email affiché (optionnel)
 						</label>
 						<input
@@ -444,7 +448,7 @@
 									stroke-linejoin="round"
 								/>
 							</svg>
-							{member.phone}
+							{internationalPhone(member.phone) ?? member.phone}
 						</p>
 					{/if}
 				</div>
@@ -526,7 +530,7 @@
 											stroke-linejoin="round"
 										/>
 									</svg>
-									{member.phone}
+									{internationalPhone(member.phone) ?? member.phone}
 								</span>
 							{/if}
 						</p>
@@ -592,6 +596,9 @@
 		<div class="space-y-3 p-4 text-sm">
 			<div>
 				<h2 id="member-card-title" class="text-base font-bold break-all">@{member.username}</h2>
+				{#if member.tagExtended}
+					<p class="font-bold">{member.tagExtended}</p>
+				{/if}
 				{#if fullName(member)}
 					<p class="text-gray-600">{fullName(member)}</p>
 				{/if}
@@ -608,7 +615,13 @@
 					{#if member.phone}
 						<div class="flex gap-2">
 							<dt class="w-24 shrink-0 font-bold">Téléphone</dt>
-							<dd><a href={telHref(member.phone)}>{member.phone}</a></dd>
+							<dd>
+								{#if internationalPhone(member.phone)}
+									<a href="tel:{internationalPhone(member.phone)}">{internationalPhone(member.phone)}</a>
+								{:else}
+									{member.phone}
+								{/if}
+							</dd>
 						</div>
 					{/if}
 					{#if member.mattermostUsername}
@@ -639,7 +652,7 @@
 				</dl>
 			{/if}
 
-			{#if !fullName(member) && !member.email && !member.phone && !member.mattermostUsername && socialLinks(member).length === 0}
+			{#if !fullName(member) && !member.tagExtended && !member.email && !member.phone && !member.mattermostUsername && socialLinks(member).length === 0}
 				<p class="text-gray-500">Ce membre n'a partagé que son pseudo.</p>
 			{/if}
 		</div>

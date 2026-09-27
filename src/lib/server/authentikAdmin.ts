@@ -59,6 +59,18 @@ const FETCH_TIMEOUT_MS = 5_000;
 // bug the same way that one already is.
 export class AuthentikUnavailableError extends Error {}
 
+// A 4xx from the Authentik API: a genuine request problem (bad payload, missing object…), not an
+// outage. Carries the HTTP status so callers can react to a specific one (e.g. 404) without
+// parsing the message.
+export class AuthentikRequestError extends Error {
+	constructor(
+		message: string,
+		readonly status: number
+	) {
+		super(message);
+	}
+}
+
 export function getAuthentikAccountUrl(): string {
 	return `${authentikOrigin()}/if/user/`;
 }
@@ -145,7 +157,7 @@ async function authentikApiFetch(path: string, init?: RequestInit): Promise<Resp
 		if (res.status >= 500) {
 			throw new AuthentikUnavailableError(`Authentik API request to ${path} failed (${res.status}): ${body}`);
 		}
-		throw new Error(`Authentik API request to ${path} failed (${res.status}): ${body}`);
+		throw new AuthentikRequestError(`Authentik API request to ${path} failed (${res.status}): ${body}`, res.status);
 	}
 
 	return res;
@@ -577,6 +589,16 @@ export async function updateNotificationPreferences(
 export interface TrombinoscopeTag {
 	tag: string | null;
 	tagColor: string | null;
+	// Full version of the role, stored as `tagx` next to `tag`/`tagc` — e.g. tag "Président",
+	// extended role "Président, délégué à la gestion journalière". Only shown on the
+	// trombinoscope's member card; the short `tag` stays the badge on the grid.
+	tagExtended: string | null;
+}
+
+export const TAG_EXTENDED_MAX_LENGTH = 120;
+
+function nonEmptyString(value: unknown): string | null {
+	return typeof value === 'string' && value.trim() ? value : null;
 }
 
 export async function getTrombinoscopeTag(pk: number): Promise<TrombinoscopeTag> {
@@ -589,7 +611,8 @@ export async function getTrombinoscopeTag(pk: number): Promise<TrombinoscopeTag>
 	return {
 		tag: typeof tagValue === 'string' && tagValue.trim() ? tagValue : null,
 		tagColor:
-			typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue) ? tagColorValue : null
+			typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue) ? tagColorValue : null,
+		tagExtended: nonEmptyString(rawTrombi.tagx)
 	};
 }
 
@@ -620,12 +643,14 @@ export async function updateTrombinoscopeTag(
 		tagColor:
 			typeof beforeTagColorValue === 'string' && HEX_COLOR_RE.test(beforeTagColorValue)
 				? beforeTagColorValue
-				: null
+				: null,
+		tagExtended: nonEmptyString(rawTrombi.tagx)
 	};
 	const mergedTrombinoscope = {
 		...rawTrombi,
 		tag: tag.tag ?? '',
-		tagc: tag.tagColor ?? ''
+		tagc: tag.tagColor ?? '',
+		tagx: tag.tagExtended ?? ''
 	};
 
 	await authentikApiFetch(`core/users/${pk}/`, {
@@ -715,6 +740,8 @@ export interface AdminUserSummary {
 	// per-member API call needed (see pickTrombinoscopeOptin()'s own defaulting for how a member
 	// who never touched this setting resolves to `false`, same as everywhere else it's read).
 	trombinoscopeVisible: boolean;
+	// Same bulk response: at least one well-formed emergency contact on file.
+	hasEmergencyContact: boolean;
 }
 
 // Not real members: Authentik's own outpost/internal service accounts, plus the break-glass
@@ -834,7 +861,10 @@ export async function listUsers(): Promise<AdminUserSummary[]> {
 			name,
 			email,
 			is_active,
-			trombinoscopeVisible: pickTrombinoscopeOptin(attributes[TROMBINOSCOPE_ATTRIBUTE]).visible
+			trombinoscopeVisible: pickTrombinoscopeOptin(attributes[TROMBINOSCOPE_ATTRIBUTE]).visible,
+			hasEmergencyContact:
+				Array.isArray(attributes[EMERGENCY_CONTACTS_ATTRIBUTE]) &&
+				(attributes[EMERGENCY_CONTACTS_ATTRIBUTE] as unknown[]).some(isEmergencyContact)
 		}));
 }
 
@@ -880,6 +910,8 @@ export interface DirectoryMember {
 	tag: string | null;
 	// Hex color without the `#`, validated — null falls back to the default black badge.
 	tagColor: string | null;
+	// Full version of the role (see TrombinoscopeTag.tagExtended) — only shown on the member card.
+	tagExtended: string | null;
 	// Signal/Telegram/Discord/Matrix, set on /profile (optional fields there). No dedicated
 	// trombinoscope opt-in for these: filling them in on an already-optional field *is* the
 	// consent, so presence is the only gate — same as tag/tagColor above, just gated by `visible`.
@@ -963,6 +995,7 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 					// with no auth — hiding it here specifically gave no real privacy.
 					avatar: avatarUrlFor(u.email, avatarVariantOf(u.attributes)),
 					tag: typeof tagValue === 'string' && tagValue.trim() ? tagValue : null,
+					tagExtended: nonEmptyString(rawTrombi.tagx),
 					tagColor:
 						typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue)
 							? tagColorValue
@@ -1181,6 +1214,43 @@ const DEVICE_TYPES: { suffix: string; label: string; endpoint: string }[] = [
 
 function deviceTypeInfo(type: string) {
 	return DEVICE_TYPES.find((t) => type.endsWith(t.suffix));
+}
+
+// Admin member list: which members have at least one MFA device, for everyone at once. The
+// unified `authenticators/admin/all/` endpoint only answers for one user at a time and doesn't
+// say whose device it is, so this reads the per-type admin endpoints instead — each device there
+// carries its owner — one call (or page) per device type rather than one call per member.
+// Counts every device type, recovery codes included, same as listMfaDevices() below and the
+// dashboard's MFA checklist item.
+export async function listUserPksWithMfa(): Promise<Set<number>> {
+	const perType = await Promise.all(
+		DEVICE_TYPES.map(async ({ endpoint }) => {
+			const pks: number[] = [];
+			let page = 1;
+			while (page) {
+				let res: Response;
+				try {
+					res = await authentikApiFetch(`authenticators/admin/${endpoint}/?page_size=500&page=${page}`);
+				} catch (err) {
+					// A device type this Authentik version doesn't have (e.g. email, added later) — no
+					// devices of that type, rather than failing the whole column.
+					if (err instanceof AuthentikRequestError && err.status === 404) break;
+					throw err;
+				}
+				const data = (await res.json()) as {
+					pagination: { next: number };
+					results: { user: { pk: number } | null }[];
+				};
+				for (const device of data.results) {
+					if (device.user) pks.push(device.user.pk);
+				}
+				// Authentik's pagination: the next page number, 0 on the last page.
+				page = data.pagination.next;
+			}
+			return pks;
+		})
+	);
+	return new Set(perType.flat());
 }
 
 export async function listMfaDevices(pk: number): Promise<MfaDevice[]> {

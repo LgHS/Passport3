@@ -24,13 +24,13 @@
 	<title>Créer une invitation — Passport</title>
 </svelte:head>
 
-<section class="mx-auto max-w-xl">
+<section class="mx-auto max-w-2xl">
 	<h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">
 		Créer une invitation
 	</h1>
 
 	{#if form?.success}
-		<div class="mb-6 border-4 border-black bg-lghs-yellow px-4 py-3">
+		<div class="mb-6 border-4 border-black bg-lghs-yellow px-4 py-3 text-sm">
 			<p class="mb-2 font-bold">Invitation envoyée à {form.email} :</p>
 			<div class="flex gap-2">
 				<input
@@ -46,7 +46,7 @@
 		</div>
 	{/if}
 	{#if form?.error}
-		<p class="mb-6 border-4 border-black bg-white px-4 py-3 font-bold">
+		<p class="mb-6 border-4 border-black bg-red-600 px-4 py-3 text-sm font-bold text-white">
 			{form.error}
 		</p>
 	{/if}
@@ -82,7 +82,7 @@
 			<label for="single_use" class="text-sm font-bold uppercase">Usage unique</label>
 		</div>
 
-		<button type="submit" class="btn-primary px-6 py-3">
+		<button type="submit" class="btn-primary px-4 py-2 text-sm">
 			Créer le lien et envoyer l'email
 		</button>
 	</form>

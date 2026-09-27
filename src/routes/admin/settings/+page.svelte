@@ -88,7 +88,7 @@
 				id="hour"
 				name="hour"
 				bind:value={hour}
-				class="border border-black px-3 py-2 text-sm"
+				class="w-full border border-black px-3 py-2 text-sm"
 			>
 				{#each Array.from({ length: 24 }, (_, h) => h) as h (h)}
 					<option value={h}>{h}h00</option>

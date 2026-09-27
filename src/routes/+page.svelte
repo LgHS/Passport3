@@ -92,7 +92,7 @@
 		Bienvenue sur l'extranet membres du
 		<br><a href="https://lghs.be" target="_blank" rel="noopener">Liège Hackerspace</a>
 	</p>
-	<p class="mb-8 leading-relaxed">
+	<p class="mb-8 text-sm text-gray-600">
 		Il centralise les informations et les services liés à votre adhésion afin de vous permettre de
 		gérer facilement votre compte et vos accès au hackerspace.
 	</p>
@@ -105,9 +105,9 @@
 	</a>
 {:else}
 	<section class="mb-12">
-		<h1 class="mb-2 text-3xl font-bold uppercase">Passport</h1>
+		<h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Passport</h1>
 		<p class="mb-2 max-w-2xl text-lg font-bold">Bienvenue sur Passport, {displayName(data.user)} !</p>
-		<p class="leading-relaxed">
+		<p class="text-sm text-gray-600">
 			Il centralise les informations et les services liés à votre adhésion afin de vous permettre
 			de gérer facilement votre compte et vos accès au hackerspace. En cas de souci :
 			<a href="mailto:noc@lghs.be">noc@lghs.be</a>

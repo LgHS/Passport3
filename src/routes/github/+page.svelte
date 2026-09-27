@@ -56,14 +56,14 @@
 <h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">GitHub</h1>
 
 <div>
-	<p class="mb-6 text-sm leading-relaxed">
+	<p class="mb-6 text-sm text-gray-600">
 		Pour rejoindre <a href={data.githubOrgUrl} target="_blank" rel="noopener"
 			>l'organisation GitHub du Liège Hackerspace</a
 		>, connectez votre compte GitHub ci-dessous.
 	</p>
 
 	{#if data.githubUsername}
-		<div class="mx-auto max-w-xl border-4 border-black p-4">
+		<div class="mx-auto max-w-2xl border-4 border-black p-4">
 			<div class="flex items-center gap-3">
 				<svg
 					viewBox="0 0 20 20"
@@ -118,7 +118,7 @@
 					<button
 						type="submit"
 						disabled={submitting}
-						class="btn-primary px-6 py-3 disabled:cursor-not-allowed disabled:opacity-40"
+						class="btn-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
 					>
 						{submitting ? 'Envoi…' : "Envoyer la demande d'invitation"}
 					</button>
@@ -148,7 +148,7 @@
 			</form>
 		</div>
 	{:else}
-		<div class="mx-auto max-w-xl border-4 border-black p-4">
+		<div class="mx-auto max-w-2xl border-4 border-black p-4">
 			<div class="mb-4 flex items-center gap-3">
 				<svg
 					viewBox="0 0 20 20"
@@ -165,7 +165,7 @@
 				</svg>
 				<p class="text-sm font-bold text-gray-600">Aucun compte GitHub connecté</p>
 			</div>
-			<a href="/github/connect" class="no-underline-fx btn-primary inline-block px-6 py-3">
+			<a href="/github/connect" class="no-underline-fx btn-primary inline-block px-4 py-2 text-sm">
 				Se connecter avec GitHub
 			</a>
 		</div>
@@ -173,7 +173,7 @@
 
 	<div class="mt-8">
 		<p class="mb-2 text-sm font-bold uppercase">Comment ça marche</p>
-		<ol class="list-decimal space-y-1 pl-5 text-sm leading-relaxed">
+		<ol class="list-decimal space-y-1 pl-5 text-sm text-gray-600">
 			<li>Cliquez sur le bouton «Se connecter avec GitHub»,</li>
 			<li>Confirmez sur Github le compte à utiliser,</li>
 			<li>Envoyez la demande d'invitation depuis cette page,</li>

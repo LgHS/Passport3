@@ -295,7 +295,7 @@
 				</div>
 			</div>
 
-			<button type="submit" class="btn-primary px-6 py-3">Ajouter</button>
+			<button type="submit" class="btn-primary px-4 py-2 text-sm">Ajouter</button>
 		</form>
 	{/if}
 </div>

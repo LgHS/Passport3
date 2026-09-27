@@ -10,7 +10,7 @@
 
 <h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Permissions</h1>
 
-<p class="mb-6 text-sm leading-relaxed">
+<p class="mb-6 text-sm text-gray-600">
 	Liste des groupes auxquels votre compte appartient. Chaque groupe vous donne accès à un certain
 	nombre de permissions.
 </p>

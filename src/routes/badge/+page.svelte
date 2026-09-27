@@ -20,22 +20,22 @@
 <h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Badge RFID</h1>
 
 {#if form?.success}
-	<p class="mb-6 border-4 border-black bg-lghs-yellow px-4 py-3 font-bold">
+	<p class="mb-6 border-4 border-black bg-lghs-yellow px-4 py-3 text-sm font-bold">
 		{wasEmpty ? 'Votre badge a été généré.' : 'Votre (vos) badge(s) a (ont) été régénéré(s).'}
 	</p>
 {:else if form?.error}
-	<p class="mb-6 border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+	<p class="mb-6 border-4 border-black bg-red-600 px-4 py-3 text-sm font-bold text-white">
 		{form.error}
 	</p>
 {/if}
 
 {#if uuid === null}
 	<section class="mx-auto max-w-2xl text-center">
-		<p class="mb-2 text-sm leading-relaxed">
+		<p class="mb-2 text-sm text-gray-600">
 			Cet identifiant unique sert à sécuriser votre porte-clé ou votre carte d'accès RFID au
 			hackerspace.
 		</p>
-		<p class="mb-6 text-sm leading-relaxed">
+		<p class="mb-6 text-sm text-gray-600">
 			Vous n'en avez pas encore, générez-le pour pouvoir l'utiliser.
 		</p>
 		<form
@@ -53,7 +53,7 @@
 			<button
 				type="submit"
 				disabled={submitting}
-				class="btn-primary px-6 py-3 disabled:cursor-not-allowed disabled:opacity-40"
+				class="btn-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
 			>
 				{submitting ? 'Génération…' : 'Générer mon badge'}
 			</button>
@@ -62,14 +62,14 @@
 {:else}
 	<div class="flex flex-col gap-8 md:flex-row md:items-start">
 		<section class="w-full md:w-2/3">
-			<p class="mb-2 text-sm leading-relaxed">
+			<p class="mb-2 text-sm text-gray-600">
 				Cet identifiant unique sert à sécuriser votre porte-clé ou votre carte d'accès RFID au
 				hackerspace.
 			</p>
-			<p class="mb-2 text-sm leading-relaxed">
+			<p class="mb-2 text-sm text-gray-600">
 				Cet identifiant est confidentiel et ne doit pas être communiqué à n'importe qui.
 			</p>
-			<p class="mb-6 text-sm leading-relaxed">
+			<p class="mb-6 text-sm text-gray-600">
 				Il est possible de le régénérer en cas de doute, de copie ou de perte.
 			</p>
 
@@ -114,7 +114,7 @@
 				<div class="hazard-stripes h-2"></div>
 				<div class="p-6">
 					<p class="mb-3 text-sm font-bold uppercase">Attention, action irréversible</p>
-					<p class="mb-4 text-sm leading-relaxed">
+					<p class="mb-4 text-sm text-gray-600">
 						En régénérant votre UUID, votre (vos) badge(s) actuel(s) cessera(ont) de fonctionner
 						immédiatement. Cette opération ne doit être utilisée qu'en cas de perte ou de copie de
 						votre (vos) badge(s).
@@ -146,7 +146,7 @@
 							<button
 								type="submit"
 								disabled={!understood || submitting}
-								class="btn-primary px-4 py-2 disabled:cursor-not-allowed disabled:opacity-40"
+								class="btn-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
 							>
 								{submitting ? 'Régénération…' : 'Confirmer la régénération'}
 							</button>

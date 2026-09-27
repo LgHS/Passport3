@@ -58,7 +58,7 @@
 	});
 </script>
 
-<p class="mb-4 text-sm leading-relaxed">
+<p class="mb-4 text-sm text-gray-600">
 	{#if adminView}
 		Les contacts d'urgence permettent aux admins de contacter une personne de confiance en cas de
 		problème (santé, sécurité, ...) au hackerspace. Indiquez des proches connaissant bien le
@@ -85,7 +85,7 @@
 		{#each rows as row, i (i)}
 			<div class="grid grid-cols-1 gap-2 border border-black p-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
 				<div>
-					<label class="mb-1 block text-xs font-bold uppercase" for="contact-name-{i}">Nom</label>
+					<label class="mb-1 block text-sm font-bold uppercase" for="contact-name-{i}">Nom</label>
 					<input
 						id="contact-name-{i}"
 						type="text"
@@ -96,7 +96,7 @@
 					/>
 				</div>
 				<div>
-					<label class="mb-1 block text-xs font-bold uppercase" for="contact-phone-{i}">
+					<label class="mb-1 block text-sm font-bold uppercase" for="contact-phone-{i}">
 						Téléphone (format : 32470000000)
 					</label>
 					<input
@@ -111,7 +111,7 @@
 					/>
 				</div>
 				<div>
-					<label class="mb-1 block text-xs font-bold uppercase" for="contact-relation-{i}">
+					<label class="mb-1 block text-sm font-bold uppercase" for="contact-relation-{i}">
 						Lien (optionnel)
 					</label>
 					<input

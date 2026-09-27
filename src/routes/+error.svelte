@@ -38,10 +38,10 @@
 		<p class="text-9xl leading-none font-bold sm:text-[12rem]">
 			{page.status}
 		</p>
-		<h1 class="mt-6 mb-4 text-2xl font-bold uppercase sm:text-3xl">
+		<h1 class="mt-6 mb-4 bg-white px-4 py-3 text-base font-bold text-black uppercase">
 			{TITLES[page.status] ?? 'Erreur'}
 		</h1>
-		<p class="mb-8 max-w-md text-sm leading-relaxed text-gray-400">
+		<p class="mb-8 max-w-md text-sm text-gray-400">
 			{description}
 		</p>
 		<a
