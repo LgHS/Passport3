@@ -84,9 +84,12 @@
 		if (event.target === memberDialog) closeMember();
 	}
 
-	// Digits and a leading + only, for the tel: link — the displayed number keeps its formatting.
-	function telHref(phone: string): string {
-		return `tel:${phone.replace(/[^\d+]/g, '')}`;
+	// Phone numbers are stored in international format without the "+" (e.g. 32470000000, enforced
+	// by /profile's validation), which a tel: link can't dial as is — it needs the "+" in front.
+	// Anything else (a value saved before that validation existed) gets no link rather than a
+	// broken one.
+	function internationalPhone(phone: string): string | null {
+		return /^[1-9]\d{7,14}$/.test(phone) ? `+${phone}` : null;
 	}
 
 	let searchQuery = $state('');
@@ -608,7 +611,13 @@
 					{#if member.phone}
 						<div class="flex gap-2">
 							<dt class="w-24 shrink-0 font-bold">Téléphone</dt>
-							<dd><a href={telHref(member.phone)}>{member.phone}</a></dd>
+							<dd>
+								{#if internationalPhone(member.phone)}
+									<a href="tel:{internationalPhone(member.phone)}">{internationalPhone(member.phone)}</a>
+								{:else}
+									{member.phone}
+								{/if}
+							</dd>
 						</div>
 					{/if}
 					{#if member.mattermostUsername}
