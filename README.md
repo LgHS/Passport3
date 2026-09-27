@@ -193,14 +193,18 @@ docker exec passport3-postgres pg_dump -U passport3 passport3 > backup.sql
 ```
 
 Uploaded profile photos live separately, in their own named volume (`passport3-data`, at
-`/app/data`), under `avatars/` (512×512 JPEGs named after the md5 hash of the member's email,
-indexed by the `member_avatars` table in Postgres) — **both volumes need to be backed up**, not
-just the database one. Passport is its own avatar service — Gravatar isn't used at all. Avatar URLs
-are public and keyed like Gravatar (`/avatars/<md5 of the lowercased email>.jpg`), and always
-return an image: the member's uploaded photo, or else an image of their initials (first two
-characters of their username, on a muted background picked from their hash), generated on first
-request with [resvg](https://github.com/thx/resvg-js) and cached under `avatars/generated/`. Other
-services can use them as their avatar source:
+`/app/data`), under `avatars/` (512×512 JPEGs named after the md5 hash of the member's email) —
+**both volumes need to be backed up**, not just the database one. Avatars don't use the database
+at all: the file itself says whether a member uploaded a photo, and the colour of their generated
+initials is an Authentik attribute (`avatar_color`), so a Postgres outage never affects them.
+Passport is its own avatar service — Gravatar isn't used at all. Avatar URLs are public and keyed
+like Gravatar (`/avatars/<md5 of the lowercased email>.jpg`), and always return an image: the
+member's uploaded photo, or else an image of their initials (first two characters of their
+username, on a muted background picked from their hash or chosen by the member), generated on
+first request with [resvg](https://github.com/thx/resvg-js) and cached under `avatars/generated/`.
+Responses carry an ETag with `Cache-Control: no-cache`, so a new photo or colour shows up right
+away everywhere, while an unchanged avatar only costs a bodiless 304. Other services can use them
+as their avatar source:
 
 - **Authentik** — *System → Settings → Avatars*: `https://<passport>/avatars/%(mail_hash)s.jpg`
 - **BookStack** — `AVATAR_URL=https://<passport>/avatars/${hash}.jpg`

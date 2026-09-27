@@ -1,8 +1,9 @@
-import type { Handle } from '@sveltejs/kit';
+import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { OidcUnavailableError, verifyIdToken } from '$lib/server/authentik';
 import { clearSessionCookie, SESSION_COOKIE } from '$lib/server/session';
 import { startBirthdayScheduler } from '$lib/server/birthdayScheduler';
+import { DATABASE_UNAVAILABLE_MESSAGE, isDatabaseUnavailable } from '$lib/server/db';
 
 // Module scope, not inside `handle` below — runs exactly once per server process, unlike `handle`
 // which runs on every request.
@@ -32,6 +33,21 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event);
 	setSecurityHeaders(response.headers);
 	return response;
+};
+
+// One place for a Postgres outage, whichever page or action hit it: the pages that need the
+// database (wishlist, audit log, birthday settings) show a clear "database unavailable" message
+// rather than a generic server error. Everything else — profile, dues, badge, trombinoscope,
+// avatars — doesn't touch the database, or only best-effort, and keeps working.
+// SvelteKit doesn't let this hook change the status code (500), only the message, which is what
+// +error.svelte shows.
+export const handleError: HandleServerError = ({ error, message }) => {
+	if (isDatabaseUnavailable(error)) {
+		console.error('[db] unavailable:', (error as Error).message);
+		return { message: DATABASE_UNAVAILABLE_MESSAGE };
+	}
+	console.error(error);
+	return { message };
 };
 
 function setSecurityHeaders(headers: Headers) {
