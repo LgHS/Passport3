@@ -61,6 +61,34 @@
 		].filter((entry): entry is { label: string; value: string } => !!entry.value);
 	}
 
+	type Member = PageData['members'][number];
+
+	// Member card: opened from a member's avatar or username. It only ever shows what's already on
+	// the member object — i.e. what that member chose to share (filtered server-side, see
+	// listDirectoryMembers), nothing more.
+	let selectedMember = $state<Member | null>(null);
+	let memberDialog = $state<HTMLDialogElement | null>(null);
+
+	function openMember(member: Member) {
+		selectedMember = member;
+		memberDialog?.showModal();
+	}
+
+	function closeMember() {
+		memberDialog?.close();
+	}
+
+	// A click on the backdrop lands on the <dialog> element itself, a click inside the card on one
+	// of its children.
+	function handleDialogClick(event: MouseEvent) {
+		if (event.target === memberDialog) closeMember();
+	}
+
+	// Digits and a leading + only, for the tel: link — the displayed number keeps its formatting.
+	function telHref(phone: string): string {
+		return `tel:${phone.replace(/[^\d+]/g, '')}`;
+	}
+
 	let searchQuery = $state('');
 	let tagFilter = $state<'all' | 'with' | 'without'>('all');
 
@@ -321,15 +349,22 @@
 		{#each filteredMembers as member (member.pk)}
 			<div class="border border-black">
 				<div class="relative">
-					{#if member.avatar}
-						<img src={avatarSize(member.avatar, 320)} alt="" class="aspect-square w-full object-cover" />
-					{:else}
-						<div
-							class="flex aspect-square items-center justify-center bg-black text-2xl font-bold text-white"
-						>
-							{initials(member.username)}
-						</div>
-					{/if}
+					<button
+						type="button"
+						onclick={() => openMember(member)}
+						class="block w-full cursor-pointer p-0"
+						aria-label="Voir la fiche de @{member.username}"
+					>
+						{#if member.avatar}
+							<img src={avatarSize(member.avatar, 320)} alt="" class="aspect-square w-full object-cover" />
+						{:else}
+							<div
+								class="flex aspect-square items-center justify-center bg-black text-2xl font-bold text-white"
+							>
+								{initials(member.username)}
+							</div>
+						{/if}
+					</button>
 					{#if member.tag}
 						<span
 							class="absolute top-0 right-0 w-24 truncate px-2 py-1 text-center text-xs font-bold uppercase"
@@ -340,8 +375,14 @@
 					{/if}
 				</div>
 				<div class="space-y-1 p-3 text-sm">
-					<p class="flex items-center justify-between font-bold uppercase">
-						<span>@{member.username}</span>
+					<p class="flex items-center justify-between font-bold">
+						<button
+							type="button"
+							onclick={() => openMember(member)}
+							class="min-w-0 cursor-pointer truncate p-0 text-left font-bold hover:underline"
+						>
+							@{member.username}
+						</button>
 						{#if member.mattermostUsername && member.mattermostDmUrl}
 							<a
 								href={member.mattermostDmUrl}
@@ -422,18 +463,31 @@
 						{member.tag}
 					</span>
 				{/if}
-				{#if member.avatar}
-					<img src={avatarSize(member.avatar, 128)} alt="" class="h-16 w-16 shrink-0 object-cover" />
-				{:else}
-					<div
-						class="flex h-16 w-16 shrink-0 items-center justify-center bg-black text-sm font-bold text-white"
-					>
-						{initials(member.username)}
-					</div>
-				{/if}
+				<button
+					type="button"
+					onclick={() => openMember(member)}
+					class="shrink-0 cursor-pointer p-0"
+					aria-label="Voir la fiche de @{member.username}"
+				>
+					{#if member.avatar}
+						<img src={avatarSize(member.avatar, 128)} alt="" class="h-16 w-16 object-cover" />
+					{:else}
+						<div
+							class="flex h-16 w-16 items-center justify-center bg-black text-sm font-bold text-white"
+						>
+							{initials(member.username)}
+						</div>
+					{/if}
+				</button>
 				<div class="space-y-1 text-sm">
 					<p>
-						<span class="font-bold uppercase">@{member.username}</span>
+						<button
+							type="button"
+							onclick={() => openMember(member)}
+							class="cursor-pointer p-0 font-bold hover:underline"
+						>
+							@{member.username}
+						</button>
 						{#if fullName(member)}
 							<span class="text-gray-600">— {fullName(member)}</span>
 						{/if}
@@ -497,3 +551,97 @@
 		{/each}
 	</div>
 {/if}
+
+<!-- Native <dialog> opened with showModal(): focus trap, Escape to close and the page behind made
+     inert come from the browser itself. -->
+<dialog
+	bind:this={memberDialog}
+	onclick={handleDialogClick}
+	onclose={() => (selectedMember = null)}
+	aria-labelledby="member-card-title"
+	class="m-auto w-[calc(100%-2rem)] max-w-sm border border-black bg-white p-0 text-left backdrop:bg-black/60"
+>
+	{#if selectedMember}
+		{@const member = selectedMember}
+		<div class="relative">
+			{#if member.avatar}
+				<img src={avatarSize(member.avatar, 512)} alt="" class="aspect-square w-full object-cover" />
+			{:else}
+				<div class="flex aspect-square items-center justify-center bg-black text-5xl font-bold text-white">
+					{initials(member.username)}
+				</div>
+			{/if}
+			{#if member.tag}
+				<span
+					class="absolute top-0 left-0 max-w-[60%] truncate px-2 py-1 text-xs font-bold uppercase"
+					style={tagBadgeStyle(member.tagColor)}
+				>
+					{member.tag}
+				</span>
+			{/if}
+			<button
+				type="button"
+				onclick={closeMember}
+				class="absolute top-0 right-0 bg-black px-3 py-1 text-sm font-bold text-white"
+				aria-label="Fermer la fiche"
+			>
+				✕
+			</button>
+		</div>
+
+		<div class="space-y-3 p-4 text-sm">
+			<div>
+				<h2 id="member-card-title" class="text-base font-bold break-all">@{member.username}</h2>
+				{#if fullName(member)}
+					<p class="text-gray-600">{fullName(member)}</p>
+				{/if}
+			</div>
+
+			{#if member.email || member.phone || member.mattermostUsername}
+				<dl class="space-y-1">
+					{#if member.email}
+						<div class="flex gap-2">
+							<dt class="w-24 shrink-0 font-bold">Mail</dt>
+							<dd class="min-w-0 break-all"><a href="mailto:{member.email}">{member.email}</a></dd>
+						</div>
+					{/if}
+					{#if member.phone}
+						<div class="flex gap-2">
+							<dt class="w-24 shrink-0 font-bold">Téléphone</dt>
+							<dd><a href={telHref(member.phone)}>{member.phone}</a></dd>
+						</div>
+					{/if}
+					{#if member.mattermostUsername}
+						<div class="flex gap-2">
+							<dt class="w-24 shrink-0 font-bold">Chat</dt>
+							<dd>
+								{#if member.mattermostDmUrl}
+									<a href={member.mattermostDmUrl} target="_blank" rel="noopener">
+										@{member.mattermostUsername}
+									</a>
+								{:else}
+									@{member.mattermostUsername}
+								{/if}
+							</dd>
+						</div>
+					{/if}
+				</dl>
+			{/if}
+
+			{#if socialLinks(member).length > 0}
+				<dl class="space-y-1">
+					{#each socialLinks(member) as link (link.label)}
+						<div class="flex gap-2">
+							<dt class="w-24 shrink-0 font-bold">{link.label}</dt>
+							<dd class="min-w-0 break-all">{link.value}</dd>
+						</div>
+					{/each}
+				</dl>
+			{/if}
+
+			{#if !fullName(member) && !member.email && !member.phone && !member.mattermostUsername && socialLinks(member).length === 0}
+				<p class="text-gray-500">Ce membre n'a partagé que son pseudo.</p>
+			{/if}
+		</div>
+	{/if}
+</dialog>
