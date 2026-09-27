@@ -61,6 +61,8 @@
 	let tagValue = $state(form?.tag ?? data.tag.tag ?? '');
 	// svelte-ignore state_referenced_locally
 	let tagColorValue = $state(form?.tagColor ?? data.tag.tagColor ?? '');
+	// svelte-ignore state_referenced_locally
+	let tagExtendedValue = $state(form?.tagExtended ?? data.tag.tagExtended ?? '');
 	// Live preview swatch — falls back to the trombinoscope's default black badge (see
 	// authentikAdmin.ts's HEX_COLOR_RE comment) when left empty or not yet valid.
 	let tagColorPreview = $derived(/^[0-9a-fA-F]{6}$/.test(tagColorValue) ? `#${tagColorValue}` : '#000000');
@@ -311,6 +313,22 @@
 					bind:value={tagValue}
 					class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-300"
 				/>
+			</div>
+			<div class="mb-4">
+				<label class="mb-1 block text-sm font-bold uppercase" for="tagExtended">Rôle étendu (optionnel)</label>
+				<input
+					id="tagExtended"
+					name="tagExtended"
+					type="text"
+					maxlength="120"
+					placeholder="Président, délégué à la gestion journalière"
+					bind:value={tagExtendedValue}
+					class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-300"
+				/>
+				<p class="mt-1 text-xs text-gray-500">
+					Affiché uniquement sur la fiche du membre dans le trombinoscope, le rôle court restant
+					l'étiquette de sa vignette.
+				</p>
 			</div>
 			<div>
 				<label class="mb-1 block text-sm font-bold uppercase" for="tagColor">Couleur</label>
