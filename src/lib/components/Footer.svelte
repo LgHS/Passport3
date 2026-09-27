@@ -8,7 +8,7 @@
 	}: { status?: SystemStatus | null; mattermostCacheStatus?: MattermostCacheStatus | null } =
 		$props();
 
-	// Mattermost's dot/latency below come from the same live ping as Authentik/Dolibarr
+	// Mattermost's dot/latency below come from the same live ping as Authentik
 	// (status.mattermost). This formats the *separate* concern of how stale the directory-lookup
 	// cache is (mattermost.ts's getMattermostCacheStatus()) — a healthy ping doesn't tell you when
 	// the trombinoscope's email->username map was last actually rebuilt.
@@ -122,13 +122,6 @@
 						aria-hidden="true"
 					></span>
 					Authentik <i>+{status.authentik.latencyMs}ms</i>
-				</span>
-				<span class="flex items-center gap-1.5">
-					<span
-						class="h-2 w-2 shrink-0 rounded-full {status.dolibarr.healthy ? 'bg-green-600' : 'bg-red-600'}"
-						aria-hidden="true"
-					></span>
-					Dolibarr <i>+{status.dolibarr.latencyMs}ms</i>
 				</span>
 				<span class="flex items-center gap-1.5">
 					<span

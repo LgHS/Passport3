@@ -25,20 +25,6 @@ async function checkAuthentik(): Promise<ServiceStatus> {
 	}
 }
 
-async function checkDolibarr(): Promise<ServiceStatus> {
-	const start = Date.now();
-	try {
-		const base = requireEnv('DOLIBARR_URL').replace(/\/+$/, '');
-		const res = await fetch(`${base}/api/index.php/status`, {
-			headers: { DOLAPIKEY: requireEnv('DOLIBARR_API_KEY') },
-			signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS)
-		});
-		return { healthy: res.ok, latencyMs: Date.now() - start };
-	} catch {
-		return { healthy: false, latencyMs: Date.now() - start };
-	}
-}
-
 async function checkMattermost(): Promise<ServiceStatus> {
 	const start = Date.now();
 	try {
@@ -64,13 +50,12 @@ export async function getSystemStatus(): Promise<SystemStatus> {
 		return cached.status;
 	}
 
-	const [authentik, dolibarr, mattermost, database] = await Promise.all([
+	const [authentik, mattermost, database] = await Promise.all([
 		checkAuthentik(),
-		checkDolibarr(),
 		checkMattermost(),
 		checkPostgres()
 	]);
-	const status: SystemStatus = { authentik, dolibarr, mattermost, database };
+	const status: SystemStatus = { authentik, mattermost, database };
 	cached = { status, expiresAt: Date.now() + CACHE_TTL_MS };
 	return status;
 }

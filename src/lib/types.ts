@@ -57,7 +57,6 @@ export interface MattermostCacheStatus {
 
 export interface SystemStatus {
 	authentik: ServiceStatus;
-	dolibarr: ServiceStatus;
 	mattermost: ServiceStatus;
 	database: ServiceStatus;
 }
