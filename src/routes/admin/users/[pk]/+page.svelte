@@ -25,7 +25,6 @@
 	let visible = $state(form?.optin?.visible ?? data.optin.visible);
 
 	const fieldOptins: { key: keyof typeof fieldOptinState; label: string }[] = [
-		{ key: 'showAvatar', label: 'Avatar' },
 		{ key: 'showChat', label: 'Pseudo Chat' },
 		{ key: 'showFirstname', label: 'Prénom' },
 		{ key: 'showLastname', label: 'Nom' },
@@ -34,7 +33,6 @@
 	];
 	// svelte-ignore state_referenced_locally
 	let fieldOptinState = $state({
-		showAvatar: form?.optin?.showAvatar ?? data.optin.showAvatar,
 		showChat: form?.optin?.showChat ?? data.optin.showChat,
 		showFirstname: form?.optin?.showFirstname ?? data.optin.showFirstname,
 		showLastname: form?.optin?.showLastname ?? data.optin.showLastname,
