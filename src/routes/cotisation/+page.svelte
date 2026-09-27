@@ -329,7 +329,7 @@
 					{#each displayedInvoices as invoice (invoice.id)}
 						<div class="border border-black p-3 text-sm">
 							<div class="flex items-center justify-between gap-2">
-								<p class="font-bold">{invoice.ref} <span class="text-gray-500">({invoice.type})</span></p>
+								<p class="font-bold">{invoice.ref} <span class="text-gray-600">({invoice.type})</span></p>
 								{#if invoice.abandoned}
 									<span
 										title="Facture abandonnée, contactez compta@lghs.be"
@@ -419,16 +419,16 @@
 
 	<section class="w-full md:w-1/3">
 		<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Infos Bancaires</h2>
-		<p class="mb-6 text-sm leading-relaxed text-gray-600">
+		<p class="mb-6 text-sm text-gray-600">
 			Renseigner vos coordonnées bancaires facilite l'automatisation des tâches de comptabilité.
 		</p>
 
 		{#if data.unavailable}
-			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-500">
+			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
 				Service temporairement indisponible. Réessayez dans quelques instants.
 			</p>
 		{:else if data.bankInfo === null}
-			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-500">
+			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
 				Compte introuvable.
 			</p>
 		{:else}
@@ -468,7 +468,6 @@
 					<label class="mb-1 block text-sm font-bold uppercase" for="ibanPerso">
 						IBAN personnel
 					</label>
-					<p class="mb-1 text-xs text-gray-500">{ibanPersoTooltip(data.bankInfo.isPro)}</p>
 					<input
 						id="ibanPerso"
 						name="ibanPerso"
@@ -478,6 +477,7 @@
 						oninput={(e) => (ibanPersoValue = formatIbanInput(e.currentTarget.value))}
 						class="w-full border border-black px-3 py-2 font-mono text-sm uppercase placeholder:text-gray-300 placeholder:normal-case"
 					/>
+					<p class="mt-1 text-xs text-gray-500">{ibanPersoTooltip(data.bankInfo.isPro)}</p>
 				</div>
 
 				{#if data.bankInfo.isPro}
@@ -485,7 +485,6 @@
 						<label class="mb-1 block text-sm font-bold uppercase" for="ibanPro">
 							IBAN professionnel
 						</label>
-						<p class="mb-1 text-xs text-gray-500">{IBAN_PRO_TOOLTIP}</p>
 						<input
 							id="ibanPro"
 							name="ibanPro"
@@ -495,13 +494,14 @@
 							oninput={(e) => (ibanProValue = formatIbanInput(e.currentTarget.value))}
 							class="w-full border border-black px-3 py-2 font-mono text-sm uppercase placeholder:text-gray-300 placeholder:normal-case"
 						/>
+						<p class="mt-1 text-xs text-gray-500">{IBAN_PRO_TOOLTIP}</p>
 					</div>
 				{/if}
 
 				<button
 					type="submit"
 					disabled={submittingBankInfo}
-					class="btn-primary px-4 py-2 disabled:opacity-50"
+					class="btn-primary px-4 py-2 text-sm disabled:opacity-50"
 				>
 					{submittingBankInfo ? 'Enregistrement…' : 'Enregistrer'}
 				</button>

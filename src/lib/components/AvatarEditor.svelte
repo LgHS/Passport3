@@ -286,7 +286,7 @@
 				/>
 			</button>
 
-			<label class="mt-4 block text-xs font-bold uppercase" for="avatar-zoom">Zoom</label>
+			<label class="mt-4 mb-1 block text-sm font-bold uppercase" for="avatar-zoom">Zoom</label>
 			<input
 				id="avatar-zoom"
 				type="range"

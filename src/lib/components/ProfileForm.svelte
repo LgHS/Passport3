@@ -424,7 +424,7 @@
 		{/if}
 	</div>
 
-	<button type="submit" disabled={submitting} class="btn-primary px-6 py-3 disabled:opacity-50">
+	<button type="submit" disabled={submitting} class="btn-primary px-4 py-2 text-sm disabled:opacity-50">
 		{submitting ? 'Enregistrement…' : 'Enregistrer'}
 	</button>
 </form>

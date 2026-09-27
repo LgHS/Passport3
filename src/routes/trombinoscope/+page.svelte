@@ -215,7 +215,7 @@
 
 				{#if fieldOptinState.showMail}
 					<div class="mt-3">
-						<label class="mb-1 block text-xs font-bold uppercase text-gray-600" for="trombiEmail">
+						<label class="mb-1 block text-sm font-bold uppercase" for="trombiEmail">
 							Email affiché (optionnel)
 						</label>
 						<input
