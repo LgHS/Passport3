@@ -25,9 +25,9 @@
 			Source : <span class="font-mono">{data.dolibarrUrl ?? '(DOLIBARR_URL non configuré)'}</span>
 		</p>
 		<p class="mt-2 text-gray-600">
-			Importe les tiers, adhérents et souscriptions (voir <span class="font-mono">docs/compta.md</span> pour la
-			correspondance). Rejouable : les lignes déjà importées sont mises à jour, pas dupliquées. Les factures
-			viendront avec le module Factures.
+			Importe les tiers, adhérents, souscriptions et factures (clients et fournisseurs) avec leurs PDF (voir
+			<span class="font-mono">docs/compta.md</span> pour la correspondance). Rejouable : les lignes déjà importées
+			sont mises à jour, pas dupliquées.
 		</p>
 		<p class="mt-2 text-gray-600">
 			Actuellement : {data.counts.tiers} tiers ({data.counts.imported} venant de Dolibarr), {data.counts.cotisations}
@@ -69,8 +69,8 @@
 		<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">
 			Résultat {r.dryRun ? '(simulation — annulée)' : ''}
 		</h2>
-		<div class="mb-4 grid gap-2 sm:grid-cols-4">
-			{#each [{ label: 'Tiers', counts: r.tiers }, { label: 'Liens', counts: r.liens }, { label: 'Cotisations', counts: r.cotisations }] as row (row.label)}
+		<div class="mb-4 grid gap-2 sm:grid-cols-3">
+			{#each [{ label: 'Tiers', counts: r.tiers }, { label: 'Liens', counts: r.liens }, { label: 'Cotisations', counts: r.cotisations }, { label: 'Factures', counts: r.factures }] as row (row.label)}
 				<div class="border border-black p-3 text-sm">
 					<p class="font-bold uppercase">{row.label}</p>
 					<p>{row.counts.created} créé(s), {row.counts.updated} mis à jour</p>
@@ -79,6 +79,10 @@
 			<div class="border border-black p-3 text-sm">
 				<p class="font-bold uppercase">Comptes Authentik</p>
 				<p>{r.authentikLinked} lié(s) par email</p>
+			</div>
+			<div class="border border-black p-3 text-sm">
+				<p class="font-bold uppercase">PDF archivés</p>
+				<p>{r.pdfs}{r.dryRun ? ' (téléchargés seulement à l’application)' : ''}</p>
 			</div>
 		</div>
 		{#if r.warnings.length > 0}

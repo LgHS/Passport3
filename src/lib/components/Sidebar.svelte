@@ -352,6 +352,10 @@
 							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="7" r="3" /><path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round" /></svg>
 							Tiers
 						</a>
+						<a href="/compta/factures" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/factures')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 3.5h7l3 3v10H5z" stroke-linejoin="round" /><path d="M12 3.5v3h3 M7.5 10h5 M7.5 13h5" stroke-linecap="round" /></svg>
+							Factures
+						</a>
 						<a href="/compta/parametres" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/parametres')}">
 							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="2.5" /><path d="M10 3.5 V5.5 M10 14.5 V16.5 M3.5 10 H5.5 M14.5 10 H16.5 M5.6 5.6 L7 7 M13 13 L14.4 14.4 M5.6 14.4 L7 13 M13 7 L14.4 5.6" stroke-linecap="round" /></svg>
 							Paramètres

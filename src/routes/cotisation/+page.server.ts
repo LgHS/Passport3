@@ -9,7 +9,7 @@ import {
 	updateTiersIban,
 	type Tiers
 } from '$lib/server/compta/tiers';
-import { getThirdPartyInvoices, DolibarrUnavailableError, type DolibarrInvoice } from '$lib/server/dolibarr';
+import { listFactures, type Facture } from '$lib/server/compta/factures';
 import { isValidIban, maskIban, normalizeIban } from '$lib/server/bankValidation';
 import { logAuditEvent } from '$lib/server/auditLog';
 import { authentikPk, displayName } from '$lib/types';
@@ -28,14 +28,10 @@ function bankOrganisation(t: Tiers) {
 	return { id: t.id, nom: tiersDisplayName(t), iban: t.iban };
 }
 
-// Distinct from "no tiers found" below — see feedback_distinguish-fetch-failure-from-empty. A
-// member with genuinely no tiers and a member Postgres couldn't serve for both end up with
-// `status: null`, but only `unavailable: true` means "we don't know yet, ask again" rather than
-// "confirmed: nothing to show here". Postgres outages are reported by handleError for this page,
-// so `unavailable` here now only concerns the invoices, still read from Dolibarr (phase 1, see
-// docs/compta.md).
+// "No tiers found" is a plausible business state (not yet registered in the books), rendered by
+// the page as "compte introuvable"; a Postgres outage, by contrast, throws and is reported by
+// handleError — so this page no longer needs an `unavailable` flag of its own.
 const NO_MEMBER_RESULT = {
-	unavailable: false,
 	status: null,
 	datefin: null,
 	finGrace: null,
@@ -44,25 +40,37 @@ const NO_MEMBER_RESULT = {
 	gaps: [],
 	isInactive: false,
 	bankInfo: null,
-	invoices: [] as DolibarrInvoice[],
-	invoicesUnavailable: false
+	invoices: [] as MemberInvoice[]
 };
 
-// Phase-1 bridge: invoices are still Dolibarr's until the factures table lands. They hang off
-// Dolibarr third parties, which the import kept on each tiers as dolibarr_soc_id — the member's own
-// (a person who was invoiced directly) and the organisations they administer.
-async function loadDolibarrInvoices(tiers: Tiers, organisations: Tiers[]) {
-	const socIds = [tiers, ...organisations].map((t) => t.dolibarrSocId).filter((id): id is number => id !== null);
-	try {
-		const lists = await Promise.all(socIds.map((id) => getThirdPartyInvoices(id)));
-		const invoices = lists.flat().sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0));
-		return { invoices, invoicesUnavailable: false };
-	} catch (err) {
-		if (err instanceof DolibarrUnavailableError) {
-			return { invoices: [] as DolibarrInvoice[], invoicesUnavailable: true };
-		}
-		throw err;
-	}
+// What the page renders per invoice — no storage path, nothing internal.
+export interface MemberInvoice {
+	id: number;
+	ref: string;
+	date: Date | null;
+	amount: number;
+	paid: boolean;
+	abandoned: boolean;
+	type: string;
+	downloadable: boolean;
+}
+
+// The member's own invoices and those of the organisations they administer. Drafts are never
+// shown: their amount can still change and they have no PDF yet.
+async function loadInvoices(tiers: Tiers, organisations: Tiers[]): Promise<MemberInvoice[]> {
+	const factures = await listFactures({ sens: 'emise', tiersIds: [tiers, ...organisations].map((t) => t.id) });
+	return factures
+		.filter((f) => f.statut !== 'brouillon')
+		.map((f: Facture) => ({
+			id: f.id,
+			ref: f.numero ?? f.referenceExterne ?? `#${f.id}`,
+			date: f.dateEmission,
+			amount: f.total,
+			paid: f.statut === 'payee',
+			abandoned: f.statut === 'annulee',
+			type: f.type === 'note_de_credit' ? 'Note de crédit' : 'Facture',
+			downloadable: f.hasPdf && f.statut !== 'annulee'
+		}));
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -78,10 +86,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		getSituationForTiers(tiers),
 		listOrganisationsAdministrees(tiers.id)
 	]);
-	const { invoices, invoicesUnavailable } = await loadDolibarrInvoices(tiers, organisations);
+	const invoices = await loadInvoices(tiers, organisations);
 
 	return {
-		unavailable: false,
 		status: situation.status,
 		datefin: situation.datefin,
 		finGrace: situation.finGrace,
@@ -95,8 +102,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			// and none of this section when the list is empty (a "classic" member).
 			organisations: organisations.map(bankOrganisation)
 		},
-		invoices,
-		invoicesUnavailable
+		invoices
 	};
 };
 

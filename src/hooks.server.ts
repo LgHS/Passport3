@@ -4,6 +4,7 @@ import { OidcUnavailableError, verifyIdToken } from '$lib/server/authentik';
 import { clearSessionCookie, SESSION_COOKIE } from '$lib/server/session';
 import { startBirthdayScheduler } from '$lib/server/birthdayScheduler';
 import { startTaskReminderScheduler } from '$lib/server/taskReminders';
+import { startFactureScheduler } from '$lib/server/compta/factureScheduler';
 import { DATABASE_UNAVAILABLE_MESSAGE, isDatabaseUnavailable } from '$lib/server/db';
 import { requireAdmin } from '$lib/server/auth';
 
@@ -11,6 +12,7 @@ import { requireAdmin } from '$lib/server/auth';
 // which runs on every request.
 startBirthdayScheduler();
 startTaskReminderScheduler();
+startFactureScheduler();
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const sessionCookie = event.cookies.get(SESSION_COOKIE);
