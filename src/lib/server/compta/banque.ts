@@ -5,6 +5,7 @@ import { parseIsoDate, parseMoney, toIsoDate } from './dates';
 import { getFacture, listFactures, marquerPayee, type Facture } from './factures';
 import { createCotisation, getCotisation } from './cotisations';
 import { getTiers, tiersDisplayName, type Tiers } from './tiers';
+import { getNoteDeFrais, listNotesDeFrais, type NoteDeFrais } from './notesDeFrais';
 import type { MouvementImporte } from './belfiusCsv';
 
 // Bank and cash accounts, their movements, internal transfers, and the matching (lettrage) of
@@ -316,6 +317,8 @@ interface LettrageRow {
 	facture_tiers_id: number | null;
 	cotisation_tiers_id: number | null;
 	cotisation_debut: string | null;
+	note_tiers_id: number | null;
+	note_libelle: string | null;
 	tiers_nom: string | null;
 	tiers_prenom: string | null;
 	tiers_nature: 'personne_physique' | 'personne_morale' | null;
@@ -331,6 +334,9 @@ function rowToLettrage(r: LettrageRow): Lettrage {
 	} else if (r.cible_type === 'cotisation') {
 		cibleLabel = `Cotisation${tiers ? ` ${tiers}` : ''}${r.cotisation_debut ? ` (${r.cotisation_debut.slice(0, 7)})` : ''}`;
 		cibleHref = r.cotisation_tiers_id ? `/compta/tiers/${r.cotisation_tiers_id}` : null;
+	} else if (r.cible_type === 'note_de_frais') {
+		cibleLabel = `Note de frais${tiers ? ` ${tiers}` : ''}${r.note_libelle ? ` — ${r.note_libelle}` : ''}`;
+		cibleHref = `/compta/notes-de-frais`;
 	}
 	return {
 		id: r.id,
@@ -348,11 +354,13 @@ const LETTRAGE_SELECT = `
 	SELECT l.id, l.mouvement_id, l.cible_type, l.cible_id, l.montant, l.libelle,
 	       f.numero AS facture_numero, f.tiers_id AS facture_tiers_id,
 	       co.tiers_id AS cotisation_tiers_id, co.debut::text AS cotisation_debut,
+	       n.tiers_id AS note_tiers_id, n.libelle AS note_libelle,
 	       t.nom AS tiers_nom, t.prenom AS tiers_prenom, t.nature AS tiers_nature
 	FROM lettrages l
 	LEFT JOIN factures f ON l.cible_type = 'facture' AND f.id = l.cible_id
 	LEFT JOIN cotisations co ON l.cible_type = 'cotisation' AND co.id = l.cible_id
-	LEFT JOIN tiers t ON t.id = COALESCE(f.tiers_id, co.tiers_id)
+	LEFT JOIN notes_de_frais n ON l.cible_type = 'note_de_frais' AND n.id = l.cible_id
+	LEFT JOIN tiers t ON t.id = COALESCE(f.tiers_id, co.tiers_id, n.tiers_id)
 `;
 
 export async function listLettrages(mouvementId: number): Promise<Lettrage[]> {
@@ -406,7 +414,12 @@ export async function lettrer(mouvementId: number, cible: CibleInput, montant: n
 			if (!cotisation || cotisation.statut !== 'attendue') throw new BanqueError('Seule une cotisation en attente de paiement peut être lettrée.');
 			if (mouvement.montant <= 0) throw new BanqueError('Une cotisation se lettre avec une entrée d’argent.');
 		} else if (cible.type === 'note_de_frais') {
-			throw new BanqueError('Les notes de frais arrivent en phase 5.');
+			const note = cible.id ? await getNoteDeFrais(cible.id) : null;
+			if (!note || note.statut !== 'acceptee') throw new BanqueError('Seule une note de frais acceptée, non remboursée, peut être lettrée.');
+			if (mouvement.montant >= 0) throw new BanqueError('Un remboursement de frais est une sortie d’argent.');
+			const deja = await totalLettre(tx, 'note_de_frais', note.id);
+			const reste = Math.round((note.montant - deja) * 100) / 100;
+			if (montant > reste + 0.005) throw new BanqueError(`Il ne reste que ${reste.toFixed(2)} € à rembourser sur cette note.`);
 		}
 
 		const [row] = await tx<{ id: number }[]>`
@@ -422,6 +435,11 @@ export async function lettrer(mouvementId: number, cible: CibleInput, montant: n
 			}
 		} else if (cible.type === 'cotisation' && cible.id) {
 			await tx`UPDATE cotisations SET statut = 'active', paye_le = ${toIsoDate(mouvement.dateValeur)} WHERE id = ${cible.id} AND statut = 'attendue'`;
+		} else if (cible.type === 'note_de_frais' && cible.id) {
+			const note = (await getNoteDeFrais(cible.id)) as NoteDeFrais;
+			if ((await totalLettre(tx, 'note_de_frais', note.id)) + 0.005 >= note.montant) {
+				await tx`UPDATE notes_de_frais SET statut = 'remboursee', remboursee_le = ${toIsoDate(mouvement.dateValeur)} WHERE id = ${note.id}`;
+			}
 		}
 		return row.id;
 	});
@@ -446,6 +464,11 @@ export async function delettrer(lettrageId: number): Promise<void> {
 		} else if (l.cible_type === 'cotisation') {
 			if ((await totalLettre(tx, 'cotisation', l.cible_id)) === 0) {
 				await tx`UPDATE cotisations SET statut = 'attendue', paye_le = NULL WHERE id = ${l.cible_id} AND statut = 'active' AND facture_id IS NULL`;
+			}
+		} else if (l.cible_type === 'note_de_frais') {
+			const note = await getNoteDeFrais(l.cible_id);
+			if (note?.statut === 'remboursee' && (await totalLettre(tx, 'note_de_frais', note.id)) + 0.005 < note.montant) {
+				await tx`UPDATE notes_de_frais SET statut = 'acceptee', remboursee_le = NULL WHERE id = ${note.id}`;
 			}
 		}
 	});
@@ -519,6 +542,8 @@ export async function autoLettrer(mouvementIds: number[]): Promise<number> {
 export interface Suggestions {
 	// Unpaid invoices in the right direction, the counterparty's own first.
 	factures: Facture[];
+	// Accepted, unrefunded expense claims — for money out only.
+	notes: NoteDeFrais[];
 	// Who the counterparty IBAN belongs to, if we know it.
 	tiers: Tiers | null;
 }
@@ -534,5 +559,6 @@ export async function suggestionsPour(mouvement: Mouvement): Promise<Suggestions
 	const factures = (await listFactures({ sens, statut: 'validee' })).sort(
 		(a, b) => Number(b.tiersId === tiers?.id) - Number(a.tiersId === tiers?.id)
 	);
-	return { factures, tiers };
+	const notes = mouvement.montant < 0 ? await listNotesDeFrais({ statut: 'acceptee' }) : [];
+	return { factures, notes, tiers };
 }

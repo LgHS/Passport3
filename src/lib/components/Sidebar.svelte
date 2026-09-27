@@ -66,7 +66,7 @@
 	// them: Incidents must always be one glance away.
 	const SECTIONS_STORAGE_KEY = 'sidebar-closed-sections';
 	const SECTION_PATHS: Record<string, string[]> = {
-		account: ['/profile', '/cotisation', '/badge', '/permissions', '/github'],
+		account: ['/profile', '/cotisation', '/notes-de-frais', '/badge', '/permissions', '/github'],
 		hackerspace: ['/trombinoscope', '/tasks', '/wishlist'],
 		admin: ['/admin'],
 		compta: ['/compta']
@@ -240,6 +240,13 @@
 						</svg>
 						Cotisation
 					</a>
+					<a href="/notes-de-frais" onclick={closeOverlay} class="{itemClass} {itemStateClass('/notes-de-frais')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path d="M5 3.5h7l3 3v10H5z" stroke-linejoin="round" />
+							<path d="M12 3.5v3h3 M7.5 10h5 M7.5 13h5" stroke-linecap="round" />
+						</svg>
+						Notes de frais
+					</a>
 					<a href="/badge" onclick={closeOverlay} class="{itemClass} {itemStateClass('/badge')}">
 						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
 							<rect x="5" y="2" width="10" height="16" rx="2" />
@@ -359,6 +366,14 @@
 						<a href="/compta/banque" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/banque')}">
 							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8 L10 3.5 L17 8 Z" stroke-linejoin="round" /><path d="M5 8 V14.5 M10 8 V14.5 M15 8 V14.5 M3 16.5 H17" stroke-linecap="round" /></svg>
 							Banque &amp; caisse
+						</a>
+						<a href="/compta/notes-de-frais" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/notes-de-frais')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5.5 3.5 H14.5 V16.5 L12.5 15 L10 16.5 L7.5 15 L5.5 16.5 Z" stroke-linejoin="round" /><path d="M8 7.5 H12 M8 10.5 H12" stroke-linecap="round" /></svg>
+							Notes de frais
+						</a>
+						<a href="/compta/journal" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/journal')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4.5 3.5 H15.5 V16.5 H4.5 Z" stroke-linejoin="round" /><path d="M7.5 3.5 V16.5 M10 7.5 H13 M10 10.5 H13" stroke-linecap="round" /></svg>
+							Journal &amp; comptes
 						</a>
 						<a href="/compta/parametres" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/parametres')}">
 							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="2.5" /><path d="M10 3.5 V5.5 M10 14.5 V16.5 M3.5 10 H5.5 M14.5 10 H16.5 M5.6 5.6 L7 7 M13 13 L14.4 14.4 M5.6 14.4 L7 13 M13 7 L14.4 5.6" stroke-linecap="round" /></svg>

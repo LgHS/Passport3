@@ -17,6 +17,8 @@ export interface ComptaSettings {
 	mentionTva: string;
 	// Default due date = issue date + this many days.
 	delaiPaiementJours: number;
+	// Whether adhesionSync.ts may deactivate/reactivate Authentik accounts — see migration 14.
+	desactivationAuto: boolean;
 }
 
 interface SettingsRow {
@@ -28,13 +30,14 @@ interface SettingsRow {
 	emetteur_iban: string;
 	mention_tva: string;
 	delai_paiement_jours: number;
+	desactivation_auto: boolean;
 }
 
 export async function getComptaSettings(): Promise<ComptaSettings> {
 	const sql = await getDb();
 	const [r] = await sql<SettingsRow[]>`
 		SELECT delai_grace_jours, emetteur_nom, emetteur_adresse, emetteur_numero_entreprise, emetteur_email,
-		       emetteur_iban, mention_tva, delai_paiement_jours
+		       emetteur_iban, mention_tva, delai_paiement_jours, desactivation_auto
 		FROM compta_settings WHERE id = 1
 	`;
 	return {
@@ -45,7 +48,8 @@ export async function getComptaSettings(): Promise<ComptaSettings> {
 		emetteurEmail: r.emetteur_email,
 		emetteurIban: r.emetteur_iban,
 		mentionTva: r.mention_tva,
-		delaiPaiementJours: r.delai_paiement_jours
+		delaiPaiementJours: r.delai_paiement_jours,
+		desactivationAuto: r.desactivation_auto
 	};
 }
 
@@ -55,7 +59,8 @@ export async function updateComptaSettings(s: ComptaSettings): Promise<void> {
 		UPDATE compta_settings SET
 			delai_grace_jours = ${s.delaiGraceJours}, emetteur_nom = ${s.emetteurNom}, emetteur_adresse = ${s.emetteurAdresse},
 			emetteur_numero_entreprise = ${s.emetteurNumeroEntreprise}, emetteur_email = ${s.emetteurEmail},
-			emetteur_iban = ${s.emetteurIban}, mention_tva = ${s.mentionTva}, delai_paiement_jours = ${s.delaiPaiementJours}
+			emetteur_iban = ${s.emetteurIban}, mention_tva = ${s.mentionTva}, delai_paiement_jours = ${s.delaiPaiementJours},
+			desactivation_auto = ${s.desactivationAuto}
 		WHERE id = 1
 	`;
 }

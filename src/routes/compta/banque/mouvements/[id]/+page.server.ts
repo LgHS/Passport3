@@ -42,13 +42,14 @@ export const load: PageServerLoad = async ({ params }) => {
 			total: f.total,
 			type: f.type
 		})),
+		notes: suggestions.notes.map((n) => ({ id: n.id, tiersNom: n.tiersNom, tiersId: n.tiersId, libelle: n.libelle, montant: n.montant })),
 		tiersSuggere: suggestions.tiers ? { id: suggestions.tiers.id, nom: tiersDisplayName(suggestions.tiers), nature: suggestions.tiers.nature } : null,
 		personnes: personnes.map((p) => ({ id: p.id, nom: tiersDisplayName(p) }))
 	};
 };
 
 function parseCible(value: unknown): CibleType | null {
-	return value === 'facture' || value === 'cotisation' || value === 'autre' ? value : null;
+	return value === 'facture' || value === 'cotisation' || value === 'note_de_frais' || value === 'autre' ? value : null;
 }
 
 export const actions: Actions = {

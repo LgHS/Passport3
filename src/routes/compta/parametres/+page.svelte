@@ -46,6 +46,15 @@
 			</p>
 			<label class={labelClass} for="delaiGraceJours">Délai de grâce (jours)</label>
 			<input id="delaiGraceJours" name="delaiGraceJours" type="number" min="0" max="365" bind:value={v.delaiGraceJours} class="w-32 border border-black px-3 py-2 text-sm" />
+
+			<label class="mt-4 flex items-start gap-3 text-sm">
+				<input type="checkbox" name="desactivationAuto" bind:checked={v.desactivationAuto} class="mt-1" />
+				<span>
+					<span class="font-bold">Désactiver automatiquement le compte Authentik</span> des membres dont la cotisation est
+					expirée (délai de grâce dépassé), et le réactiver dès qu'ils sont à nouveau en ordre. Vérifié toutes les six
+					heures ; les admins et trésoriers ne sont jamais désactivés ; chaque action est journalisée dans l'audit.
+				</span>
+			</label>
 		</div>
 
 		<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Factures émises</h2>
