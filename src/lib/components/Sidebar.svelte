@@ -4,6 +4,7 @@
 	import {
 		displayName,
 		isAdmin,
+		isTresorier,
 		COTISATION_STATUS_LABEL,
 		COTISATION_STATUS_COLOR,
 		type AppUser,
@@ -57,6 +58,9 @@
 			page.url.pathname.startsWith('/admin/invite')
 	);
 
+	// "Tableau de bord" is /compta itself only; every page under it has its own entry.
+	const comptaHomeActive = $derived(page.url.pathname === '/compta');
+
 	// Foldable menu sections, open by default. Only the ones a member closed are remembered, per
 	// browser (same convenience-only storage as the collapsed sidebar below). Sécurité isn't one of
 	// them: Incidents must always be one glance away.
@@ -64,7 +68,8 @@
 	const SECTION_PATHS: Record<string, string[]> = {
 		account: ['/profile', '/cotisation', '/badge', '/permissions', '/github'],
 		hackerspace: ['/trombinoscope', '/tasks', '/wishlist'],
-		admin: ['/admin']
+		admin: ['/admin'],
+		compta: ['/compta']
 	};
 	let closedSections = $state<Record<string, boolean>>({});
 
@@ -330,6 +335,30 @@
 						<a href="/admin/audit" onclick={closeOverlay} class="{itemClass} {itemStateClass('/admin/audit')}">
 							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="6.5" /><path d="M10 6.5 V10 L12.5 11.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
 							Audit
+						</a>
+					</div>
+				{/if}
+			{/if}
+
+			{#if isTresorier(user)}
+				{@render foldHeader('compta', 'Compta')}
+				{#if !closedSections.compta}
+					<div class="flex flex-col gap-0.5" transition:slide={{ duration: foldDuration }}>
+						<a href="/compta" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta', comptaHomeActive)}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3.5" y="3.5" width="13" height="13" rx="1" /><path d="M6.5 13.5 V10.5 M10 13.5 V6.5 M13.5 13.5 V9" stroke-linecap="round" /></svg>
+							Tableau de bord
+						</a>
+						<a href="/compta/tiers" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/tiers')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="7" r="3" /><path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round" /></svg>
+							Tiers
+						</a>
+						<a href="/compta/parametres" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/parametres')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="2.5" /><path d="M10 3.5 V5.5 M10 14.5 V16.5 M3.5 10 H5.5 M14.5 10 H16.5 M5.6 5.6 L7 7 M13 13 L14.4 14.4 M5.6 14.4 L7 13 M13 7 L14.4 5.6" stroke-linecap="round" /></svg>
+							Paramètres
+						</a>
+						<a href="/compta/import" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/import')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3.5 V12 M6.5 8.5 L10 12 L13.5 8.5" stroke-linecap="round" stroke-linejoin="round" /><path d="M4 14 V16.5 H16 V14" stroke-linecap="round" stroke-linejoin="round" /></svg>
+							Import Dolibarr
 						</a>
 					</div>
 				{/if}
