@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:25-alpine AS base
+FROM node:26-alpine AS base
 WORKDIR /app
 # Node 25+ no longer bundles corepack, so it's installed from npm first. `--force` because the image
 # still ships a standalone /usr/local/bin/yarn that npm would otherwise refuse to overwrite (EEXIST).
@@ -25,7 +25,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
 # ---- runtime ----
-FROM node:25-alpine AS runner
+FROM node:26-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8030
