@@ -15,7 +15,8 @@ import {
 	updateEmergencyContacts,
 	MAX_EMERGENCY_CONTACTS,
 	getRfidUid,
-	regenerateRfidUid
+	regenerateRfidUid,
+	listMfaDevices
 } from '$lib/server/authentikAdmin';
 import { lookupMattermostUsername, buildMattermostDmUrl } from '$lib/server/mattermost';
 import {
@@ -39,7 +40,7 @@ function resolvePk(paramPk: string): number {
 export const load: PageServerLoad = async ({ params }) => {
 	const pk = resolvePk(params.pk);
 
-	const [profile, optin, tag, groups, emergencyContacts, rfidUid] = await Promise.all([
+	const [profile, optin, tag, groups, emergencyContacts, rfidUid, mfaDevices] = await Promise.all([
 		getUserProfile(pk).catch(() => null),
 		getTrombinoscopeOptin(pk),
 		getTrombinoscopeTag(pk),
@@ -55,7 +56,9 @@ export const load: PageServerLoad = async ({ params }) => {
 		// getRfidUid's own return already uses `null` to mean "no badge assigned" — that's a
 		// legitimate, distinct value from a fetch failure, so the failure case is `undefined` here
 		// rather than reusing `null` and collapsing the two meanings together.
-		getRfidUid(pk).catch(() => undefined)
+		getRfidUid(pk).catch(() => undefined),
+		// Same reasoning — null (not []) on failure, so "couldn't check" never reads as "no MFA".
+		listMfaDevices(pk).catch(() => null)
 	]);
 	if (!profile) {
 		error(404, 'Membre introuvable.');
@@ -81,6 +84,9 @@ export const load: PageServerLoad = async ({ params }) => {
 		emergencyContacts,
 		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
 		rfidUid,
+		// Distinct device types only (e.g. "Application TOTP, Codes de secours"): which kinds of MFA
+		// the member has matters here, not how many of each.
+		mfaTypes: mfaDevices ? [...new Set(mfaDevices.map((device) => device.type))] : null,
 		hasLocalAvatar: hasUploadedAvatar(profile.email)
 	};
 };
