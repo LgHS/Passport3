@@ -26,12 +26,15 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          # Same major as the Dockerfile's base image, so the type-check runs on the Node version
+          # that actually runs in production.
+          node-version: 26
 
       # Same mechanism as the Dockerfile's own `RUN corepack enable` — respects the pnpm version
       # pinned in package.json's `packageManager` field, no separate pnpm-specific action needed.
+      # Node 25+ no longer bundles corepack, so it's installed from npm first, as in the Dockerfile.
       - name: Enable pnpm via corepack
-        run: corepack enable
+        run: npm install -g --force corepack && corepack enable
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
