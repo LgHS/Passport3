@@ -145,7 +145,11 @@ société. La route `/cotisation/invoice/[id]` garde son contrôle « c'est bien
   pour un montant. Une ligne par affectation : un paiement couvre plusieurs factures, un paiement
   partiel est possible. Une facture passe à `payee` quand la somme lettrée atteint son total ;
   une cotisation `attendue` passe à `active`.
-- Import : **CSV Belfius** d'abord. CODA (commun aux banques belges) ensuite si utile.
+- Import : **CSV Belfius** d'abord (export « CSV » de Belfius Direct Net : `Compte;Date de
+  comptabilisation;N° d'extrait;N° de transaction;Compte contrepartie;Nom contrepartie…;Transaction;
+  Date valeur;Montant;Devise;…;Communications`, point-virgule, montants `1.234,56`, dates
+  `jj/mm/aaaa` ; le lecteur repère l'en-tête par ses intitulés et tolère un préambule). CODA
+  (commun aux banques belges) ensuite si utile.
 - Auto-lettrage à l'import sur la communication structurée ; le reste est proposé à la
   trésorerie, qui tranche (c'est là qu'une cotisation `libre` naît).
 
@@ -183,7 +187,7 @@ application ; il est idempotent (clefs `dolibarr_*_id`) et peut être rejoué. C
 | tiers `client` / `fournisseur` | `est_client` / `est_fournisseur` |
 | facture client (statut ≥ validée) | facture `emise`, PDF archivé, numéro Dolibarr conservé dans `reference_externe` |
 | facture fournisseur | facture `recue`, numéro du fournisseur, montant TTC payé |
-| compte bancaire | `comptes` (phase 3) |
+| compte bancaire (type 1 banque, 2 caisse) et ses écritures | `comptes` et `mouvements` (`external_id` = `dolibarr-<id>`) |
 
 Le rapprochement adhérent ↔ compte Authentik se fait par email à l'import (c'est tout ce que
 Dolibarr a), puis `authentik_pk` fait foi.
@@ -195,6 +199,8 @@ Dolibarr a), puis `authentik_pk` fait foi.
 2. **Factures émises et reçues** : lignes, numérotation, PDF, notes de crédit, abonnements et
    génération planifiée ; import des factures Dolibarr ; plus rien ne lit Dolibarr au runtime,
    `dolibarr.ts` ne sert plus qu'à l'import. *(livré)*
-3. **Banque et caisse** : comptes, mouvements, import Belfius, lettrage, virements internes.
+3. **Banque et caisse** : comptes, mouvements, import Belfius, lettrage (automatique sur la
+   communication structurée, manuel sinon), virements internes ; import des comptes et écritures
+   Dolibarr. *(livré)*
 4. **UBL**, factures reçues, SMTP.
 5. Notes de frais, livre journal et comptes annuels, désactivation Authentik automatique.

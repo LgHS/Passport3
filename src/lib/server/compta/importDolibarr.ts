@@ -26,6 +26,8 @@ export interface ImportReport {
 	liens: ImportCounts;
 	cotisations: ImportCounts;
 	factures: ImportCounts;
+	comptes: ImportCounts;
+	mouvements: ImportCounts;
 	// Invoice PDFs fetched from Dolibarr and archived (never on a dry run).
 	pdfs: number;
 	// Persons whose Authentik account got linked by email during this run.
@@ -158,20 +160,27 @@ export async function importDolibarr(dryRun: boolean): Promise<ImportReport> {
 		liens: { created: 0, updated: 0 },
 		cotisations: { created: 0, updated: 0 },
 		factures: { created: 0, updated: 0 },
+		comptes: { created: 0, updated: 0 },
+		mouvements: { created: 0, updated: 0 },
 		pdfs: 0,
 		authentikLinked: 0,
 		warnings: []
 	};
 
 	// Everything read up front, before the transaction opens — no HTTP inside the transaction.
-	const [types, members, thirdParties, invoices, supplierInvoices, authentikUsers] = await Promise.all([
+	const [types, members, thirdParties, invoices, supplierInvoices, bankAccounts, authentikUsers] = await Promise.all([
 		getMemberTypes(),
 		fetchJson<RawMember[]>('members?limit=0'),
 		fetchJson<RawThirdParty[]>('thirdparties?limit=0'),
 		fetchJson<RawInvoice[]>('invoices?limit=0'),
 		fetchJson<RawSupplierInvoice[]>('supplierinvoices?limit=0'),
+		fetchJson<RawBankAccount[]>('bankaccounts'),
 		listUsers()
 	]);
+	const bankLinesByAccount = new Map<number, RawBankLine[]>();
+	for (const b of bankAccounts) {
+		bankLinesByAccount.set(Number(b.id), await fetchJson<RawBankLine[]>(`bankaccounts/${Number(b.id)}/lines?limit=0`));
+	}
 	const exemptTypeIds = new Set(types.filter((t) => !t.subscriptionRequired).map((t) => t.id));
 	const thirdPartyById = new Map(thirdParties.map((tp) => [Number(tp.id), tp]));
 	const subscriptionsByMember = new Map<number, RawSubscription[]>();
@@ -205,6 +214,7 @@ export async function importDolibarr(dryRun: boolean): Promise<ImportReport> {
 			}
 			for (const inv of invoices) await importInvoice(tx, inv, tiersBySocId, report);
 			for (const inv of supplierInvoices) await importSupplierInvoice(tx, inv, tiersBySocId, report);
+			for (const b of bankAccounts) await importBankAccount(tx, b, bankLinesByAccount.get(Number(b.id)) ?? [], report);
 
 			if (dryRun) throw new DryRunRollback();
 		});
@@ -721,4 +731,68 @@ async function linkAuthentikAccounts(tx: postgres.TransactionSql, pkByEmail: Map
 		linked += 1;
 	}
 	return linked;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Bank accounts and their lines
+
+interface RawBankAccount {
+	id: string | number;
+	label: string;
+	// Dolibarr: 0 current, 1 savings, 2 cash.
+	type?: string | number;
+	iban?: string | null;
+	status?: string | number;
+}
+
+interface RawBankLine {
+	id?: string | number;
+	rowid?: string | number;
+	datev?: string | number | null;
+	dateo?: string | number | null;
+	amount?: string | number;
+	label?: string | null;
+	num_releve?: string | null;
+	fk_type?: string | null;
+}
+
+// A Dolibarr account's balance is entirely made of its lines (its "Solde initial" is a line), so
+// the compte opens at 0 and every line becomes a movement, keyed by its Dolibarr id.
+async function importBankAccount(tx: postgres.TransactionSql, b: RawBankAccount, lines: RawBankLine[], report: ImportReport): Promise<void> {
+	const type = num(b.type) === 2 ? 'caisse' : 'banque';
+	const ibanValue = normalizeIban(b.iban ?? '') || null;
+	const dolibarrId = Number(b.id);
+	const [existing] = await tx<{ id: number }[]>`SELECT id FROM comptes WHERE dolibarr_bank_id = ${dolibarrId}`;
+	let compteId: number;
+	if (existing) {
+		compteId = existing.id;
+		await tx`UPDATE comptes SET type = ${type}, nom = ${b.label.trim()}, iban = COALESCE(${ibanValue}, iban), actif = ${(num(b.status) ?? 0) === 0} WHERE id = ${compteId}`;
+		report.comptes.updated += 1;
+	} else {
+		const dates = lines.map((l) => calendarDay(l.datev ?? l.dateo)).filter((d): d is Date => d !== null).sort((a, b2) => a.getTime() - b2.getTime());
+		const [row] = await tx<{ id: number }[]>`
+			INSERT INTO comptes (type, nom, iban, solde_ouverture, date_ouverture, actif, dolibarr_bank_id)
+			VALUES (${type}, ${b.label.trim()}, ${ibanValue}, 0, ${toIsoDate(dates[0] ?? brusselsToday())}, ${(num(b.status) ?? 0) === 0}, ${dolibarrId})
+			RETURNING id
+		`;
+		compteId = row.id;
+		report.comptes.created += 1;
+	}
+	for (const l of lines) {
+		const lineId = num(l.id) ?? num(l.rowid);
+		const date = calendarDay(l.datev ?? l.dateo);
+		const amount = num(l.amount);
+		if (lineId === null || !date || amount === null) {
+			report.warnings.push(`${b.label} : écriture ${lineId ?? '?'} sans date ou montant, ignorée.`);
+			continue;
+		}
+		const inserted = await tx<{ id: number }[]>`
+			INSERT INTO mouvements (compte_id, date_valeur, montant, libelle, external_id)
+			VALUES (${compteId}, ${toIsoDate(date)}, ${amount}, ${text(l.label) ?? '—'}, ${`dolibarr-${lineId}`})
+			ON CONFLICT (compte_id, external_id) DO NOTHING
+			RETURNING id
+		`;
+		if (inserted.length > 0) report.mouvements.created += 1;
+		else report.mouvements.updated += 1;
+	}
 }

@@ -25,7 +25,8 @@
 			Source : <span class="font-mono">{data.dolibarrUrl ?? '(DOLIBARR_URL non configuré)'}</span>
 		</p>
 		<p class="mt-2 text-gray-600">
-			Importe les tiers, adhérents, souscriptions et factures (clients et fournisseurs) avec leurs PDF (voir
+			Importe les tiers, adhérents, souscriptions, factures (clients et fournisseurs) avec leurs PDF, comptes
+			bancaires et leurs écritures (voir
 			<span class="font-mono">docs/compta.md</span> pour la correspondance). Rejouable : les lignes déjà importées
 			sont mises à jour, pas dupliquées.
 		</p>
@@ -70,10 +71,10 @@
 			Résultat {r.dryRun ? '(simulation — annulée)' : ''}
 		</h2>
 		<div class="mb-4 grid gap-2 sm:grid-cols-3">
-			{#each [{ label: 'Tiers', counts: r.tiers }, { label: 'Liens', counts: r.liens }, { label: 'Cotisations', counts: r.cotisations }, { label: 'Factures', counts: r.factures }] as row (row.label)}
+			{#each [{ label: 'Tiers', counts: r.tiers }, { label: 'Liens', counts: r.liens }, { label: 'Cotisations', counts: r.cotisations }, { label: 'Factures', counts: r.factures }, { label: 'Comptes', counts: r.comptes }, { label: 'Écritures bancaires', counts: r.mouvements }] as row (row.label)}
 				<div class="border border-black p-3 text-sm">
 					<p class="font-bold uppercase">{row.label}</p>
-					<p>{row.counts.created} créé(s), {row.counts.updated} mis à jour</p>
+					<p>{row.counts.created} créé(s), {row.counts.updated} {row.label === 'Écritures bancaires' ? 'déjà connue(s)' : 'mis à jour'}</p>
 				</div>
 			{/each}
 			<div class="border border-black p-3 text-sm">
