@@ -205,16 +205,18 @@ export function validateTrombiEmail(raw: string): { ok: true; value: string } | 
 // Contrairement aux champs optionnels ci-dessus, le nom d'utilisateur est obligatoire (Authentik
 // en a toujours besoin d'un) — pas de cas "vide = valide" ici.
 //
-// Le jeu de caractères n'est pas deviné : confirmé en lisant le schéma OpenAPI réel d'Authentik
-// (GET /api/v3/schema/), qui documente son `username` avec exactement ce pattern et cette
-// description : "Requis. 150 caractères maximum. Uniquement des lettres, nombres et les
-// caractères « @ », « . », « + », « - » et « _ »." — c'est le UnicodeUsernameValidator standard
-// de Django, dont le `\w` couvre aussi les lettres accentuées/Unicode, pas seulement a-z/A-Z/0-9
-// (JS n'a pas cet équivalent Unicode-aware pour `\w`, donc \p{L}/\p{N} + le flag `u` en dessous).
+// Authentik lui-même accepte un jeu de caractères plus large (confirmé via son schéma OpenAPI :
+// UnicodeUsernameValidator de Django, `^[\w.@+-]+$`, où `\w` couvre aussi les lettres
+// accentuées/Unicode). On reste volontairement plus strict que lui, à l'ASCII : `\p{L}`/`\p{N}`
+// autoriseraient un nom visuellement quasi identique à un autre via des lettres d'un autre alphabet
+// (ex. un "a" cyrillique dans "аdmin" au lieu du latin "admin") — un risque d'usurpation qui ne
+// vaut pas la peine dans un outil interne. Authentik acceptant un sur-ensemble de ce qu'on valide
+// ici, resserrer ce regex ne peut jamais faire apparaître de nouveau refus de son côté — seulement
+// en bloquer certains plus tôt, côté client.
 // 32 caractères ici est une limite business plus stricte que les 150 d'Authentik, pas un défaut
 // de son côté — 32 < 150 donc jamais un souci pour l'API elle-même.
 const USERNAME_MAX_LENGTH = 32;
-const USERNAME_RE = /^[\p{L}\p{N}_.@+-]+$/u;
+const USERNAME_RE = /^[a-zA-Z0-9_.-]+$/;
 export function validateUsername(raw: string): { ok: true; value: string } | { ok: false; error: string } {
 	const trimmed = raw.trim();
 	if (!trimmed) {
@@ -227,7 +229,7 @@ export function validateUsername(raw: string): { ok: true; value: string } | { o
 		return {
 			ok: false,
 			error:
-				"Le nom d'utilisateur ne peut contenir que des lettres, chiffres, et les caractères @, ., +, - et _."
+				"Le nom d'utilisateur ne peut contenir que des lettres non accentuées, des chiffres, et les caractères ., - et _."
 		};
 	}
 	return { ok: true, value: trimmed };
