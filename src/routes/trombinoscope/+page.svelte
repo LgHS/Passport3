@@ -86,7 +86,8 @@
 
 	// Phone numbers are stored in international format without the "+" (e.g. 32470000000, enforced
 	// by /profile's validation), which a tel: link can't dial as is — it needs the "+" in front.
-	// Anything else (a value saved before that validation existed) gets no link rather than a
+	// Shown with the "+" everywhere (grid, list, card), linked only on the card. Anything else (a
+	// value saved before that validation existed) is shown as stored, with no link rather than a
 	// broken one.
 	function internationalPhone(phone: string): string | null {
 		return /^[1-9]\d{7,14}$/.test(phone) ? `+${phone}` : null;
@@ -447,7 +448,7 @@
 									stroke-linejoin="round"
 								/>
 							</svg>
-							{member.phone}
+							{internationalPhone(member.phone) ?? member.phone}
 						</p>
 					{/if}
 				</div>
@@ -529,7 +530,7 @@
 											stroke-linejoin="round"
 										/>
 									</svg>
-									{member.phone}
+									{internationalPhone(member.phone) ?? member.phone}
 								</span>
 							{/if}
 						</p>
