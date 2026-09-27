@@ -22,9 +22,11 @@ envoi Peppol automatisé (le dépôt se fait à la main sur Doccle).
 | --- | --- |
 | membre (tout compte) | sa propre situation : cotisation, factures de sa société s'il en est administrateur, ses notes de frais |
 | `Passport Admin` | l'administration des comptes (existant) — **pas** le détail comptable |
-| `Trésorier` (`PUBLIC_AUTHENTIK_TRESORIER_GROUP`) | tout le module `/compta` |
+| trésorerie (`PUBLIC_AUTHENTIK_TRESORIER_GROUP`) | tout le module `/compta` |
 
-Un admin qui n'est pas trésorier ne voit pas la compta. Les deux groupes se cumulent.
+Le contrôle est indépendant de celui des admins, mais le CA a choisi (28/09/2026) de pointer la
+variable sur le groupe `Passport Admin` : les admins sont les trésoriers. Créer un groupe
+`Trésorier` distinct ne demande que de changer la variable.
 
 ## Tiers
 
