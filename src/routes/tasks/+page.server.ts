@@ -17,7 +17,7 @@ import {
 	type Task,
 	type TaskInput
 } from '$lib/server/tasks';
-import { listUsers } from '$lib/server/authentikAdmin';
+import { listTrombinoscopeUsernames, listUsers } from '$lib/server/authentikAdmin';
 import { getMattermostUsername } from '$lib/server/mattermost';
 import { postDirectMessage } from '$lib/server/mattermostBot';
 import { logAuditEvent } from '$lib/server/auditLog';
@@ -123,7 +123,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 					)
 					.catch(() => null)
 			: null;
-	return { tasks, members, isAdmin: admin, mySub: user.sub };
+	// Best-effort: without it, usernames just aren't links to the trombinoscope.
+	const visibleUsernames = await listTrombinoscopeUsernames().catch(() => []);
+	return { tasks, members, isAdmin: admin, mySub: user.sub, visibleUsernames };
 };
 
 export const actions: Actions = {

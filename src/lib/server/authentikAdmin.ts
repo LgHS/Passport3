@@ -858,6 +858,19 @@ export async function listUsers(): Promise<AdminUserSummary[]> {
 		}));
 }
 
+// Usernames of the members shown on the trombinoscope (active, opted in), so other pages can turn
+// a username into a link to that member's card — and only for those who chose to be listed there.
+// Cached 5 minutes: it's read on every /tasks and /wishlist load.
+const VISIBLE_USERNAMES_TTL_MS = 5 * 60 * 1000;
+let visibleUsernames: { list: string[]; expiresAt: number } | null = null;
+
+export async function listTrombinoscopeUsernames(): Promise<string[]> {
+	if (visibleUsernames && visibleUsernames.expiresAt > Date.now()) return visibleUsernames.list;
+	const list = (await listUsers()).filter((u) => u.is_active && u.trombinoscopeVisible).map((u) => u.username);
+	visibleUsernames = { list, expiresAt: Date.now() + VISIBLE_USERNAMES_TTL_MS };
+	return list;
+}
+
 export interface BirthdayAnnounceMember {
 	pk: number;
 	email: string;
