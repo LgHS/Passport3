@@ -64,6 +64,15 @@
 		].filter((entry): entry is { label: string; value: string } => !!entry.value);
 	}
 
+	// Profile link for the networks where the handle alone is enough to build one (opened in a new
+	// tab from the member card). Discord has no username-based profile URL (it needs the numeric
+	// account id) and Signal's share links carry an encrypted token, so those two stay plain text.
+	function socialUrl(label: string, value: string): string | null {
+		if (label === 'Telegram') return `https://t.me/${encodeURIComponent(value)}`;
+		if (label === 'Matrix') return `https://matrix.to/#/${encodeURIComponent(value)}`;
+		return null;
+	}
+
 	type Member = PageData['members'][number];
 
 	// Member card: opened from a member's avatar or username. It only ever shows what's already on
@@ -671,7 +680,13 @@
 					{#each socialLinks(member) as link (link.label)}
 						<div class="flex gap-2">
 							<dt class="w-24 shrink-0 font-bold">{link.label}</dt>
-							<dd class="min-w-0 break-all">{link.value}</dd>
+							<dd class="min-w-0 break-all">
+								{#if socialUrl(link.label, link.value)}
+									<a href={socialUrl(link.label, link.value)} target="_blank" rel="noopener">{link.value}</a>
+								{:else}
+									{link.value}
+								{/if}
+							</dd>
 						</div>
 					{/each}
 				</dl>
