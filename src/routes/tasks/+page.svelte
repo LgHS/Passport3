@@ -178,9 +178,42 @@
 {/snippet}
 
 <h1 class="mb-2 bg-black px-4 py-3 text-base font-bold text-white uppercase">Tâches</h1>
-<p class="mb-6 text-sm text-gray-600">
+<p class="mb-3 text-sm text-gray-600">
 	Les tâches de l'atelier. Participez à une tâche, ou proposez-en une nouvelle.
 </p>
+
+<details class="mb-6 border border-black text-sm">
+	<summary class="cursor-pointer px-4 py-2 font-bold uppercase">Comment ça marche ?</summary>
+	<div class="space-y-2 border-t border-black p-4">
+		<p>
+			<strong>Proposer</strong> : tout membre peut ajouter une tâche, visible tout de suite. Vous en
+			êtes alors le <strong>propriétaire</strong>.
+		</p>
+		<p>
+			<strong>Participant</strong> : vous vous portez volontaire avec « Je participe », et pouvez vous
+			retirer quand vous voulez. Plusieurs personnes peuvent participer à la même tâche.
+		</p>
+		<p>
+			<strong>Assigné</strong> : quelqu'un vous a mis sur la tâche (un admin, le propriétaire ou le
+			leader). Vous êtes prévenu sur Mattermost et ne pouvez pas vous retirer vous-même.
+		</p>
+		<p>
+			<strong>Leader</strong> (★) : la personne qui mène la tâche, choisie parmi les personnes dessus
+			par le propriétaire ou un admin. Avec le propriétaire, le leader gère la tâche : il assigne ou
+			retire des personnes, la bloque ou la débloque, et peut la supprimer (sauf si un admin l'a
+			créée).
+		</p>
+		<p>
+			<strong>Déroulé</strong> : « À faire » tant que personne ne l'a démarrée, « En cours » une fois
+			démarrée, puis « Fait ». Une tâche <strong>bloquée</strong> (interne ou externe, avec une note
+			sur ce qu'on attend) est masquée par défaut.
+		</p>
+		<p class="text-gray-600">
+			Les boutons jaunes sont réservés aux admins. Chaque action est gardée dans l'historique de la
+			tâche.
+		</p>
+	</div>
+</details>
 
 <div class="mb-6 border border-black">
 	<button
