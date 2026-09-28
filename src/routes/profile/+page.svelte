@@ -258,7 +258,7 @@
 			<div class="space-y-2 sm:hidden">
 				{#each data.sessions as session (session.uuid)}
 					<div class="border border-black p-3 text-sm leading-relaxed">
-						<p class="font-bold">{session.os} — {session.browser}</p>
+						<p class="text-xs font-bold">{session.os} — {session.browser}</p>
 						<p class="mt-1 text-gray-600">{session.location ?? session.lastIp}</p>
 						<p class="mt-1 text-gray-600">Dernière activité : {formatDate(session.lastUsed)}</p>
 						<p class="mt-1 text-gray-600">Expire le : {formatDate(session.expires)}</p>
@@ -292,7 +292,7 @@
 					<tbody>
 						{#each data.sessions as session (session.uuid)}
 							<tr>
-								<td class="border border-black px-3 py-2">{session.os} — {session.browser}</td>
+								<td class="border border-black px-3 py-2 text-xs">{session.os} — {session.browser}</td>
 								<td class="border border-black px-3 py-2">{session.location ?? session.lastIp}</td>
 								<td class="border border-black px-3 py-2 whitespace-nowrap">{formatDate(session.lastUsed)}</td>
 								<td class="border border-black px-3 py-2 whitespace-nowrap">{formatDate(session.expires)}</td>
@@ -509,7 +509,7 @@
 						<p class="mt-1 text-gray-600">
 							{formatDate(event.createdAt)} —
 							<span
-								class="inline-block w-16 border border-black px-1 py-0.5 text-center text-[10px] font-bold uppercase"
+								class="inline-block w-16 border border-black px-1 py-0.5 text-center text-[10px] font-bold uppercase {event.source === 'admin' ? 'bg-lghs-yellow' : ''}"
 							>
 								{sourceLabel(event.source)}
 							</span>
@@ -536,7 +536,7 @@
 								</td>
 								<td class="border border-black px-3 py-2 whitespace-nowrap">
 									<span
-										class="inline-block w-16 border border-black px-1.5 py-0.5 text-center text-[10px] font-bold uppercase"
+										class="inline-block w-16 border border-black px-1.5 py-0.5 text-center text-[10px] font-bold uppercase {event.source === 'admin' ? 'bg-lghs-yellow' : ''}"
 									>
 										{sourceLabel(event.source)}
 									</span>
@@ -594,7 +594,7 @@
 			<p class="mb-3 text-sm text-gray-600">
 				{formatDate(selectedEvent.createdAt)} —
 				<span
-					class="inline-block w-16 border border-black px-1 py-0.5 text-center text-[10px] font-bold uppercase"
+					class="inline-block w-16 border border-black px-1 py-0.5 text-center text-[10px] font-bold uppercase {selectedEvent.source === 'admin' ? 'bg-lghs-yellow' : ''}"
 				>
 					{sourceLabel(selectedEvent.source)}
 				</span>
