@@ -122,7 +122,7 @@
 {/snippet}
 
 {#snippet submit(pending: boolean, idle: string, working: string)}
-	<button type="submit" disabled={pending} class="btn-primary mt-auto w-fit px-4 py-2 text-sm disabled:opacity-50">
+	<button type="submit" disabled={pending} class="btn-primary w-fit px-4 py-2 text-sm disabled:opacity-50">
 		{pending ? working : idle}
 	</button>
 {/snippet}
@@ -134,11 +134,12 @@
 <section>
 	<h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Paramètres</h1>
 
-	<div class="grid gap-6 md:grid-cols-2">
+	<!-- Two columns, masonry-style: each block keeps its own height instead of matching its row neighbour. -->
+	<div class="gap-6 md:columns-2">
 		<form
 			method="POST"
 			action="?/updateBirthdaySettings"
-			class="flex flex-col border border-black"
+			class="mb-6 flex break-inside-avoid flex-col border border-black"
 			use:enhance={busy((v) => (savingBirthday = v))}
 		>
 			<h2 class="bg-black px-4 py-3 text-base font-bold text-white uppercase">Anniversaires</h2>
@@ -170,7 +171,7 @@
 		<form
 			method="POST"
 			action="?/updateWishlistSettings"
-			class="flex flex-col border border-black"
+			class="mb-6 flex break-inside-avoid flex-col border border-black"
 			use:enhance={busy((v) => (savingWishlist = v))}
 		>
 			<h2 class="bg-black px-4 py-3 text-base font-bold text-white uppercase">Wishlist</h2>
@@ -201,7 +202,7 @@
 		<form
 			method="POST"
 			action="?/updateTaskSettings"
-			class="flex flex-col border border-black"
+			class="mb-6 flex break-inside-avoid flex-col border border-black"
 			use:enhance={busy((v) => (savingTasks = v))}
 		>
 			<h2 class="bg-black px-4 py-3 text-base font-bold text-white uppercase">Todolist</h2>
@@ -235,7 +236,7 @@
 		<form
 			method="POST"
 			action="?/refreshMattermostCache"
-			class="flex flex-col border border-black"
+			class="mb-6 flex break-inside-avoid flex-col border border-black"
 			use:enhance={busy((v) => (refreshingMattermostCache = v))}
 		>
 			<h2 class="bg-black px-4 py-3 text-base font-bold text-white uppercase">Cache Mattermost</h2>
@@ -252,7 +253,7 @@
 		<form
 			method="POST"
 			action="?/pregenerateAvatars"
-			class="flex flex-col border border-black"
+			class="mb-6 flex break-inside-avoid flex-col border border-black"
 			use:enhance={busy((v) => (generatingAvatars = v))}
 		>
 			<h2 class="bg-black px-4 py-3 text-base font-bold text-white uppercase">Avatars</h2>
