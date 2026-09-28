@@ -11,6 +11,14 @@
 	// Captured at submit time, before the action's response replaces `uuid` — decides which
 	// success wording to show ("généré" the first time, "régénéré" after that).
 	let wasEmpty = $state(false);
+
+	// Placeholder until physical access authorisations exist (Authentik group per door, read by
+	// Passport): shows what "Mes autorisations RFID" will look like, with made-up rows.
+	const PLACEHOLDER_AUTHORIZATIONS = [
+		{ name: "Porte d'entrée", description: 'Accès au hackerspace' },
+		{ name: 'Atelier', description: 'Accès à l’atelier et aux machines' },
+		{ name: 'Local technique', description: 'Réservé aux membres habilités' }
+	];
 </script>
 
 <svelte:head>
@@ -106,6 +114,41 @@
 						{/if}
 					</button>
 				</div>
+			</div>
+
+			<h2 class="mt-8 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">
+				Mes autorisations RFID
+			</h2>
+			<p class="mb-4 border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
+				Aperçu : bientôt, vous verrez ici les portes et zones auxquelles votre badge donne accès. Les
+				lignes ci-dessous sont des exemples.
+			</p>
+			<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->
+			<div class="space-y-2 opacity-60 sm:hidden" aria-hidden="true">
+				{#each PLACEHOLDER_AUTHORIZATIONS as authorization (authorization.name)}
+					<div class="border border-black p-3 text-sm">
+						<p class="font-bold">{authorization.name}</p>
+						<p class="mt-1 text-gray-600">{authorization.description}</p>
+					</div>
+				{/each}
+			</div>
+			<div class="hidden overflow-x-auto opacity-60 sm:block" aria-hidden="true">
+				<table class="w-full table-fixed border-collapse text-sm">
+					<thead>
+						<tr class="bg-black text-white uppercase">
+							<th class="w-1/3 border border-black px-3 py-2 text-left">Autorisation</th>
+							<th class="border border-black px-3 py-2 text-left">Description</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each PLACEHOLDER_AUTHORIZATIONS as authorization (authorization.name)}
+							<tr>
+								<td class="border border-black px-3 py-2 font-bold">{authorization.name}</td>
+								<td class="border border-black px-3 py-2 text-gray-600">{authorization.description}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
 			</div>
 		</section>
 
