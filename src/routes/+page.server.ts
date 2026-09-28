@@ -19,6 +19,8 @@ import {
 import { authentikPk, type CotisationStatus } from '$lib/types';
 import { hasUploadedAvatar } from '$lib/server/avatars';
 import { listOpenTasksForMember } from '$lib/server/tasks';
+import { lookupMattermostUsername } from '$lib/server/mattermost';
+import { env } from '$env/dynamic/private';
 
 export interface AppGroup {
 	name: string;
@@ -40,6 +42,9 @@ export interface DashboardChecklist {
 	badgeConfigured: boolean | null;
 	// A local file check (see avatars.ts), so never "couldn't check" — a plain boolean.
 	avatarUploaded: boolean;
+	// An active Mattermost account under the member's email (the directory only keeps active
+	// ones). null when Mattermost couldn't be asked, same reasoning as above.
+	mattermostActivated: boolean | null;
 	// Also null when Dolibarr is unavailable, same reasoning as above — a Dolibarr outage must
 	// never be reported as "IBAN not filled in", which would be actively wrong for a member who
 	// already filled it in.
@@ -130,6 +135,7 @@ const NO_CHECKLIST: DashboardChecklist = {
 	emergencyContactConfigured: null,
 	badgeConfigured: null,
 	avatarUploaded: false,
+	mattermostActivated: null,
 	ibanPersoConfigured: false,
 	ibanProApplicable: false,
 	ibanProConfigured: false
@@ -142,7 +148,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const pk = authentikPk(locals.user);
 
-	const [apps, financial, mfaDevices, emergencyContacts, rfidUid, myTasks] = await Promise.all([
+	const [apps, financial, mfaDevices, emergencyContacts, rfidUid, myTasks, mattermost] = await Promise.all([
 		// Best-effort: a transient Authentik API hiccup shouldn't take down the whole homepage.
 		pk ? listUserApplications(pk).catch((): UserApplication[] | null => null) : Promise.resolve(null),
 		loadMemberFinancialSummary(locals.user.email),
@@ -153,7 +159,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// reusing `null` and collapsing the two meanings together.
 		pk ? getRfidUid(pk).catch(() => undefined) : Promise.resolve(undefined),
 		// "Mes tâches": best-effort too, a database hiccup just hides the block.
-		listOpenTasksForMember(locals.user.sub).catch(() => null)
+		listOpenTasksForMember(locals.user.sub).catch(() => null),
+		// Never throws: `unavailable` tells "couldn't check" apart from "no account".
+		locals.user.email ? lookupMattermostUsername(locals.user.email) : Promise.resolve({ username: null, unavailable: false })
 	]);
 
 	const checklist: DashboardChecklist = {
@@ -161,6 +169,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		emergencyContactConfigured: emergencyContacts === null ? null : emergencyContacts.length > 0,
 		badgeConfigured: rfidUid === undefined ? null : rfidUid !== null,
 		avatarUploaded: hasUploadedAvatar(locals.user.email),
+		mattermostActivated: mattermost.unavailable ? null : mattermost.username !== null,
 		ibanPersoConfigured: financial.unavailable ? null : !!financial.ibanPerso,
 		ibanProApplicable: financial.isPro,
 		ibanProConfigured: financial.unavailable ? null : !!financial.ibanPro
@@ -171,6 +180,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		cotisation: financial.cotisation,
 		cotisationUnavailable: financial.unavailable,
 		checklist,
-		myTasks
+		myTasks,
+		// Where the "Mattermost" checklist item sends the member to sign up / log in.
+		mattermostUrl: env.MATTERMOST_URL || null
 	};
 };
