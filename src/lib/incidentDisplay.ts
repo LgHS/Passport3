@@ -32,8 +32,9 @@ export function kindMeta(kind: IncidentKind) {
 // Field limits live here rather than in the server validator so the form's `maxlength` and the
 // server's check read the same constant — importing $lib/server/* from a Svelte page isn't allowed,
 // and copying the numbers into the page (as the wishlist does) lets them drift apart.
-export const PEOPLE_MAX_LENGTH = 300;
-export const WITNESSES_MAX_LENGTH = 300;
+// Both are filled one person per line, so they need more room than a single-line field would.
+export const PEOPLE_MAX_LENGTH = 500;
+export const WITNESSES_MAX_LENGTH = 500;
 export const EQUIPMENT_MAX_LENGTH = 300;
 export const DESCRIPTION_MAX_LENGTH = 2000;
 export const DETAILS_MAX_LENGTH = 300;

@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import TagInput from '$lib/components/TagInput.svelte';
 	import {
 		INCIDENT_KINDS,
 		kindMeta,
-		PEOPLE_MAX_LENGTH,
-		WITNESSES_MAX_LENGTH,
 		EQUIPMENT_MAX_LENGTH,
 		DESCRIPTION_MAX_LENGTH,
 		DETAILS_MAX_LENGTH,
@@ -25,6 +24,8 @@
 
 	let kind = $state<IncidentKind>('incident');
 	let occurredAt = $state(localNow());
+	let people = $state<string[]>([]);
+	let witnesses = $state<string[]>([]);
 	let descriptionValue = $state('');
 	let firstAidUsed = $state(false);
 	let fireDeviceUsed = $state(false);
@@ -44,6 +45,8 @@
 			// not whenever this page was first opened.
 			kind = 'incident';
 			occurredAt = localNow();
+			people = [];
+			witnesses = [];
 			descriptionValue = '';
 			firstAidUsed = false;
 			fireDeviceUsed = false;
@@ -58,9 +61,14 @@
 </svelte:head>
 
 <h1 class="mb-2 bg-black px-4 py-3 text-base font-bold text-white uppercase">Déclarer un incident</h1>
+<p class="mb-1 text-sm text-gray-600">
+	Ce formulaire sert à consigner ce qui s'est passé au hackerspace. Ces déclarations sont
+	obligatoires pour des raisons de législation et d'assurance : merci de les remplir sérieusement
+	et le plus précisément possible.
+</p>
 <p class="mb-6 text-sm text-gray-600">
-	Ce formulaire sert à consigner ce qui s'est passé au hackerspace. Les déclarations sont
-	transmises aux admins et ne sont pas visibles par les autres membres.
+	Elles sont transmises aux admins et ne sont pas visibles par les autres membres. En cas de
+	besoin d'aide, écrivez à <a href="mailto:admin@lghs.be">admin@lghs.be</a>.
 </p>
 
 <form method="POST" action="?/create" use:enhance class="mb-8 border border-black p-4">
@@ -109,15 +117,8 @@
 
 	<div class="mb-4">
 		<label class="mb-1 block text-sm font-bold uppercase" for="people">Personnes impliquées</label>
-		<input
-			id="people"
-			name="people"
-			type="text"
-			maxlength={PEOPLE_MAX_LENGTH}
-			required
-			placeholder="Prénoms ou pseudos, séparés par des virgules"
-			class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-300"
-		/>
+		<TagInput id="people" name="people" bind:tags={people} placeholder="Un nom, puis Entrée" />
+		<p class="mt-1 text-xs text-gray-500">Tapez un nom puis Entrée pour l'ajouter.</p>
 		<label class="mt-2 flex cursor-pointer items-center gap-2 text-sm">
 			<input type="checkbox" name="visitorInvolved" />
 			Un non-membre ou visiteur a été impliqué
@@ -128,14 +129,7 @@
 		<label class="mb-1 block text-sm font-bold uppercase" for="witnesses">
 			Témoins <span class="text-xs font-normal normal-case">(optionnel)</span>
 		</label>
-		<input
-			id="witnesses"
-			name="witnesses"
-			type="text"
-			maxlength={WITNESSES_MAX_LENGTH}
-			placeholder="Prénoms ou pseudos, séparés par des virgules"
-			class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-300"
-		/>
+		<TagInput id="witnesses" name="witnesses" bind:tags={witnesses} placeholder="Un nom, puis Entrée" />
 	</div>
 
 	<div class="mb-4">
@@ -227,16 +221,28 @@
 					<p class="mb-3 text-sm whitespace-pre-wrap">{incident.description}</p>
 
 					<dl class="grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
-						<div>
-							<dt class="inline font-bold">Personnes impliquées :</dt>
-							<dd class="inline">
-								{incident.people}{incident.visitorInvolved ? ' (dont un non-membre ou visiteur)' : ''}
+						<div class="sm:col-span-2">
+							<dt class="font-bold">Personnes impliquées</dt>
+							<dd class="mt-1 flex flex-wrap gap-1.5">
+								{#each incident.people.split('\n').filter(Boolean) as person (person)}
+									<span class="border border-black bg-gray-100 px-2 py-0.5">{person}</span>
+								{/each}
 							</dd>
 						</div>
+						{#if incident.visitorInvolved}
+							<div class="sm:col-span-2">
+								<dt class="inline font-bold">Tiers :</dt>
+								<dd class="inline">un non-membre ou visiteur était impliqué</dd>
+							</div>
+						{/if}
 						{#if incident.witnesses}
-							<div>
-								<dt class="inline font-bold">Témoins :</dt>
-								<dd class="inline">{incident.witnesses}</dd>
+							<div class="sm:col-span-2">
+								<dt class="font-bold">Témoins</dt>
+								<dd class="mt-1 flex flex-wrap gap-1.5">
+									{#each incident.witnesses.split('\n').filter(Boolean) as witness (witness)}
+										<span class="border border-black bg-gray-100 px-2 py-0.5">{witness}</span>
+									{/each}
+								</dd>
 							</div>
 						{/if}
 						{#if incident.equipment}

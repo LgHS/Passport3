@@ -67,6 +67,17 @@ describe('validateIncidentSubmission', () => {
 		expect(validateIncidentSubmission(submission({ description: tooLong })).ok).toBe(false);
 	});
 
+	it('accepte la valeur multi-ligne produite par le champ à tags', () => {
+		// TagInput submits its chips through a hidden field as newline-separated text; the validator
+		// treats it as plain text and must keep the separators intact, since the admin list splits on
+		// them again to render the chips back.
+		const result = validateIncidentSubmission(
+			submission({ people: 'Alice\nBob', witnesses: 'Carol\nDave' })
+		);
+		expect(result.ok && result.input.people).toBe('Alice\nBob');
+		expect(result.ok && result.input.witnesses).toBe('Carol\nDave');
+	});
+
 	describe('cases à cocher et leur champ de détail', () => {
 		it("refuse l'anti-incendie coché sans détail", () => {
 			expect(validateIncidentSubmission(submission({ fireDeviceUsed: 'on' })).ok).toBe(false);
