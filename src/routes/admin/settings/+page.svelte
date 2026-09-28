@@ -5,26 +5,26 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	let submitting = $state(false);
 	// svelte-ignore state_referenced_locally
 	let enabled = $state(form?.enabled ?? data.birthdaySettings.enabled);
 	// svelte-ignore state_referenced_locally
 	let hour = $state(form?.hour ?? data.birthdaySettings.hour);
-	let refreshingMattermostCache = $state(false);
-	let savingChannels = $state(false);
+	let savingBirthday = $state(false);
+	let savingWishlist = $state(false);
 	// svelte-ignore state_referenced_locally
 	let wishlistAnnounce = $state(data.wishlistAnnounce);
+	let refreshingMattermostCache = $state(false);
 	let generatingAvatars = $state(false);
 
 	$effect(() => {
 		if (form?.birthdaySuccess) {
-			showToast('success', 'Paramètres enregistrés.');
+			showToast('success', 'Réglages des anniversaires enregistrés.');
 		} else if (form?.birthdayError) {
 			showToast('error', form.birthdayError);
-		} else if (form?.channelsSaved) {
-			showToast('success', 'Canaux Mattermost enregistrés.');
-		} else if (form?.channelsError) {
-			showToast('error', form.channelsError);
+		} else if (form?.wishlistSaved) {
+			showToast('success', 'Réglages de la wishlist enregistrés.');
+		} else if (form?.wishlistError) {
+			showToast('error', form.wishlistError);
 		} else if (form?.mattermostCacheRefreshed) {
 			showToast('success', 'Cache Mattermost régénéré.');
 		} else if (form?.mattermostCacheError) {
@@ -39,7 +39,68 @@
 			showToast('error', form.avatarsError);
 		}
 	});
+
+	// Keeps the submit button's busy state in sync with a form's round-trip.
+	function busy(set: (v: boolean) => void) {
+		return () => {
+			set(true);
+			return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
+				await update({ reset: false });
+				set(false);
+			};
+		};
+	}
 </script>
+
+{#snippet toggle(name: string, checked: boolean, onchange: (v: boolean) => void, label: string)}
+	<label class="flex w-fit cursor-pointer items-center gap-3 text-sm">
+		<span
+			class="relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors {checked
+				? 'bg-black'
+				: 'bg-gray-300'}"
+		>
+			<input
+				type="checkbox"
+				{name}
+				{checked}
+				onchange={(e) => onchange(e.currentTarget.checked)}
+				class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+			/>
+			<span
+				class="pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform {checked
+					? 'translate-x-5'
+					: ''}"
+			></span>
+		</span>
+		{label}
+	</label>
+{/snippet}
+
+{#snippet channelField(id: string, label: string, current: string)}
+	<div>
+		<label class="mb-1 block text-sm font-bold uppercase" for={id}>{label}</label>
+		<input
+			{id}
+			name={id}
+			value={current}
+			placeholder="Identifiant du canal (26 caractères)"
+			class="w-full border border-black px-3 py-2 font-mono text-sm placeholder:text-gray-300"
+		/>
+		<p class="mt-1 text-xs text-gray-500">
+			Menu du canal → « Afficher les infos », en bas de la fenêtre. Le bot doit être membre du canal.
+		</p>
+	</div>
+{/snippet}
+
+{#snippet submit(pending: boolean, idle: string, working: string)}
+	<button
+		type="submit"
+		disabled={pending}
+		class="btn-primary mt-auto w-fit px-4 py-2 text-sm disabled:opacity-50"
+	>
+		{pending ? working : idle}
+	</button>
+{/snippet}
 
 <svelte:head>
 	<title>Paramètres — Administration — Passport</title>
@@ -48,188 +109,96 @@
 <section>
 	<h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Paramètres</h1>
 
-	<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">
-		Annonces d'anniversaire
-	</h2>
-	<form
-		method="POST"
-		action="?/updateBirthdaySettings"
-		class="border border-black p-4"
-		use:enhance={() => {
-			submitting = true;
-			return async ({ update }) => {
-				await update({ reset: false });
-				submitting = false;
-			};
-		}}
-	>
-		<label class="flex w-fit cursor-pointer items-center gap-3 text-sm">
-			<span
-				class="relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors {enabled
-					? 'bg-black'
-					: 'bg-gray-300'}"
-			>
-				<input
-					type="checkbox"
-					name="enabled"
-					bind:checked={enabled}
-					class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-				/>
-				<span
-					class="pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform {enabled
-						? 'translate-x-5'
-						: ''}"
-				></span>
-			</span>
-			Souhaiter automatiquement leur anniversaire aux membres sur Mattermost
-		</label>
-
-		<div class="mt-4">
-			<label class="mb-1 block text-sm font-bold uppercase" for="hour">
-				Heure d'envoi
-				<span class="text-xs font-normal text-gray-500 normal-case"
-					>(Heure de la République libre d'Outremeuse)</span
-				>
-			</label>
-			<select
-				id="hour"
-				name="hour"
-				bind:value={hour}
-				class="w-full border border-black px-3 py-2 text-sm"
-			>
-				{#each Array.from({ length: 24 }, (_, h) => h) as h (h)}
-					<option value={h}>{h}h00</option>
-				{/each}
-			</select>
-		</div>
-
-		<button
-			type="submit"
-			disabled={submitting}
-			class="btn-primary mt-4 px-4 py-2 text-sm disabled:opacity-50"
+	<div class="grid gap-6 md:grid-cols-2">
+		<form
+			method="POST"
+			action="?/updateBirthdaySettings"
+			class="flex flex-col border border-black"
+			use:enhance={busy((v) => (savingBirthday = v))}
 		>
-			{submitting ? 'Enregistrement…' : 'Enregistrer'}
-		</button>
-	</form>
+			<h2 class="bg-black px-4 py-3 text-base font-bold text-white uppercase">Anniversaires</h2>
+			<div class="flex flex-1 flex-col gap-4 p-4">
+				{@render toggle(
+					'enabled',
+					enabled,
+					(v) => (enabled = v),
+					'Souhaiter automatiquement leur anniversaire aux membres sur Mattermost'
+				)}
+				<div>
+					<label class="mb-1 block text-sm font-bold uppercase" for="hour">
+						Heure d'envoi
+						<span class="text-xs font-normal text-gray-500 normal-case"
+							>(Heure de la République libre d'Outremeuse)</span
+						>
+					</label>
+					<select
+						id="hour"
+						name="hour"
+						bind:value={hour}
+						class="w-full border border-black px-3 py-2 text-sm"
+					>
+						{#each Array.from({ length: 24 }, (_, h) => h) as h (h)}
+							<option value={h}>{h}h00</option>
+						{/each}
+					</select>
+				</div>
+				{@render channelField('birthdayChannel', 'Canal Mattermost', data.mattermostChannels.birthday)}
+				{@render submit(savingBirthday, 'Enregistrer', 'Enregistrement…')}
+			</div>
+		</form>
 
-	<h2 class="mt-8 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Mattermost</h2>
-	{#snippet channelPicker(id: string, label: string, help: string, current: string)}
-		<div class="mb-4">
-			<label class="mb-1 block text-sm font-bold uppercase" for={id}>{label}</label>
-			<input
-				{id}
-				name={id}
-				value={current}
-				placeholder="Identifiant du canal (26 caractères) — vide pour désactiver"
-				class="w-full border border-black px-3 py-2 font-mono text-sm placeholder:text-gray-300"
-			/>
-			<p class="mt-1 text-xs text-gray-500">{help}</p>
-		</div>
-	{/snippet}
-	<form
-		method="POST"
-		action="?/updateMattermostChannels"
-		class="mb-4 border border-black p-4"
-		use:enhance={() => {
-			savingChannels = true;
-			return async ({ update }) => {
-				await update({ reset: false });
-				savingChannels = false;
-			};
-		}}
-	>
-		<p class="mb-4 text-sm text-gray-600">
-			Collez l'identifiant du canal : dans Mattermost, menu du canal → « Afficher les infos », en bas
-			de la fenêtre.
-		</p>
-		{@render channelPicker(
-			'birthdayChannel',
-			"Canal des anniversaires",
-			"Où sont souhaités les anniversaires. Le bot doit être membre du canal.",
-			data.mattermostChannels.birthday
-		)}
-		<!-- Same switch as the birthday announcements. -->
-		<label class="mb-3 flex w-fit cursor-pointer items-center gap-3 text-sm">
-			<span
-				class="relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors {wishlistAnnounce
-					? 'bg-black'
-					: 'bg-gray-300'}"
-			>
-				<input
-					type="checkbox"
-					name="wishlistAnnounce"
-					bind:checked={wishlistAnnounce}
-					class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-				/>
-				<span
-					class="pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform {wishlistAnnounce
-						? 'translate-x-5'
-						: ''}"
-				></span>
-			</span>
-			Annoncer les nouvelles propositions de la wishlist sur Mattermost
-		</label>
-		{@render channelPicker(
-			'wishlistChannel',
-			'Canal des propositions wishlist',
-			'Où sont annoncées les nouvelles propositions, quand l’annonce est activée ci-dessus.',
-			data.mattermostChannels.wishlist
-		)}
-		<button type="submit" disabled={savingChannels} class="btn-primary px-4 py-2 text-sm disabled:opacity-50">
-			{savingChannels ? 'Enregistrement…' : 'Enregistrer les canaux'}
-		</button>
-	</form>
-	<form
-		method="POST"
-		action="?/refreshMattermostCache"
-		class="border border-black p-4"
-		use:enhance={() => {
-			refreshingMattermostCache = true;
-			return async ({ update }) => {
-				await update({ reset: false });
-				refreshingMattermostCache = false;
-			};
-		}}
-	>
-		<p class="mb-4 text-sm text-gray-600">
-			Passport garde en mémoire la correspondance entre emails et comptes Mattermost, régénérée
-			automatiquement toutes les heures. Ce bouton force une mise à jour immédiate, par exemple
-			juste après qu'un membre ait créé son compte Mattermost.
-		</p>
-		<button
-			type="submit"
-			disabled={refreshingMattermostCache}
-			class="btn-primary px-4 py-2 text-sm disabled:opacity-50"
+		<form
+			method="POST"
+			action="?/updateWishlistSettings"
+			class="flex flex-col border border-black"
+			use:enhance={busy((v) => (savingWishlist = v))}
 		>
-			{refreshingMattermostCache ? 'Régénération…' : 'Régénérer le cache Mattermost'}
-		</button>
-	</form>
+			<h2 class="bg-black px-4 py-3 text-base font-bold text-white uppercase">Wishlist</h2>
+			<div class="flex flex-1 flex-col gap-4 p-4">
+				{@render toggle(
+					'wishlistAnnounce',
+					wishlistAnnounce,
+					(v) => (wishlistAnnounce = v),
+					'Annoncer les nouvelles propositions sur Mattermost'
+				)}
+				{@render channelField('wishlistChannel', 'Canal Mattermost', data.mattermostChannels.wishlist)}
+				{@render submit(savingWishlist, 'Enregistrer', 'Enregistrement…')}
+			</div>
+		</form>
 
-	<h2 class="mt-8 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Avatars</h2>
-	<form
-		method="POST"
-		action="?/pregenerateAvatars"
-		class="border border-black p-4"
-		use:enhance={() => {
-			generatingAvatars = true;
-			return async ({ update }) => {
-				await update({ reset: false });
-				generatingAvatars = false;
-			};
-		}}
-	>
-		<p class="mb-4 text-sm text-gray-600">
-			Les membres sans photo ont un avatar généré à partir de leur nom d'utilisateur, créé
-			automatiquement la première fois qu'il est affiché. Ce bouton les génère tous d'un coup, par
-			exemple avant de brancher Authentik ou BookStack sur Passport. Les avatars déjà générés ne
-			sont pas refaits.
-		</p>
-		<button
-			type="submit"
-			disabled={generatingAvatars}
-			class="btn-primary px-4 py-2 text-sm disabled:opacity-50"
+		<form
+			method="POST"
+			action="?/refreshMattermostCache"
+			class="flex flex-col border border-black"
+			use:enhance={busy((v) => (refreshingMattermostCache = v))}
 		>
-			{generatingAvatars ? 'Génération…' : 'Générer les avatars manquants'}
-		</button>
-	</form>
+			<h2 class="bg-black px-4 py-3 text-base font-bold text-white uppercase">Cache Mattermost</h2>
+			<div class="flex flex-1 flex-col gap-4 p-4">
+				<p class="text-sm text-gray-600">
+					Passport garde en mémoire la correspondance entre emails et comptes Mattermost, régénérée
+					automatiquement toutes les heures. Ce bouton force une mise à jour immédiate, par exemple
+					juste après qu'un membre ait créé son compte Mattermost.
+				</p>
+				{@render submit(refreshingMattermostCache, 'Régénérer le cache Mattermost', 'Régénération…')}
+			</div>
+		</form>
+
+		<form
+			method="POST"
+			action="?/pregenerateAvatars"
+			class="flex flex-col border border-black"
+			use:enhance={busy((v) => (generatingAvatars = v))}
+		>
+			<h2 class="bg-black px-4 py-3 text-base font-bold text-white uppercase">Avatars</h2>
+			<div class="flex flex-1 flex-col gap-4 p-4">
+				<p class="text-sm text-gray-600">
+					Les membres sans photo ont un avatar généré à partir de leur nom d'utilisateur, créé
+					automatiquement la première fois qu'il est affiché. Ce bouton les génère tous d'un coup, par
+					exemple avant de brancher Authentik ou BookStack sur Passport. Les avatars déjà générés ne
+					sont pas refaits.
+				</p>
+				{@render submit(generatingAvatars, 'Générer les avatars manquants', 'Génération…')}
+			</div>
+		</form>
+	</div>
 </section>
