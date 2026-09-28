@@ -43,6 +43,8 @@
 
 	const itemClass =
 		'no-underline-fx flex items-center gap-3 rounded px-4 py-2 text-sm font-bold uppercase transition-colors';
+	// Small grey heading above a group of entries ("Mon compte", "Hackerspace", "Sécurité").
+	const sectionLabelClass = 'mt-4 mb-1 px-4 text-xs font-bold tracking-wide text-gray-500 uppercase';
 	// Indented, smaller sibling of itemClass for the admin submenu (Paramètres/Historique) — one
 	// level under "Admin" itself, not a full nav item in its own right.
 	const subItemClass =
@@ -147,6 +149,7 @@
 				</svg>
 				Accueil
 			</a>
+			<p class="{sectionLabelClass}">Mon compte</p>
 			<a href="/profile" onclick={closeOverlay} class="{itemClass} {itemStateClass('/profile')}">
 				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
 					<circle cx="10" cy="6.5" r="3" />
@@ -161,6 +164,14 @@
 				</svg>
 				Cotisation
 			</a>
+			<a href="/badge" onclick={closeOverlay} class="{itemClass} {itemStateClass('/badge')}">
+				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+					<rect x="5" y="2" width="10" height="16" rx="2" />
+					<circle cx="10" cy="7.5" r="2" />
+					<path d="M7.5 13 H12.5 M7.5 15 H12.5" stroke-linecap="round" />
+				</svg>
+				Badge RFID
+			</a>
 			<a href="/permissions" onclick={closeOverlay} class="{itemClass} {itemStateClass('/permissions')}">
 				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
 					<path
@@ -169,14 +180,6 @@
 					/>
 				</svg>
 				Permissions
-			</a>
-			<a href="/badge" onclick={closeOverlay} class="{itemClass} {itemStateClass('/badge')}">
-				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-					<rect x="5" y="2" width="10" height="16" rx="2" />
-					<circle cx="10" cy="7.5" r="2" />
-					<path d="M7.5 13 H12.5 M7.5 15 H12.5" stroke-linecap="round" />
-				</svg>
-				Badge RFID
 			</a>
 			<a href="/github" onclick={closeOverlay} class="{itemClass} {itemStateClass('/github')}">
 				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -188,7 +191,8 @@
 				</svg>
 				GitHub
 			</a>
-			<a href="/trombinoscope" onclick={closeOverlay} class="{itemClass} {itemStateClass('/trombinoscope')} mt-4">
+			<p class="{sectionLabelClass}">Hackerspace</p>
+			<a href="/trombinoscope" onclick={closeOverlay} class="{itemClass} {itemStateClass('/trombinoscope')}">
 				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
 					<circle cx="7" cy="7" r="2.5" />
 					<path d="M2.5 16c0-2.8 2-4.5 4.5-4.5s4.5 1.7 4.5 4.5" stroke-linecap="round" />
@@ -220,6 +224,7 @@
 				</svg>
 				Wishlist
 			</a>
+			<p class="{sectionLabelClass}">Sécurité</p>
 			<a href="/incidents" onclick={closeOverlay} class="{itemClass} {itemStateClass('/incidents')}">
 				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
 					<path d="M10 3.5 L18 16.5 H2 Z" stroke-linejoin="round" />
