@@ -15,10 +15,11 @@ const CHANNEL_ID_RE = /^[a-z0-9]{26}$/;
 
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
-	const [birthdaySettings, birthdayChannel, wishlistChannel] = await Promise.all([
+	const [birthdaySettings, birthdayChannel, wishlistChannel, wishlistAnnounce] = await Promise.all([
 		getBirthdaySettings(),
 		getSetting(SETTING_KEYS.birthdayChannel),
-		getSetting(SETTING_KEYS.wishlistChannel)
+		getSetting(SETTING_KEYS.wishlistChannel),
+		getSetting(SETTING_KEYS.wishlistAnnounce)
 	]);
 	return {
 		birthdaySettings,
@@ -26,7 +27,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			// The .env value is shown as the current one until a channel is picked here.
 			birthday: birthdayChannel ?? env.MATTERMOST_BIRTHDAY_CHANNEL_ID ?? '',
 			wishlist: wishlistChannel ?? ''
-		}
+		},
+		wishlistAnnounce: wishlistAnnounce === 'true'
 	};
 };
 
@@ -52,6 +54,7 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const birthday = String(formData.get('birthdayChannel') ?? '').trim();
 		const wishlist = String(formData.get('wishlistChannel') ?? '').trim();
+		const wishlistAnnounce = formData.has('wishlistAnnounce');
 		for (const value of [birthday, wishlist]) {
 			if (value && !CHANNEL_ID_RE.test(value)) {
 				return fail(400, { channelsError: 'Identifiant de canal invalide (26 caractères, minuscules et chiffres).' });
@@ -60,13 +63,15 @@ export const actions: Actions = {
 
 		const before = {
 			birthday: await getSetting(SETTING_KEYS.birthdayChannel),
-			wishlist: await getSetting(SETTING_KEYS.wishlistChannel)
+			wishlist: await getSetting(SETTING_KEYS.wishlistChannel),
+			wishlistAnnounce: (await getSetting(SETTING_KEYS.wishlistAnnounce)) === 'true'
 		};
 		await setSetting(SETTING_KEYS.birthdayChannel, birthday || null);
 		await setSetting(SETTING_KEYS.wishlistChannel, wishlist || null);
+		await setSetting(SETTING_KEYS.wishlistAnnounce, wishlistAnnounce ? 'true' : null);
 		await logAuditEvent({ sub: admin.sub, label: displayName(admin) }, 'admin', 'settings.mattermostChannels.update', {}, {
 			before,
-			after: { birthday: birthday || null, wishlist: wishlist || null }
+			after: { birthday: birthday || null, wishlist: wishlist || null, wishlistAnnounce }
 		});
 		return { channelsSaved: true };
 	},

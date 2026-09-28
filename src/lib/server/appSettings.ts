@@ -5,7 +5,9 @@ import { getDb } from '$lib/server/db';
 export const SETTING_KEYS = {
 	// Mattermost channel ids.
 	birthdayChannel: 'mattermost.birthday_channel_id',
-	wishlistChannel: 'mattermost.wishlist_channel_id'
+	wishlistChannel: 'mattermost.wishlist_channel_id',
+	// "true" when new wishlist proposals are announced (off by default, like birthdays).
+	wishlistAnnounce: 'mattermost.wishlist_announce_enabled'
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

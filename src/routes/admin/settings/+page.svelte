@@ -12,6 +12,8 @@
 	let hour = $state(form?.hour ?? data.birthdaySettings.hour);
 	let refreshingMattermostCache = $state(false);
 	let savingChannels = $state(false);
+	// svelte-ignore state_referenced_locally
+	let wishlistAnnounce = $state(data.wishlistAnnounce);
 	let generatingAvatars = $state(false);
 
 	$effect(() => {
@@ -146,10 +148,31 @@
 			"Où sont souhaités les anniversaires. Le bot doit être membre du canal.",
 			data.mattermostChannels.birthday
 		)}
+		<!-- Same switch as the birthday announcements. -->
+		<label class="mb-3 flex w-fit cursor-pointer items-center gap-3 text-sm">
+			<span
+				class="relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors {wishlistAnnounce
+					? 'bg-black'
+					: 'bg-gray-300'}"
+			>
+				<input
+					type="checkbox"
+					name="wishlistAnnounce"
+					bind:checked={wishlistAnnounce}
+					class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+				/>
+				<span
+					class="pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform {wishlistAnnounce
+						? 'translate-x-5'
+						: ''}"
+				></span>
+			</span>
+			Annoncer les nouvelles propositions de la wishlist sur Mattermost
+		</label>
 		{@render channelPicker(
 			'wishlistChannel',
 			'Canal des propositions wishlist',
-			'Chaque nouvelle proposition y est annoncée. Aucun canal = pas d’annonce.',
+			'Où sont annoncées les nouvelles propositions, quand l’annonce est activée ci-dessus.',
 			data.mattermostChannels.wishlist
 		)}
 		<button type="submit" disabled={savingChannels} class="btn-primary px-4 py-2 text-sm disabled:opacity-50">

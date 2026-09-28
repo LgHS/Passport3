@@ -45,8 +45,11 @@ function targetFromSub(sub: string): { pk: number } | Record<string, never> {
 // (postToChannel never throws): the proposal is created either way. The link uses Passport's
 // public origin, taken from the OIDC redirect URI like the task board's links.
 async function announceNewProposal(itemId: number, title: string, type: string, author: string): Promise<void> {
-	const channelId = await getSetting(SETTING_KEYS.wishlistChannel).catch(() => null);
-	if (!channelId) return;
+	const [enabled, channelId] = await Promise.all([
+		getSetting(SETTING_KEYS.wishlistAnnounce).catch(() => null),
+		getSetting(SETTING_KEYS.wishlistChannel).catch(() => null)
+	]);
+	if (enabled !== 'true' || !channelId) return;
 	let link = '';
 	try {
 		if (env.AUTHENTIK_REDIRECT_URI) link = ` ${new URL(env.AUTHENTIK_REDIRECT_URI).origin}/wishlist?item=${itemId}`;
