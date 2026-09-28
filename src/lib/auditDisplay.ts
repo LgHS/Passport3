@@ -22,6 +22,7 @@ export const ACTION_LABELS: Record<string, string> = {
 	'wishlist.resolve': 'Statut de la proposition wishlist changé',
 	'settings.birthday.update': 'Réglages des anniversaires modifiés',
 	'settings.wishlist.update': 'Réglages de la wishlist modifiés',
+	'settings.tasks.update': 'Réglages de la todolist modifiés',
 	'task.create': 'Tâche créée',
 	'task.edit': 'Tâche modifiée',
 	'task.delete': 'Tâche supprimée',

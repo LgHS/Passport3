@@ -156,6 +156,10 @@ values where relevant.
 - **Mattermost reminders** (hourly check from 9:00 Brussels time): one "due tomorrow" and one
   "overdue" DM per due date, to everyone on the task (its owner if nobody is); blocked tasks are
   skipped
+- **Channel announcements** (Admin → Paramètres → Todolist, each off by default): new tasks, done
+  tasks, newly blocked tasks, tasks made urgent (an urgent new task is announced once, as urgent),
+  and a weekly recap (day and hour set there, Monday 9:00 by default) of urgent tasks due within
+  7 days, overdue tasks and tasks nobody is on, all posted to the chosen channel
 - **Deep links**: `/tasks?task=<id>` opens a task; Mattermost messages link there. Passport has no
   dedicated public-URL setting, so these links use the origin of `AUTHENTIK_REDIRECT_URI` — make
   sure it points at Passport's public address
