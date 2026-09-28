@@ -305,6 +305,27 @@ const migrations: Migration[] = [
 				)
 			`;
 		}
+	},
+	{
+		version: 17,
+		name: 'move birthday_settings into app_settings',
+		up: async (sql) => {
+			// Brings the birthday switch and hour next to the birthday channel, so all of a
+			// feature's settings live in app_settings. ON CONFLICT DO NOTHING keeps a value already
+			// saved there. birthday_settings itself is left in place (no longer read) so the
+			// previous release still runs against this database if it has to be rolled back; it
+			// can be dropped by a later migration.
+			await sql`
+				INSERT INTO app_settings (key, value)
+				SELECT 'mattermost.birthday_enabled', 'true' FROM birthday_settings WHERE id = 1 AND enabled
+				ON CONFLICT (key) DO NOTHING
+			`;
+			await sql`
+				INSERT INTO app_settings (key, value)
+				SELECT 'mattermost.birthday_hour', hour::text FROM birthday_settings WHERE id = 1
+				ON CONFLICT (key) DO NOTHING
+			`;
+		}
 	}
 ];
 

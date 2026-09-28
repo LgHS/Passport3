@@ -3,7 +3,9 @@ import { getDb } from '$lib/server/db';
 // Small admin-editable settings (table app_settings, migration 16), edited on /admin/settings.
 
 export const SETTING_KEYS = {
-	// Mattermost channel ids.
+	// Birthday announcements: "true" when on, the hour (0-23, Brussels), and the channel.
+	birthdayEnabled: 'mattermost.birthday_enabled',
+	birthdayHour: 'mattermost.birthday_hour',
 	birthdayChannel: 'mattermost.birthday_channel_id',
 	wishlistChannel: 'mattermost.wishlist_channel_id',
 	// "true" when new wishlist proposals are announced (off by default, like birthdays).
