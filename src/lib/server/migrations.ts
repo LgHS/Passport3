@@ -259,6 +259,15 @@ const migrations: Migration[] = [
 			`;
 			await sql`CREATE INDEX IF NOT EXISTS task_events_task_id ON task_events(task_id, id)`;
 		}
+	},
+	{
+		version: 13,
+		name: 'tasks: created_by_admin',
+		up: async (sql) => {
+			// Whether an admin created the task: its leader can delete a task, except one an admin
+			// created. Existing rows default to false.
+			await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by_admin BOOLEAN NOT NULL DEFAULT false`;
+		}
 	}
 ];
 

@@ -56,7 +56,10 @@
 	const isMember = (t: Task) => t.members.some((m) => m.sub === data.mySub);
 	const myMembership = (t: Task) => t.members.find((m) => m.sub === data.mySub);
 	const canEdit = (t: Task) => data.isAdmin || t.authorSub === data.mySub;
-	const canDelete = (t: Task) => data.isAdmin || (t.authorSub === data.mySub && t.members.length === 0);
+	const isLeader = (t: Task) => t.members.some((m) => m.sub === data.mySub && m.isLeader);
+	// Same rule as the server: the owner, or the leader unless an admin created the task.
+	const canDeleteWithoutAdmin = (t: Task) => t.authorSub === data.mySub || (isLeader(t) && !t.createdByAdmin);
+	const canDelete = (t: Task) => data.isAdmin || canDeleteWithoutAdmin(t);
 	// The task's owner (author) and leader manage it alongside admins: assign members, block/unblock.
 	const isOwnerOrLeader = (t: Task) =>
 		t.authorSub === data.mySub || t.members.some((m) => m.sub === data.mySub && m.isLeader);
@@ -411,11 +414,16 @@
 										({member.imposed ? 'assigné' : 'participant'}{member.isLeader ? ', leader' : ''})
 									</span>
 								</span>
-								{#if data.isAdmin}
+								{#if canAssign(task)}
 									<form method="POST" action="?/removeMember" use:enhance>
 										<input type="hidden" name="taskId" value={task.id} />
 										<input type="hidden" name="memberSub" value={member.sub} />
-										<button class="{adminButtonClass} px-1.5 py-0" aria-label="Retirer @{member.label}">×</button>
+										<button
+											class="{buttonFor(!isOwnerOrLeader(task))} px-1.5 py-0"
+											aria-label="Retirer @{member.label}"
+										>
+											×
+										</button>
 									</form>
 								{/if}
 							</li>
@@ -584,7 +592,7 @@
 						>
 							<input type="hidden" name="taskId" value={task.id} />
 							<button
-								class="text-xs font-bold uppercase underline {task.authorSub === data.mySub ? '' : 'bg-lghs-yellow px-1'}"
+								class="text-xs font-bold uppercase underline {canDeleteWithoutAdmin(task) ? '' : 'bg-lghs-yellow px-1'}"
 							>
 								Supprimer
 							</button>

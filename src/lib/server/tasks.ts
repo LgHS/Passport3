@@ -22,6 +22,7 @@ export interface Task {
 	createdAt: string;
 	authorSub: string;
 	authorLabel: string;
+	createdByAdmin: boolean;
 	title: string;
 	description: string | null;
 	dueDate: string | null;
@@ -45,6 +46,7 @@ interface TaskRow {
 	created_at: Date;
 	author_sub: string;
 	author_label: string;
+	created_by_admin: boolean;
 	title: string;
 	description: string | null;
 	due_date: Date | null;
@@ -79,6 +81,7 @@ function toTask(r: TaskRow, memberRows: MemberRow[]): Task {
 		createdAt: r.created_at.toISOString(),
 		authorSub: r.author_sub,
 		authorLabel: r.author_label,
+		createdByAdmin: r.created_by_admin,
 		title: r.title,
 		description: r.description,
 		dueDate: r.due_date ? isoDay(r.due_date) : null,
@@ -117,11 +120,11 @@ export async function getTask(id: number): Promise<Task | null> {
 	return toTask(row, members);
 }
 
-export async function createTask(author: Person, input: TaskInput): Promise<number> {
+export async function createTask(author: Person, input: TaskInput, byAdmin: boolean): Promise<number> {
 	const sql = await getDb();
 	const [row] = await sql<{ id: number }[]>`
-		INSERT INTO tasks (author_sub, author_label, title, description, due_date)
-		VALUES (${author.sub}, ${author.label}, ${input.title}, ${input.description}, ${input.dueDate})
+		INSERT INTO tasks (author_sub, author_label, title, description, due_date, created_by_admin)
+		VALUES (${author.sub}, ${author.label}, ${input.title}, ${input.description}, ${input.dueDate}, ${byAdmin})
 		RETURNING id
 	`;
 	return row.id;

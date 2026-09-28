@@ -71,6 +71,10 @@ const isOnTask = (task: Task, sub: string) => task.members.some((m) => m.sub ===
 const isOwnerOrLeader = (task: Task, sub: string) =>
 	task.authorSub === sub || task.members.some((m) => m.sub === sub && m.isLeader);
 const canAssign = (task: Task, user: AppUser) => isAdmin(user) || isOwnerOrLeader(task, user.sub);
+// Deleting: admins, the owner, or the leader — except the leader of a task an admin created.
+const isLeader = (task: Task, sub: string) => task.members.some((m) => m.sub === sub && m.isLeader);
+const canDeleteTask = (task: Task, user: AppUser) =>
+	isAdmin(user) || task.authorSub === user.sub || (isLeader(task, user.sub) && !task.createdByAdmin);
 
 // Blocking/unblocking: the task's owner or leader, or an admin.
 const canFlagBlocked = (task: Task, user: AppUser) => isAdmin(user) || isOwnerOrLeader(task, user.sub);
@@ -122,7 +126,7 @@ export const actions: Actions = {
 		const result = validateTaskInput(await request.formData());
 		if (!result.ok) return fail(400, { error: result.error });
 
-		const taskId = await createTask({ sub: user.sub, label: usernameLabel(user) }, result.input);
+		const taskId = await createTask({ sub: user.sub, label: usernameLabel(user) }, result.input, isAdmin(user));
 		await record(user, 'user', 'task.create', targetFromSub(user.sub), taskId, {
 			title: result.input.title
 		});
@@ -210,18 +214,20 @@ export const actions: Actions = {
 		return { updated: true };
 	},
 
-	// Admin only: takes someone off a task, imposed or not.
+	// Admins, the owner or the leader: takes someone off a task, imposed or not.
 	removeMember: async ({ request, locals }) => {
 		const user = requireUser(locals);
-		if (!isAdmin(user)) return fail(403, { error: 'Réservé aux administrateurs.' });
 		const formData = await request.formData();
 		const task = await taskFrom(formData);
 		const memberSub = String(formData.get('memberSub') ?? '');
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
+		// Same people as for assigning: an admin delegates the task's management to its owner and
+		// leader, who can remove anyone, including members an admin put on it.
+		if (!canAssign(task, user)) return fail(403, { error: 'Action non autorisée.' });
 		if (!isOnTask(task, memberSub)) return fail(400, { error: "Ce membre n'est pas sur cette tâche." });
 
 		await removeTaskMember(task.id, memberSub);
-		await record(user, 'admin', 'task.removeMember', targetFromSub(memberSub), task.id, {
+		await record(user, isOwnerOrLeader(task, user.sub) ? 'user' : 'admin', 'task.removeMember', targetFromSub(memberSub), task.id, {
 				member: task.members.find((m) => m.sub === memberSub)?.label,
 			title: task.title
 		});
@@ -338,17 +344,17 @@ export const actions: Actions = {
 		return { updated: true };
 	},
 
-	// Admins, or the author while nobody is on it yet.
+	// Admins, the owner, or the leader unless an admin created the task.
 	delete: async ({ request, locals }) => {
 		const user = requireUser(locals);
 		const task = await taskFrom(await request.formData());
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
-		if (!isAdmin(user) && !(task.authorSub === user.sub && task.members.length === 0)) {
-			return fail(403, { error: 'Vous ne pouvez plus supprimer cette tâche.' });
+		if (!canDeleteTask(task, user)) {
+			return fail(403, { error: 'Vous ne pouvez pas supprimer cette tâche.' });
 		}
 
 		await deleteTask(task.id);
-		await record(user, task.authorSub === user.sub ? 'user' : 'admin', 'task.delete', targetFromSub(task.authorSub), task.id, { title: task.title }
+		await record(user, isOwnerOrLeader(task, user.sub) ? 'user' : 'admin', 'task.delete', targetFromSub(task.authorSub), task.id, { title: task.title }
 		);
 		return { deleted: true };
 	}
