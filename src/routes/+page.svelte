@@ -1,6 +1,13 @@
 <script lang="ts">
 	import { displayName } from '$lib/types';
 	import CotisationStatusBlock from '$lib/components/CotisationStatusBlock.svelte';
+	import { priorityMeta } from '$lib/taskPriority';
+
+	const today = new Date().toISOString().slice(0, 10);
+
+	function formatDay(iso: string): string {
+		return new Date(`${iso}T00:00:00`).toLocaleDateString('fr-BE', { day: 'numeric', month: 'short' });
+	}
 
 	let { data } = $props();
 
@@ -142,6 +149,45 @@
 			</div>
 		</section>
 	</div>
+
+	{#if data.myTasks && data.myTasks.length > 0}
+		<section class="mb-10">
+			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">
+				Mes tâches ({data.myTasks.length})
+			</h2>
+			<ul class="divide-y divide-black border border-black">
+				{#each data.myTasks as task (task.id)}
+					{@const overdue = !!task.dueDate && task.dueDate < today}
+					<li>
+						<a
+							href="/tasks?task={task.id}"
+							class="no-underline-fx flex items-center justify-between gap-3 px-4 py-2 text-sm hover:bg-gray-100 {overdue
+								? 'bg-red-50'
+								: ''}"
+						>
+							<span class="min-w-0">
+								<span class="font-bold">{task.title}</span>
+								<span class="ml-2 text-xs text-gray-500">
+									{task.status === 'blocked' ? 'Bloquée' : task.status === 'in_progress' ? 'En cours' : 'À faire'}
+								</span>
+								{#if task.dueDate}
+									<span class="ml-2 text-xs {overdue ? 'font-bold text-red-600' : 'text-gray-500'}">
+										{overdue ? 'En retard' : 'Pour le'} {formatDay(task.dueDate)}
+									</span>
+								{/if}
+							</span>
+							<span
+								class="shrink-0 border border-black px-1.5 py-0.5 text-[10px] font-bold uppercase {priorityMeta(task.priority).badge}"
+							>
+								{priorityMeta(task.priority).label}
+							</span>
+						</a>
+					</li>
+				{/each}
+			</ul>
+			<a href="/tasks" class="mt-2 inline-block text-sm">Voir toutes les tâches →</a>
+		</section>
+	{/if}
 
 	{#if data.groups === null || data.groups.length === 0}
 		<section>

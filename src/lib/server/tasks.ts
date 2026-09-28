@@ -239,3 +239,62 @@ export async function listTaskEvents(taskId: number): Promise<TaskEvent[]> {
 		return { id: r.id, createdAt: r.created_at.toISOString(), actorLabel: r.actor_label, action: r.action, details };
 	});
 }
+
+// Passport's public address, for links in Mattermost messages. There's no dedicated setting: the
+// OIDC redirect URI always points at Passport itself. null if it isn't configured.
+export function publicTaskUrl(taskId: number, redirectUri: string | undefined): string | null {
+	try {
+		return redirectUri ? `${new URL(redirectUri).origin}/tasks?task=${taskId}` : null;
+	} catch {
+		return null;
+	}
+}
+
+// Dashboard's "Mes tâches": tasks not done that the member is on.
+export async function listOpenTasksForMember(memberSub: string): Promise<Task[]> {
+	const sql = await getDb();
+	const rows = await sql<TaskRow[]>`
+		SELECT t.* FROM tasks t
+		JOIN task_members m ON m.task_id = t.id AND m.member_sub = ${memberSub}
+		WHERE t.done_at IS NULL
+		ORDER BY t.priority DESC, t.due_date ASC NULLS LAST, t.id DESC
+	`;
+	if (rows.length === 0) return [];
+	const members = await sql<MemberRow[]>`
+		SELECT * FROM task_members WHERE task_id IN ${sql(rows.map((r) => r.id))} ORDER BY joined_at
+	`;
+	return rows.map((r) => toTask(r, members.filter((m) => m.task_id === r.id)));
+}
+
+export interface ReminderCandidate {
+	task: Task;
+	kind: 'due_soon' | 'overdue';
+}
+
+// Tasks owed a reminder today (`today`/`tomorrow` as YYYY-MM-DD in Brussels time): due tomorrow,
+// or past their due date, and not reminded yet for that due date.
+export async function listReminderCandidates(today: string, tomorrow: string): Promise<ReminderCandidate[]> {
+	const sql = await getDb();
+	const rows = await sql<(TaskRow & { kind: 'due_soon' | 'overdue' })[]>`
+		SELECT *, CASE WHEN due_date = ${tomorrow}::date THEN 'due_soon' ELSE 'overdue' END AS kind
+		FROM tasks
+		WHERE done_at IS NULL AND blocked_kind IS NULL AND due_date IS NOT NULL AND (
+			(due_date = ${tomorrow}::date AND due_soon_reminded_for IS DISTINCT FROM due_date)
+			OR (due_date < ${today}::date AND overdue_reminded_for IS DISTINCT FROM due_date)
+		)
+	`;
+	if (rows.length === 0) return [];
+	const members = await sql<MemberRow[]>`
+		SELECT * FROM task_members WHERE task_id IN ${sql(rows.map((r) => r.id))} ORDER BY joined_at
+	`;
+	return rows.map((r) => ({ task: toTask(r, members.filter((m) => m.task_id === r.id)), kind: r.kind }));
+}
+
+export async function markReminded(taskId: number, kind: 'due_soon' | 'overdue'): Promise<void> {
+	const sql = await getDb();
+	if (kind === 'due_soon') {
+		await sql`UPDATE tasks SET due_soon_reminded_for = due_date WHERE id = ${taskId}`;
+	} else {
+		await sql`UPDATE tasks SET overdue_reminded_for = due_date WHERE id = ${taskId}`;
+	}
+}

@@ -276,6 +276,20 @@ const migrations: Migration[] = [
 			// 1 Bas, 2 Moyen, 3 Normal, 4 Élevé, 5 Urgent (see $lib/taskPriority). Existing tasks: Normal.
 			await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority SMALLINT NOT NULL DEFAULT 3`;
 		}
+	},
+	{
+		version: 15,
+		name: 'tasks: reminder tracking',
+		up: async (sql) => {
+			// Which due date each Mattermost reminder was already sent for (see taskReminders.ts):
+			// one "due tomorrow" and one "overdue" reminder per due date, sent again only if the due
+			// date is changed.
+			await sql`
+				ALTER TABLE tasks
+					ADD COLUMN IF NOT EXISTS due_soon_reminded_for DATE,
+					ADD COLUMN IF NOT EXISTS overdue_reminded_for DATE
+			`;
+		}
 	}
 ];
 

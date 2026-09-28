@@ -18,6 +18,7 @@ import {
 } from '$lib/server/dolibarr';
 import { authentikPk, type CotisationStatus } from '$lib/types';
 import { hasUploadedAvatar } from '$lib/server/avatars';
+import { listOpenTasksForMember } from '$lib/server/tasks';
 
 export interface AppGroup {
 	name: string;
@@ -141,7 +142,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const pk = authentikPk(locals.user);
 
-	const [apps, financial, mfaDevices, emergencyContacts, rfidUid] = await Promise.all([
+	const [apps, financial, mfaDevices, emergencyContacts, rfidUid, myTasks] = await Promise.all([
 		// Best-effort: a transient Authentik API hiccup shouldn't take down the whole homepage.
 		pk ? listUserApplications(pk).catch((): UserApplication[] | null => null) : Promise.resolve(null),
 		loadMemberFinancialSummary(locals.user.email),
@@ -150,7 +151,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// getRfidUid's own return already uses `null` to mean "no badge yet" — a legitimate,
 		// distinct value from a fetch failure, so the failure case is `undefined` here rather than
 		// reusing `null` and collapsing the two meanings together.
-		pk ? getRfidUid(pk).catch(() => undefined) : Promise.resolve(undefined)
+		pk ? getRfidUid(pk).catch(() => undefined) : Promise.resolve(undefined),
+		// "Mes tâches": best-effort too, a database hiccup just hides the block.
+		listOpenTasksForMember(locals.user.sub).catch(() => null)
 	]);
 
 	const checklist: DashboardChecklist = {
@@ -167,6 +170,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		groups: apps ? groupApps(apps) : null,
 		cotisation: financial.cotisation,
 		cotisationUnavailable: financial.unavailable,
-		checklist
+		checklist,
+		myTasks
 	};
 };

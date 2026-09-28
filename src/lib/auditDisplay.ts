@@ -33,7 +33,8 @@ export const ACTION_LABELS: Record<string, string> = {
 	'task.block': 'Tâche bloquée',
 	'task.unblock': 'Tâche débloquée',
 	'task.done': 'Tâche terminée',
-	'task.reopen': 'Tâche rouverte'
+	'task.reopen': 'Tâche rouverte',
+	'task.comment': 'Commentaire sur une tâche'
 };
 
 export function actionLabel(action: string): string {

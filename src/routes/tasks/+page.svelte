@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { replaceState } from '$app/navigation';
+	import { page } from '$app/state';
+	import { onMount } from 'svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { renderMiniMarkdown } from '$lib/renderMiniMarkdown';
 	import { DEFAULT_TASK_PRIORITY, TASK_PRIORITIES, priorityMeta } from '$lib/taskPriority';
@@ -33,14 +36,38 @@
 	let editing = $state(false);
 	let dialog = $state<HTMLDialogElement | null>(null);
 
+	// Deep link: /tasks?task=12 opens that task (used by the Mattermost messages), and the address
+	// follows the open task so it can be shared.
+	function setTaskParam(taskId: number | null) {
+		const url = new URL(page.url);
+		if (taskId === null) url.searchParams.delete('task');
+		else url.searchParams.set('task', String(taskId));
+		replaceState(url, {});
+	}
+
 	function openTask(task: Task) {
 		selectedId = task.id;
 		editing = false;
 		dialog?.showModal();
+		setTaskParam(task.id);
 	}
 
 	function closeTask() {
 		dialog?.close();
+	}
+
+	onMount(() => {
+		const linked = data.tasks.find((t) => t.id === Number(page.url.searchParams.get('task')));
+		if (linked) openTask(linked);
+	});
+
+	async function copyTaskLink(task: Task) {
+		try {
+			await navigator.clipboard.writeText(`${location.origin}/tasks?task=${task.id}`);
+			showToast('success', 'Lien copié.');
+		} catch {
+			showToast('error', 'Impossible de copier le lien.');
+		}
 	}
 
 	$effect(() => {
@@ -67,7 +94,31 @@
 	const canFlagBlocked = (t: Task) => data.isAdmin || isOwnerOrLeader(t);
 	const canAssign = (t: Task) => data.isAdmin || isOwnerOrLeader(t);
 
-	const visibleTasks = $derived(onlyMine ? data.tasks.filter(isMember) : data.tasks);
+	let search = $state('');
+	let priorityFilter = $state<number | 'all'>('all');
+	let leaderFilter = $state<string>('all');
+
+	// Leaders present on the board, for the leader filter.
+	const leaders = $derived(
+		[...new Map(data.tasks.flatMap((t) => t.members.filter((m) => m.isLeader)).map((m) => [m.sub, m])).values()].sort(
+			(a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' })
+		)
+	);
+
+	// Accent-insensitive, like the trombinoscope's search.
+	function normalize(value: string): string {
+		return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+	}
+
+	const visibleTasks = $derived(
+		data.tasks.filter((t) => {
+			if (onlyMine && !isMember(t)) return false;
+			if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false;
+			if (leaderFilter !== 'all' && !t.members.some((m) => m.isLeader && m.sub === leaderFilter)) return false;
+			const query = normalize(search.trim());
+			return !query || normalize(`${t.title} ${t.description ?? ''}`).includes(query);
+		})
+	);
 
 	function tasksFor(status: Status): Task[] {
 		return visibleTasks.filter((t) => t.status === status);
@@ -144,6 +195,9 @@
 			case 'task.unblock': return 'a débloqué la tâche';
 			case 'task.done': return 'a marqué la tâche comme faite';
 			case 'task.reopen': return 'a rouvert la tâche';
+			case 'task.comment': return 'a commenté :';
+			case 'task.remindDueSoon': return 'a envoyé un rappel (date limite demain)';
+			case 'task.remindOverdue': return 'a signalé que la date limite est dépassée';
 			default: return event.action;
 		}
 	}
@@ -366,6 +420,26 @@
 		<input type="checkbox" bind:checked={onlyMine} />
 		Mes tâches
 	</label>
+	<input
+		type="search"
+		bind:value={search}
+		placeholder="Rechercher une tâche…"
+		class="min-w-0 flex-1 border border-black px-3 py-2 text-sm placeholder:text-gray-400 sm:max-w-xs"
+	/>
+	<select bind:value={priorityFilter} aria-label="Filtrer par priorité" class="border border-black px-2 py-2 text-sm">
+		<option value="all">Toutes priorités</option>
+		{#each [...TASK_PRIORITIES].reverse() as priority (priority.value)}
+			<option value={priority.value}>{priority.label}</option>
+		{/each}
+	</select>
+	{#if leaders.length > 0}
+		<select bind:value={leaderFilter} aria-label="Filtrer par leader" class="border border-black px-2 py-2 text-sm">
+			<option value="all">Tous les leaders</option>
+			{#each leaders as leader (leader.sub)}
+				<option value={leader.sub}>★ @{leader.label}</option>
+			{/each}
+		</select>
+	{/if}
 	<!-- Stands out while blocked tasks exist, since they're hidden by default. -->
 	<label
 		class="flex items-center gap-2 text-sm {blockedCount > 0
@@ -426,6 +500,7 @@
 	onclose={() => {
 		selectedId = null;
 		editing = false;
+		setTaskParam(null);
 	}}
 	aria-labelledby="task-title"
 	class="m-auto max-h-[80vh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto border-4 border-black bg-white p-4 text-left backdrop:bg-black/50"
@@ -644,7 +719,28 @@
 			{/if}
 
 			<div class="mb-3 border-t border-black pt-3">
-				<p class="mb-2 text-sm font-bold">Historique</p>
+				<p class="mb-2 text-sm font-bold">Historique et commentaires</p>
+				<form
+					method="POST"
+					action="?/comment"
+					class="mb-3 flex gap-2"
+					use:enhance={() =>
+						async ({ result, update }) => {
+							await update();
+							if (result.type === 'success') loadHistory(task.id);
+						}}
+				>
+					<input type="hidden" name="taskId" value={task.id} />
+					<textarea
+						name="comment"
+						required
+						maxlength="1000"
+						rows="1"
+						placeholder="Ajouter un commentaire… (**gras**, *italique*, __souligné__)"
+						class="min-w-0 flex-1 border border-black px-2 py-1 text-xs"
+					></textarea>
+					<button class="btn-primary px-3 py-1 text-xs">Envoyer</button>
+				</form>
 				{#if historyFailed}
 					<p class="text-xs text-gray-500">Historique indisponible pour le moment.</p>
 				{:else if history === null}
@@ -659,14 +755,22 @@
 								<span class="font-bold">@{event.actorLabel}</span>
 								{describe(event)}
 								<span class="text-gray-500">· {formatWhen(event.createdAt)}</span>
+								{#if event.action === 'task.comment' && typeof event.details?.text === 'string'}
+									<p class="mt-0.5 border border-gray-300 bg-gray-50 px-2 py-1 whitespace-pre-wrap">
+										{@html renderMiniMarkdown(event.details.text)}
+									</p>
+								{/if}
 							</li>
 						{/each}
 					</ol>
 				{/if}
 			</div>
 
-			{#if canEdit(task) || canDelete(task)}
-				<div class="flex gap-4 border-t border-black pt-3">
+			<div class="flex gap-4 border-t border-black pt-3">
+				<button type="button" onclick={() => copyTaskLink(task)} class="text-xs font-bold uppercase underline">
+					🔗 Copier le lien
+				</button>
+				{#if canEdit(task) || canDelete(task)}
 					{#if canEdit(task)}
 						<button
 							type="button"
@@ -692,8 +796,8 @@
 							</button>
 						</form>
 					{/if}
-				</div>
-			{/if}
+				{/if}
+			</div>
 		{/if}
 	{/if}
 </dialog>

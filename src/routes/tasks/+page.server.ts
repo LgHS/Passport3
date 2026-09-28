@@ -8,6 +8,7 @@ import {
 	listTasks,
 	removeTaskMember,
 	addTaskEvent,
+	publicTaskUrl,
 	setTaskBlocked,
 	setTaskStarted,
 	setTaskDone,
@@ -20,12 +21,14 @@ import { listUsers } from '$lib/server/authentikAdmin';
 import { getMattermostUsername } from '$lib/server/mattermost';
 import { postDirectMessage } from '$lib/server/mattermostBot';
 import { logAuditEvent } from '$lib/server/auditLog';
+import { env } from '$env/dynamic/private';
 import { displayName, isAdmin, type AppUser } from '$lib/types';
 import { DEFAULT_TASK_PRIORITY, TASK_PRIORITIES } from '$lib/taskPriority';
 
 const TITLE_MAX_LENGTH = 120;
 const DESCRIPTION_MAX_LENGTH = 2000;
 const BLOCKED_NOTE_MAX_LENGTH = 500;
+const COMMENT_MAX_LENGTH = 1000;
 
 function requireUser(locals: App.Locals): AppUser {
 	if (!locals.user) redirect(302, '/login');
@@ -210,7 +213,7 @@ export const actions: Actions = {
 			if (mattermostUsername) {
 				await postDirectMessage(
 					mattermostUsername,
-					`📌 ${usernameLabel(user)} t'a assigné une tâche dans Passport : **${task.title}**${task.dueDate ? ` (date limite : ${task.dueDate})` : ''}.`
+					`📌 ${usernameLabel(user)} t'a assigné une tâche dans Passport : **${task.title}**${task.dueDate ? ` (date limite : ${task.dueDate})` : ''}.${publicTaskUrl(task.id, env.AUTHENTIK_REDIRECT_URI) ? ` ${publicTaskUrl(task.id, env.AUTHENTIK_REDIRECT_URI)}` : ''}`
 				);
 			}
 		}
@@ -308,6 +311,22 @@ export const actions: Actions = {
 		await setTaskStarted(task.id, false);
 		await record(user, sourceFor(task, user), 'task.unstart', targetFromSub(user.sub), task.id, { title: task.title });
 		return { updated: true };
+	},
+
+	// Any member can comment a task, e.g. "j'ai commandé la pièce". Shown in its history.
+	comment: async ({ request, locals }) => {
+		const user = requireUser(locals);
+		const formData = await request.formData();
+		const task = await taskFrom(formData);
+		if (!task) return fail(404, { error: 'Tâche introuvable.' });
+		const text = String(formData.get('comment') ?? '').trim();
+		if (!text) return fail(400, { error: 'Le commentaire est vide.' });
+		if (text.length > COMMENT_MAX_LENGTH) {
+			return fail(400, { error: `Commentaire : ${COMMENT_MAX_LENGTH} caractères maximum.` });
+		}
+
+		await record(user, 'user', 'task.comment', targetFromSub(user.sub), task.id, { title: task.title, text });
+		return { commented: true };
 	},
 
 	block: async ({ request, locals }) => {
