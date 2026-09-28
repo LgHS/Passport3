@@ -585,28 +585,20 @@
 					{member.tag}
 				</span>
 			{/if}
-			<button
-				type="button"
-				onclick={closeMember}
-				class="absolute top-0 right-0 bg-black px-3 py-1 text-sm font-bold text-white md:hidden"
-				aria-label="Fermer la fiche"
-			>
-				✕
-			</button>
 		</div>
 
 		<div class="relative space-y-3 p-4 text-sm">
-			<!-- Wide screens: the photo is on the left, so the close button moves to the card's corner. -->
+			<!-- Same close button as the wishlist and task modals, at the top right of the details. -->
 			<button
 				type="button"
 				onclick={closeMember}
-				class="absolute top-0 right-0 hidden bg-black px-3 py-1 text-sm font-bold text-white md:block"
 				aria-label="Fermer la fiche"
+				class="absolute top-3 right-2 px-2 text-lg leading-none font-bold"
 			>
-				✕
+				×
 			</button>
 			<div>
-				<h2 id="member-card-title" class="text-base font-bold break-all">@{member.username}</h2>
+				<h2 id="member-card-title" class="pr-8 text-base font-bold break-all">@{member.username}</h2>
 				{#if member.tagExtended}
 					<p class="font-bold">{member.tagExtended}</p>
 				{/if}
