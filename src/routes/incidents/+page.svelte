@@ -68,8 +68,11 @@
 	et le plus précisément possible.
 </p>
 <p class="mb-6 text-sm text-gray-600">
-	Elles sont transmises aux admins et ne sont pas visibles par les autres membres. En cas de
-	besoin d'aide, écrivez à <a href="mailto:admin@lghs.be">admin@lghs.be</a>.
+	Les informations de cette déclaration sont traitées de manière strictement confidentielle. Seuls
+	les admins peuvent la consulter ; les autres membres n'y ont jamais accès. Elles ne sont
+	communiquées à un tiers (assureur, autorités) que lorsque c'est nécessaire, par exemple pour une
+	déclaration d'assurance, et uniquement dans la mesure requise. Pour toute question :
+	<a href="mailto:admin@lghs.be">admin@lghs.be</a>.
 </p>
 
 <form method="POST" action="?/create" use:enhance class="mb-8 border border-black p-4">
