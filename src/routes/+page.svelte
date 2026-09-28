@@ -41,6 +41,12 @@
 				todoLabel: 'Envoyer une photo de profil'
 			},
 			{
+				href: data.mattermostUrl ?? '/profile',
+				done: data.checklist.mattermostActivated,
+				doneLabel: 'Compte Mattermost activé',
+				todoLabel: 'Activer mon compte Mattermost'
+			},
+			{
 				href: '/badge',
 				done: data.checklist.badgeConfigured,
 				doneLabel: 'Badge RFID généré',
