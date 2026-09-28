@@ -1,4 +1,11 @@
 <script lang="ts">
+	// "Révoquer" asks first, like the other destructive buttons: the device gets logged out.
+	function confirmRevoke(session: { os: string; browser: string }) {
+		return ({ cancel }: { cancel: () => void }) => {
+			if (!confirm(`Révoquer la session ${session.os} — ${session.browser} ? Cet appareil sera déconnecté.`)) cancel();
+		};
+	}
+
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -258,7 +265,7 @@
 			<div class="space-y-2 sm:hidden">
 				{#each data.sessions as session (session.uuid)}
 					<div class="border border-black p-3 text-sm leading-relaxed">
-						<p class="font-bold">{session.os} — {session.browser}</p>
+						<p class="text-xs font-bold">{session.os} — {session.browser}</p>
 						<p class="mt-1 text-gray-600">{session.location ?? session.lastIp}</p>
 						<p class="mt-1 text-gray-600">Dernière activité : {formatDate(session.lastUsed)}</p>
 						<p class="mt-1 text-gray-600">Expire le : {formatDate(session.expires)}</p>
@@ -266,9 +273,9 @@
 							{#if session.current}
 								<span class="text-xs font-bold uppercase">Session actuelle</span>
 							{:else}
-								<form method="POST" action="?/revokeSession" use:enhance>
+								<form method="POST" action="?/revokeSession" use:enhance={confirmRevoke(session)}>
 									<input type="hidden" name="uuid" value={session.uuid} />
-									<button type="submit" class="text-xs font-bold uppercase underline">
+									<button type="submit" class="text-xs font-bold text-red-700 uppercase underline">
 										Révoquer
 									</button>
 								</form>
@@ -292,7 +299,7 @@
 					<tbody>
 						{#each data.sessions as session (session.uuid)}
 							<tr>
-								<td class="border border-black px-3 py-2">{session.os} — {session.browser}</td>
+								<td class="border border-black px-3 py-2 text-xs">{session.os} — {session.browser}</td>
 								<td class="border border-black px-3 py-2">{session.location ?? session.lastIp}</td>
 								<td class="border border-black px-3 py-2 whitespace-nowrap">{formatDate(session.lastUsed)}</td>
 								<td class="border border-black px-3 py-2 whitespace-nowrap">{formatDate(session.expires)}</td>
@@ -300,9 +307,9 @@
 									{#if session.current}
 										<span class="text-xs font-bold uppercase">Session actuelle</span>
 									{:else}
-										<form method="POST" action="?/revokeSession" use:enhance>
+										<form method="POST" action="?/revokeSession" use:enhance={confirmRevoke(session)}>
 											<input type="hidden" name="uuid" value={session.uuid} />
-											<button type="submit" class="text-xs font-bold uppercase underline">
+											<button type="submit" class="text-xs font-bold text-red-700 uppercase underline">
 												Révoquer
 											</button>
 										</form>
@@ -509,7 +516,7 @@
 						<p class="mt-1 text-gray-600">
 							{formatDate(event.createdAt)} —
 							<span
-								class="inline-block w-16 border border-black px-1 py-0.5 text-center text-[10px] font-bold uppercase"
+								class="inline-block w-16 border border-black px-1 py-0.5 text-center text-[10px] font-bold uppercase {event.source === 'admin' ? 'bg-lghs-yellow' : ''}"
 							>
 								{sourceLabel(event.source)}
 							</span>
@@ -536,7 +543,7 @@
 								</td>
 								<td class="border border-black px-3 py-2 whitespace-nowrap">
 									<span
-										class="inline-block w-16 border border-black px-1.5 py-0.5 text-center text-[10px] font-bold uppercase"
+										class="inline-block w-16 border border-black px-1.5 py-0.5 text-center text-[10px] font-bold uppercase {event.source === 'admin' ? 'bg-lghs-yellow' : ''}"
 									>
 										{sourceLabel(event.source)}
 									</span>
@@ -594,7 +601,7 @@
 			<p class="mb-3 text-sm text-gray-600">
 				{formatDate(selectedEvent.createdAt)} —
 				<span
-					class="inline-block w-16 border border-black px-1 py-0.5 text-center text-[10px] font-bold uppercase"
+					class="inline-block w-16 border border-black px-1 py-0.5 text-center text-[10px] font-bold uppercase {selectedEvent.source === 'admin' ? 'bg-lghs-yellow' : ''}"
 				>
 					{sourceLabel(selectedEvent.source)}
 				</span>

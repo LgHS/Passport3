@@ -42,7 +42,7 @@
 	}
 
 	const itemClass =
-		'no-underline-fx flex items-center gap-3 rounded px-4 py-2.5 text-sm font-bold uppercase transition-colors';
+		'no-underline-fx flex items-center gap-3 rounded px-4 py-2 text-sm font-bold uppercase transition-colors';
 	// Indented, smaller sibling of itemClass for the admin submenu (Paramètres/Historique) — one
 	// level under "Admin" itself, not a full nav item in its own right.
 	const subItemClass =
