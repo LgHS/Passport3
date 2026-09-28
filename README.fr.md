@@ -124,6 +124,7 @@ Passport3 conserve un historique des actions effectuées via l'application, auss
 - **Étapes explicites** : avoir des personnes sur une tâche ne la démarre pas, c'est *Démarrer* qui la passe *En cours*. *Bloqué* demande un type (interne/externe) et une note sur ce qu'on attend
 - **Historique et commentaires propres à chaque tâche** dans sa fiche ; chaque action est aussi écrite dans le journal d'audit, visible sur `/admin/audit` et dans l'historique du membre
 - **Rappels Mattermost** (vérification toutes les heures à partir de 9 h, heure de Bruxelles) : un message « à faire pour demain » et un « date limite dépassée » par date limite, envoyés aux personnes sur la tâche (au propriétaire s'il n'y a personne) ; les tâches bloquées sont ignorées
+- **Annonces sur un canal** (Admin → Paramètres → Todolist, chacune désactivée par défaut) : nouvelles tâches, tâches terminées, tâches qui deviennent bloquées, tâches passées en urgent (une nouvelle tâche urgente n'est annoncée qu'une fois, comme urgente), et un récap le lundi à 9 h des tâches en retard et sans participant, postés sur le canal choisi
 - **Liens directs** : `/tasks?task=<id>` ouvre une tâche, et les messages Mattermost y renvoient. Passport n'a pas de réglage d'adresse publique dédié : ces liens utilisent l'origine de `AUTHENTIK_REDIRECT_URI`, qui doit donc pointer vers l'adresse publique de Passport
 - La page d'accueil liste les tâches ouvertes du membre (« Mes tâches »)
 

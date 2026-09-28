@@ -21,9 +21,12 @@ import { listTrombinoscopeUsernames, listUsers } from '$lib/server/authentikAdmi
 import { getMattermostUsername } from '$lib/server/mattermost';
 import { postDirectMessage } from '$lib/server/mattermostBot';
 import { logAuditEvent } from '$lib/server/auditLog';
+import { announceTask } from '$lib/server/taskAnnouncements';
 import { env } from '$env/dynamic/private';
 import { displayName, isAdmin, type AppUser } from '$lib/types';
 import { DEFAULT_TASK_PRIORITY, TASK_PRIORITIES } from '$lib/taskPriority';
+
+const URGENT_PRIORITY = TASK_PRIORITIES[TASK_PRIORITIES.length - 1].value;
 
 const TITLE_MAX_LENGTH = 120;
 const DESCRIPTION_MAX_LENGTH = 2000;
@@ -138,6 +141,9 @@ export const actions: Actions = {
 		await record(user, 'user', 'task.create', targetFromSub(user.sub), taskId, {
 			title: result.input.title
 		});
+		// An urgent task gets the urgent announcement rather than both.
+		const newTask = { id: taskId, title: result.input.title, members: [] };
+		await announceTask(result.input.priority === URGENT_PRIORITY ? 'urgent' : 'created', newTask, usernameLabel(user));
 		return { created: true };
 	},
 
@@ -157,6 +163,9 @@ export const actions: Actions = {
 				after: result.input
 			}
 		);
+		if (result.input.priority === URGENT_PRIORITY && task.priority !== URGENT_PRIORITY && task.status !== 'done') {
+			await announceTask('urgent', { ...task, title: result.input.title }, usernameLabel(user));
+		}
 		return { edited: true };
 	},
 
@@ -272,6 +281,7 @@ export const actions: Actions = {
 		await setTaskDone(task.id, true);
 		await record(user, isOnTask(task, user.sub) ? 'user' : 'admin', 'task.done', targetFromSub(user.sub), task.id, { title: task.title }
 		);
+		if (task.status !== 'done') await announceTask('done', task, usernameLabel(user));
 		return { updated: true };
 	},
 
@@ -351,6 +361,8 @@ export const actions: Actions = {
 			before: task.blocked,
 			after: { kind, note }
 		});
+		// Only when it becomes blocked, not when the note is merely edited.
+		if (!task.blocked) await announceTask('blocked', { ...task, blockedNote: note }, usernameLabel(user));
 		return { updated: true };
 	},
 
