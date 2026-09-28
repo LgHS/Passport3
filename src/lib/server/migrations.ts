@@ -165,8 +165,8 @@ const migrations: Migration[] = [
 		version: 10,
 		name: 'create tasks',
 		up: async (sql) => {
-			// Workshop to-do board (replaces the post-its on the wall). `status` only tracks
-			// done-or-not: "à faire" vs "en cours" is derived from whether anyone is on the task.
+			// First shape of the task board (one assignee per task). Kept exactly as it first ran:
+			// migration 11 below turns it into the current shape.
 			await sql`
 				CREATE TABLE tasks (
 					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -176,17 +176,25 @@ const migrations: Migration[] = [
 					title TEXT NOT NULL,
 					description TEXT,
 					due_date DATE,
-					done_at TIMESTAMPTZ,
-					-- 'internal' (waiting on us: a decision, a purchase…) or 'external' (a supplier,
-					-- a third party…), with a note saying what it's waiting on. NULL = not blocked.
-					blocked_kind TEXT,
-					blocked_note TEXT
+					status TEXT NOT NULL DEFAULT 'todo',
+					assignee_sub TEXT,
+					assignee_label TEXT,
+					assigned_by_sub TEXT,
+					done_at TIMESTAMPTZ
 				)
 			`;
+		}
+	},
+	{
+		version: 11,
+		name: 'tasks: several members, leader, blocked state',
+		up: async (sql) => {
+			// Written to work on any database that ran a draft of migration 10 (whichever shape it
+			// had), hence the IF [NOT] EXISTS everywhere.
 			// Everyone on a task: volunteers (assigned_by_sub null) and members an admin put on it
 			// (assigned_by_sub set — they can't remove themselves). At most one leader per task.
 			await sql`
-				CREATE TABLE task_members (
+				CREATE TABLE IF NOT EXISTS task_members (
 					task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
 					member_sub TEXT NOT NULL,
 					member_label TEXT NOT NULL,
@@ -196,7 +204,37 @@ const migrations: Migration[] = [
 					PRIMARY KEY (task_id, member_sub)
 				)
 			`;
-			await sql`CREATE UNIQUE INDEX task_members_one_leader ON task_members(task_id) WHERE is_leader`;
+			await sql`
+				CREATE UNIQUE INDEX IF NOT EXISTS task_members_one_leader ON task_members(task_id) WHERE is_leader
+			`;
+
+			// The single assignee of the first shape becomes the task's first member.
+			const [{ has_assignee }] = await sql<{ has_assignee: boolean }[]>`
+				SELECT EXISTS (
+					SELECT 1 FROM information_schema.columns
+					WHERE table_name = 'tasks' AND column_name = 'assignee_sub'
+				) AS has_assignee
+			`;
+			if (has_assignee) {
+				await sql`
+					INSERT INTO task_members (task_id, member_sub, member_label, assigned_by_sub)
+					SELECT id, assignee_sub, assignee_label, assigned_by_sub FROM tasks WHERE assignee_sub IS NOT NULL
+					ON CONFLICT DO NOTHING
+				`;
+			}
+			// "à faire" vs "en cours" is now derived from whether anyone is on the task, and "fait"
+			// from done_at.
+			await sql`
+				ALTER TABLE tasks
+					DROP COLUMN IF EXISTS status,
+					DROP COLUMN IF EXISTS assignee_sub,
+					DROP COLUMN IF EXISTS assignee_label,
+					DROP COLUMN IF EXISTS assigned_by_sub,
+					-- 'internal' (waiting on us: a decision, a purchase…) or 'external' (a supplier, a
+					-- third party…), with a note saying what it's waiting on. NULL = not blocked.
+					ADD COLUMN IF NOT EXISTS blocked_kind TEXT,
+					ADD COLUMN IF NOT EXISTS blocked_note TEXT
+			`;
 		}
 	}
 ];
