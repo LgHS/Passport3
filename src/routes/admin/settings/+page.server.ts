@@ -9,6 +9,7 @@ import { getBirthdaySettings, updateBirthdaySettings } from '$lib/server/birthda
 import { refreshMattermostCache } from '$lib/server/mattermost';
 import { getSetting, setSetting, SETTING_KEYS, type SettingKey } from '$lib/server/appSettings';
 import { env } from '$env/dynamic/private';
+import { getRecapSchedule } from '$lib/server/taskAnnouncements';
 
 // Mattermost channel ids are 26 lowercase alphanumerics.
 const CHANNEL_ID_RE = /^[a-z0-9]{26}$/;
@@ -43,10 +44,16 @@ async function saveAnnouncements(
 	channelKey: SettingKey,
 	channel: string,
 	admin: AppUser,
-	action: string
+	action: string,
+	// Other fields of the same block, added to the audit entry.
+	extra: { before: Record<string, unknown>; after: Record<string, unknown> } = { before: {}, after: {} }
 ): Promise<void> {
-	const before: Record<string, unknown> = { channel: await getSetting(channelKey), ...(await readSwitches(switches)) };
-	const after: Record<string, unknown> = { channel: channel || null };
+	const before: Record<string, unknown> = {
+		channel: await getSetting(channelKey),
+		...(await readSwitches(switches)),
+		...extra.before
+	};
+	const after: Record<string, unknown> = { channel: channel || null, ...extra.after };
 	for (const [field, key] of Object.entries(switches)) {
 		after[field] = formData.has(field);
 		await setSetting(key, after[field] ? 'true' : null);
@@ -63,7 +70,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		getSetting(SETTING_KEYS.wishlistChannel),
 		getSetting(SETTING_KEYS.tasksChannel)
 	]);
-	const [wishlistAnnounce, tasksAnnounce] = await Promise.all([readSwitches(WISHLIST_SWITCHES), readSwitches(TASK_SWITCHES)]);
+	const [wishlistAnnounce, tasksAnnounce, tasksRecap] = await Promise.all([
+		readSwitches(WISHLIST_SWITCHES),
+		readSwitches(TASK_SWITCHES),
+		getRecapSchedule()
+	]);
 	return {
 		birthdaySettings,
 		mattermostChannels: {
@@ -73,7 +84,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			tasks: tasksChannel ?? ''
 		},
 		wishlistAnnounce,
-		tasksAnnounce
+		tasksAnnounce,
+		tasksRecap
 	};
 };
 
@@ -128,7 +140,21 @@ export const actions: Actions = {
 		if (channel && !CHANNEL_ID_RE.test(channel)) {
 			return fail(400, { tasksError: INVALID_CHANNEL });
 		}
-		await saveAnnouncements(formData, TASK_SWITCHES, SETTING_KEYS.tasksChannel, channel, admin, 'settings.tasks.update');
+		const recapDay = Number(formData.get('recapDay'));
+		const recapHour = Number(formData.get('recapHour'));
+		if (!Number.isInteger(recapDay) || recapDay < 0 || recapDay > 6) {
+			return fail(400, { tasksError: 'Jour du récap invalide.' });
+		}
+		if (!Number.isInteger(recapHour) || recapHour < 0 || recapHour > 23) {
+			return fail(400, { tasksError: 'Heure du récap invalide (0 à 23).' });
+		}
+		const recapBefore = await getRecapSchedule();
+		await setSetting(SETTING_KEYS.tasksRecapDay, String(recapDay));
+		await setSetting(SETTING_KEYS.tasksRecapHour, String(recapHour));
+		await saveAnnouncements(formData, TASK_SWITCHES, SETTING_KEYS.tasksChannel, channel, admin, 'settings.tasks.update', {
+			before: { recapDay: recapBefore.day, recapHour: recapBefore.hour },
+			after: { recapDay, recapHour }
+		});
 		return { tasksSaved: true };
 	},
 

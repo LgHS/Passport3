@@ -32,11 +32,11 @@ function brusselsDate(offsetDays = 0): { day: string; hour: number } {
 
 async function sendTaskReminders(): Promise<void> {
 	const now = brusselsDate();
-	if (now.hour < REMINDER_HOUR) return;
-	// Same hour as the reminders: Monday's recap on the task channel, when switched on.
-	await sendWeeklyTaskRecap(now.day, now.hour, REMINDER_HOUR).catch((err) =>
+	// The weekly recap on the task channel has its own day and hour (Paramètres admin).
+	await sendWeeklyTaskRecap(now.day, now.hour).catch((err) =>
 		console.error('[taskReminders] weekly recap failed:', err)
 	);
+	if (now.hour < REMINDER_HOUR) return;
 	const candidates = await listReminderCandidates(now.day, brusselsDate(1).day);
 	if (candidates.length === 0) return;
 

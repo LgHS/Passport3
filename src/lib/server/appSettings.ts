@@ -18,7 +18,10 @@ export const SETTING_KEYS = {
 	tasksAnnounceBlocked: 'mattermost.tasks_announce_blocked_enabled',
 	tasksAnnounceUrgent: 'mattermost.tasks_announce_urgent_enabled',
 	tasksWeeklyRecap: 'mattermost.tasks_weekly_recap_enabled',
-	// Brussels date (YYYY-MM-DD) of the Monday the last recap went out, so it's sent once a week.
+	// Recap day (0 = Sunday … 6 = Saturday, default Monday) and hour (Brussels, default 9).
+	tasksRecapDay: 'mattermost.tasks_recap_day',
+	tasksRecapHour: 'mattermost.tasks_recap_hour',
+	// Brussels date (YYYY-MM-DD) the last recap went out, so it's sent once a week.
 	tasksRecapLastSent: 'mattermost.tasks_recap_last_sent'
 } as const;
 

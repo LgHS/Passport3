@@ -18,12 +18,26 @@
 		['announceDone', 'Annoncer les tâches terminées sur Mattermost'],
 		['announceBlocked', 'Annoncer les tâches bloquées sur Mattermost'],
 		['announceUrgent', 'Annoncer les tâches urgentes sur Mattermost'],
-		['weeklyRecap', 'Récap chaque lundi à 9h : tâches en retard et sans participant']
+		['weeklyRecap', 'Récap hebdomadaire : urgentes à 7 jours, en retard, sans participant']
 	] as const;
 
 	let savingBirthday = $state(false);
 	let savingWishlist = $state(false);
 	let savingTasks = $state(false);
+	// svelte-ignore state_referenced_locally
+	let recapDay = $state(data.tasksRecap.day);
+	// svelte-ignore state_referenced_locally
+	let recapHour = $state(data.tasksRecap.hour);
+	// Monday first; values are JS getDay() numbers (0 = Sunday).
+	const WEEKDAYS = [
+		[1, 'Lundi'],
+		[2, 'Mardi'],
+		[3, 'Mercredi'],
+		[4, 'Jeudi'],
+		[5, 'Vendredi'],
+		[6, 'Samedi'],
+		[0, 'Dimanche']
+	] as const;
 	let refreshingMattermostCache = $state(false);
 	let generatingAvatars = $state(false);
 
@@ -195,6 +209,24 @@
 				{#each TASK_TOGGLES as [field, label] (field)}
 					{@render toggle(field, tasksAnnounce[field], (v) => (tasksAnnounce[field] = v), label)}
 				{/each}
+				<div class="grid grid-cols-2 gap-3">
+					<div>
+						<label class="mb-1 block text-sm font-bold uppercase" for="recapDay">Jour du récap</label>
+						<select id="recapDay" name="recapDay" bind:value={recapDay} class="w-full border border-black px-3 py-2 text-sm">
+							{#each WEEKDAYS as [value, label] (value)}
+								<option {value}>{label}</option>
+							{/each}
+						</select>
+					</div>
+					<div>
+						<label class="mb-1 block text-sm font-bold uppercase" for="recapHour">Heure du récap</label>
+						<select id="recapHour" name="recapHour" bind:value={recapHour} class="w-full border border-black px-3 py-2 text-sm">
+							{#each Array.from({ length: 24 }, (_, h) => h) as h (h)}
+								<option value={h}>{h}h00</option>
+							{/each}
+						</select>
+					</div>
+				</div>
 				{@render channelField('tasksChannel', data.mattermostChannels.tasks)}
 				{@render submit(savingTasks, 'Enregistrer', 'Enregistrement…')}
 			</div>
