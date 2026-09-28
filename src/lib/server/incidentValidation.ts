@@ -8,6 +8,7 @@ import {
 	type IncidentKind
 } from '$lib/incidentDisplay';
 import type { IncidentInput } from '$lib/server/incidents';
+import { parseBrusselsDateTime } from '$lib/brusselsTime';
 
 export type IncidentValidationResult =
 	| { ok: true; input: IncidentInput }
@@ -45,8 +46,9 @@ export function validateIncidentSubmission(formData: FormData): IncidentValidati
 	if (!occurredAtRaw) {
 		return { ok: false, error: "La date et l'heure sont obligatoires." };
 	}
-	const occurredAt = new Date(occurredAtRaw);
-	if (Number.isNaN(occurredAt.getTime())) {
+	// Brussels wall-clock time, not the server's timezone — see brusselsTime.ts.
+	const occurredAt = parseBrusselsDateTime(occurredAtRaw);
+	if (!occurredAt) {
 		return { ok: false, error: "Date et heure invalides." };
 	}
 	// A minute of slack rather than a strict comparison: the form pre-fills the time it was opened,
@@ -54,6 +56,11 @@ export function validateIncidentSubmission(formData: FormData): IncidentValidati
 	// reject a declaration submitted immediately.
 	if (occurredAt.getTime() > Date.now() + 60_000) {
 		return { ok: false, error: "La date ne peut pas être dans le futur." };
+	}
+
+	// Sworn statement: declarations are kept for legal and insurance purposes.
+	if (!formData.has('certified')) {
+		return { ok: false, error: "Cochez la case certifiant l'exactitude de la déclaration." };
 	}
 
 	const people = String(formData.get('people') ?? '').trim();

@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import TagInput from '$lib/components/TagInput.svelte';
+	import { brusselsNowInput } from '$lib/brusselsTime';
 	import {
 		INCIDENT_KINDS,
 		kindMeta,
@@ -14,13 +15,9 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	// `datetime-local` wants the member's own wall clock in YYYY-MM-DDTHH:mm, not an ISO/UTC string
-	// — hence the manual build from the local parts rather than toISOString().
-	function localNow(): string {
-		const now = new Date();
-		const pad = (n: number) => String(n).padStart(2, '0');
-		return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-	}
+	// `datetime-local` wants a wall-clock time; it's the hackerspace's (Brussels), which is also how
+	// the server reads it back — see brusselsTime.ts.
+	const localNow = () => brusselsNowInput();
 
 	let kind = $state<IncidentKind>('incident');
 	let occurredAt = $state(localNow());
@@ -29,10 +26,13 @@
 	let descriptionValue = $state('');
 	let firstAidUsed = $state(false);
 	let fireDeviceUsed = $state(false);
+	let certified = $state(false);
 
+	// Pinned to Brussels so the server-rendered page (UTC) and the browser show the same time.
 	const dateTimeFormat = new Intl.DateTimeFormat('fr-BE', {
 		dateStyle: 'short',
-		timeStyle: 'short'
+		timeStyle: 'short',
+		timeZone: 'Europe/Brussels'
 	});
 	function formatDateTime(iso: string): string {
 		return dateTimeFormat.format(new Date(iso));
@@ -50,6 +50,7 @@
 			descriptionValue = '';
 			firstAidUsed = false;
 			fireDeviceUsed = false;
+			certified = false;
 		} else if (form?.error) {
 			showToast('error', form.error);
 		}
@@ -144,7 +145,7 @@
 			maxlength={DESCRIPTION_MAX_LENGTH}
 			required
 			bind:value={descriptionValue}
-			placeholder="Ce qui s'est passé, dans quelles circonstances, ce qui a été fait ensuite…"
+			placeholder="Ce qui s'est passé, dans quelles circonstances, ce qui a été fait ensuite… En cas de blessure, précisez la partie du corps touchée."
 			class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-300"
 		></textarea>
 	</div>
@@ -200,7 +201,15 @@
 		{/if}
 	</div>
 
-	<button type="submit" class="btn-primary px-4 py-2 text-sm">Déclarer</button>
+	<label class="mb-4 flex cursor-pointer items-start gap-2 border-t border-black pt-4 text-sm">
+		<input type="checkbox" name="certified" bind:checked={certified} required class="mt-1" />
+		Je certifie sur l'honneur que cette déclaration est sincère et, à ma connaissance, exacte et
+		complète.
+	</label>
+
+	<button type="submit" disabled={!certified} class="btn-primary px-4 py-2 text-sm disabled:opacity-50">
+		Déclarer
+	</button>
 </form>
 
 {#if data.incidents}
@@ -224,7 +233,7 @@
 						<div class="sm:col-span-2">
 							<dt class="font-bold">Personnes impliquées</dt>
 							<dd class="mt-1 flex flex-wrap gap-1.5">
-								{#each incident.people.split('\n').filter(Boolean) as person (person)}
+								{#each incident.people.split('\n').filter(Boolean) as person, i (i)}
 									<span class="border border-black bg-gray-100 px-2 py-0.5">{person}</span>
 								{/each}
 							</dd>
@@ -239,7 +248,7 @@
 							<div class="sm:col-span-2">
 								<dt class="font-bold">Témoins</dt>
 								<dd class="mt-1 flex flex-wrap gap-1.5">
-									{#each incident.witnesses.split('\n').filter(Boolean) as witness (witness)}
+									{#each incident.witnesses.split('\n').filter(Boolean) as witness, i (i)}
 										<span class="border border-black bg-gray-100 px-2 py-0.5">{witness}</span>
 									{/each}
 								</dd>
