@@ -411,7 +411,11 @@
 
 					<div class="flex items-center justify-between text-xs text-gray-500">
 						<span>
-							<MemberName username={item.authorLabel} visibleUsernames={data.visibleUsernames} /> —
+							<MemberName
+										username={item.authorLabel}
+										visibleUsernames={data.visibleUsernames}
+										class={item.authorLabel === data.myUsername ? 'font-bold text-black' : ''}
+									/> —
 							{formatDate(item.createdAt)}
 						</span>
 						{#if item.status === 'pending'}
@@ -628,7 +632,11 @@
 						{/if}
 
 						<p class="mb-3 text-xs text-gray-500">
-							Proposé par <MemberName username={selectedItem.authorLabel} visibleUsernames={data.visibleUsernames} />
+							Proposé par <MemberName
+										username={selectedItem.authorLabel}
+										visibleUsernames={data.visibleUsernames}
+										class={selectedItem.authorLabel === data.myUsername ? 'font-bold text-black' : ''}
+									/>
 							le {formatDate(selectedItem.createdAt)}
 						</p>
 
@@ -672,6 +680,7 @@
 								{#each selectedItem.upVoters as voter, i (voter)}{i > 0 ? ', ' : ''}<MemberName
 										username={voter}
 										visibleUsernames={data.visibleUsernames}
+										class={voter === data.myUsername ? 'font-bold text-black' : ''}
 									/>{:else}—{/each}
 							</p>
 							<p class="mb-1 font-bold text-red-700">Contre ({selectedItem.downVoters.length})</p>
@@ -679,6 +688,7 @@
 								{#each selectedItem.downVoters as voter, i (voter)}{i > 0 ? ', ' : ''}<MemberName
 										username={voter}
 										visibleUsernames={data.visibleUsernames}
+										class={voter === data.myUsername ? 'font-bold text-black' : ''}
 									/>{:else}—{/each}
 							</p>
 						</div>

@@ -54,7 +54,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	// Best-effort: without it, usernames just aren't links to the trombinoscope.
 	const visibleUsernames = await listTrombinoscopeUsernames().catch(() => []);
-	return { items, isAdmin: admin, visibleUsernames };
+	// The viewer's own username, shown in bold wherever it appears (same as the task board).
+	return { items, isAdmin: admin, visibleUsernames, myUsername: usernameLabel(user) };
 };
 
 export const actions: Actions = {
