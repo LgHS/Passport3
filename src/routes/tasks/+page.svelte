@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { deserialize, enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
@@ -93,6 +94,57 @@
 		t.authorSub === data.mySub || t.members.some((m) => m.sub === data.mySub && m.isLeader);
 	const canFlagBlocked = (t: Task) => data.isAdmin || isOwnerOrLeader(t);
 	const canAssign = (t: Task) => data.isAdmin || isOwnerOrLeader(t);
+
+	// --- Drag and drop between the board's columns. A drop runs the same form actions as the
+	// modal's buttons (same permission checks, history and audit), chained when a move needs
+	// several steps (e.g. Fait → En cours = reopen, then start). Dropping on "Bloqué" opens the
+	// task instead: blocking needs a note. Mouse only — on phones, use the modal's buttons. ---
+	let draggedId = $state<number | null>(null);
+	let dropTarget = $state<Status | null>(null);
+
+	async function runAction(action: string, taskId: number): Promise<boolean> {
+		const body = new FormData();
+		body.set('taskId', String(taskId));
+		const res = await fetch(`?/${action}`, {
+			method: 'POST',
+			body,
+			headers: { 'x-sveltekit-action': 'true' }
+		});
+		const result = deserialize(await res.text());
+		if (result.type === 'failure') {
+			showToast('error', String((result.data as { error?: string } | undefined)?.error ?? 'Action impossible.'));
+			return false;
+		}
+		if (result.type !== 'success') {
+			showToast('error', 'Action impossible.');
+			return false;
+		}
+		return true;
+	}
+
+	function stepsFor(task: Task, to: Status): string[] {
+		const steps: string[] = [];
+		if (task.status === 'done') steps.push('reopen');
+		if (task.blocked) steps.push('unblock');
+		if (to === 'todo' && task.startedAt) steps.push('unstart');
+		if (to === 'in_progress' && !task.startedAt) steps.push('start');
+		if (to === 'done') return ['done'];
+		return steps;
+	}
+
+	async function moveTask(taskId: number, to: Status) {
+		const task = data.tasks.find((t) => t.id === taskId);
+		if (!task || task.status === to) return;
+		if (to === 'blocked') {
+			openTask(task);
+			showToast('success', 'Précisez ce qui bloque la tâche, dans « Signaler un blocage ».');
+			return;
+		}
+		for (const step of stepsFor(task, to)) {
+			if (!(await runAction(step, task.id))) break;
+		}
+		await invalidateAll();
+	}
 
 	let search = $state('');
 	let priorityFilter = $state<number | 'all'>('all');
@@ -226,7 +278,19 @@
 {/snippet}
 
 {#snippet taskCard(task: Task)}
-	<div class="relative">
+	<div
+		class="relative {draggedId === task.id ? 'opacity-40' : ''}"
+		draggable={view === 'board'}
+		ondragstart={(event) => {
+			draggedId = task.id;
+			event.dataTransfer?.setData('text/plain', String(task.id));
+		}}
+		ondragend={() => {
+			draggedId = null;
+			dropTarget = null;
+		}}
+		role="listitem"
+	>
 		<button
 			type="button"
 			onclick={() => openTask(task)}
@@ -454,7 +518,27 @@
 {#if view === 'board'}
 	<div class="grid gap-4 {showBlocked ? 'md:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-3'}">
 		{#each columns as column (column.status)}
-			<section class="border border-black bg-gray-50">
+			<section
+				class="border bg-gray-50 {dropTarget === column.status
+					? 'border-2 border-dashed border-black bg-lghs-yellow/20'
+					: 'border-black'}"
+				ondragover={(event) => {
+					if (draggedId === null) return;
+					event.preventDefault();
+					dropTarget = column.status;
+				}}
+				ondragleave={(event) => {
+					if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node)) dropTarget = null;
+				}}
+				ondrop={(event) => {
+					event.preventDefault();
+					const id = Number(event.dataTransfer?.getData('text/plain'));
+					dropTarget = null;
+					draggedId = null;
+					if (id) moveTask(id, column.status);
+				}}
+				aria-label="Colonne {column.label}"
+			>
 				<h2 class="bg-black px-3 py-2 text-sm font-bold text-white uppercase">
 					{column.label} ({tasksFor(column.status).length})
 				</h2>
