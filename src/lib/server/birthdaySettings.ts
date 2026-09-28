@@ -1,7 +1,7 @@
 import { getSetting, setSetting, SETTING_KEYS } from '$lib/server/appSettings';
 
 // Stored in app_settings next to the birthday channel (moved there from the old single-row
-// birthday_settings table by migration 17). Absent keys mean the defaults: off, 9:00.
+// birthday_settings table by migration 17, dropped by migration 18). Absent keys mean the defaults: off, 9:00.
 const DEFAULT_HOUR = 9;
 
 export interface BirthdaySettings {
