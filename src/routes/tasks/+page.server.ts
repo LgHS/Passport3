@@ -66,9 +66,14 @@ function validateTaskInput(formData: FormData): { ok: true; input: TaskInput } |
 
 const isOnTask = (task: Task, sub: string) => task.members.some((m) => m.sub === sub);
 
-// Blocking/unblocking: anyone on the task, its author, or an admin.
-const canFlagBlocked = (task: Task, user: AppUser) =>
-	isAdmin(user) || task.authorSub === user.sub || isOnTask(task, user.sub);
+// The task's owner (its author) and its leader manage it alongside admins: they can assign
+// members and block/unblock it.
+const isOwnerOrLeader = (task: Task, sub: string) =>
+	task.authorSub === sub || task.members.some((m) => m.sub === sub && m.isLeader);
+const canAssign = (task: Task, user: AppUser) => isAdmin(user) || isOwnerOrLeader(task, user.sub);
+
+// Blocking/unblocking: the task's owner or leader, or an admin.
+const canFlagBlocked = (task: Task, user: AppUser) => isAdmin(user) || isOwnerOrLeader(task, user.sub);
 
 // Every task action is recorded twice: in the audit log, with the member concerned as its target
 // (so it shows in /admin/audit and in that member's own "Historique" on /profile), and in the
@@ -93,12 +98,13 @@ function sourceFor(task: Task, user: AppUser): 'user' | 'admin' {
 export const load: PageServerLoad = async ({ locals }) => {
 	const user = requireUser(locals);
 	const admin = isAdmin(user);
-	const [tasks, members] = await Promise.all([
-		listTasks(),
-		// Admins only: the members they can put on a task. Best-effort — the board still works
-		// without it, just without the assignment picker.
-		admin
-			? listUsers()
+	const tasks = await listTasks();
+	// Only for those who can assign somewhere (admins, a task's owner or leader): the members they
+	// can put on a task. Best-effort — the board still works without it, just without the
+	// assignment picker.
+	const members =
+		admin || tasks.some((t) => isOwnerOrLeader(t, user.sub))
+			? await listUsers()
 					.then((users) =>
 						users
 							.filter((u) => u.is_active)
@@ -106,8 +112,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 							.sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }))
 					)
 					.catch(() => null)
-			: Promise.resolve(null)
-	]);
+			: null;
 	return { tasks, members, isAdmin: admin, mySub: user.sub };
 };
 
@@ -173,14 +178,14 @@ export const actions: Actions = {
 		return { updated: true };
 	},
 
-	// Admin only: puts one or more members on a task, and tells each newly added one on
-	// Mattermost (best-effort).
+	// Admins, or the task's owner or leader: puts one or more members on a task, and tells each
+	// newly added one on Mattermost (best-effort).
 	assign: async ({ request, locals }) => {
 		const user = requireUser(locals);
-		if (!isAdmin(user)) return fail(403, { error: 'Réservé aux administrateurs.' });
 		const formData = await request.formData();
 		const task = await taskFrom(formData);
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
+		if (!canAssign(task, user)) return fail(403, { error: 'Action non autorisée.' });
 		const pks = new Set(formData.getAll('assigneePk').map(Number));
 		if (pks.size === 0) return fail(400, { error: 'Choisissez au moins un membre.' });
 
@@ -189,7 +194,7 @@ export const actions: Actions = {
 			const sub = String(member.pk);
 			const alreadyOn = isOnTask(task, sub);
 			await addTaskMember(task.id, { sub, label: member.username }, user.sub);
-			await record(user, 'admin', 'task.assign', { pk: member.pk }, task.id, {
+			await record(user, isOwnerOrLeader(task, user.sub) ? 'user' : 'admin', 'task.assign', { pk: member.pk }, task.id, {
 				member: member.username,
 				title: task.title
 			});

@@ -56,7 +56,11 @@
 	const myMembership = (t: Task) => t.members.find((m) => m.sub === data.mySub);
 	const canEdit = (t: Task) => data.isAdmin || t.authorSub === data.mySub;
 	const canDelete = (t: Task) => data.isAdmin || (t.authorSub === data.mySub && t.members.length === 0);
-	const canFlagBlocked = (t: Task) => data.isAdmin || t.authorSub === data.mySub || isMember(t);
+	// The task's owner (author) and leader manage it alongside admins: assign members, block/unblock.
+	const isOwnerOrLeader = (t: Task) =>
+		t.authorSub === data.mySub || t.members.some((m) => m.sub === data.mySub && m.isLeader);
+	const canFlagBlocked = (t: Task) => data.isAdmin || isOwnerOrLeader(t);
+	const canAssign = (t: Task) => data.isAdmin || isOwnerOrLeader(t);
 
 	const visibleTasks = $derived(onlyMine ? data.tasks.filter(isMember) : data.tasks);
 
@@ -350,7 +354,7 @@
 					{#if canFlagBlocked(task)}
 						<form method="POST" action="?/unblock" use:enhance class="mt-2">
 							<input type="hidden" name="taskId" value={task.id} />
-							<button class={buttonFor(task.authorSub !== data.mySub && !isMember(task))}>Débloquer</button>
+							<button class={buttonFor(!isOwnerOrLeader(task))}>Débloquer</button>
 						</form>
 					{/if}
 				</div>
@@ -377,7 +381,7 @@
 							placeholder="Ce qui bloque (ex. en attente de la livraison des pièces)"
 							class="w-full border border-black px-3 py-2 text-sm"
 						></textarea>
-						<button class="btn-primary px-3 py-1 text-xs">Marquer comme bloquée</button>
+						<button class={buttonFor(!isOwnerOrLeader(task), 'btn-primary px-3 py-1 text-xs')}>Marquer comme bloquée</button>
 					</form>
 				</details>
 			{/if}
@@ -422,9 +426,13 @@
 				</form>
 			{/if}
 
-			{#if data.isAdmin && data.members && task.status !== 'done'}
+			{#if canAssign(task) && data.members && task.status !== 'done'}
 				<details class="border border-black">
-					<summary class="cursor-pointer bg-lghs-yellow px-3 py-2 text-xs font-bold uppercase">Assigner des membres</summary>
+					<summary
+						class="cursor-pointer px-3 py-2 text-xs font-bold uppercase {isOwnerOrLeader(task) ? '' : 'bg-lghs-yellow'}"
+					>
+						Assigner des membres
+					</summary>
 					<form method="POST" action="?/assign" use:enhance class="border-t border-black p-3">
 						<input type="hidden" name="taskId" value={task.id} />
 						<div class="max-h-48 space-y-1 overflow-y-auto">
@@ -435,7 +443,7 @@
 								</label>
 							{/each}
 						</div>
-						<button class="{adminButtonClass} mt-2">Assigner</button>
+						<button class="{buttonFor(!isOwnerOrLeader(task), 'btn-primary px-3 py-1 text-xs')} mt-2">Assigner</button>
 					</form>
 				</details>
 			{/if}
