@@ -13,7 +13,7 @@
 	import ProfileForm from '$lib/components/ProfileForm.svelte';
 	import EmergencyContactsForm from '$lib/components/EmergencyContactsForm.svelte';
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
-	import MemberName from '$lib/components/MemberName.svelte';
+	import AuditActor from '$lib/components/AuditActor.svelte';
 	import { actionLabel, sourceLabel, detailRows } from '$lib/auditDisplay';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -119,9 +119,11 @@
 <!-- "Admin Loïc Keyeux (@iooner)", the username linking to their trombinoscope card. -->
 {#snippet author(event: AuditEvent)}
 	{#if event.source === 'admin'}
-		{event.actorLabel}{#if data.actorUsernames[event.actorSub]}{' '}<span class="italic"
-				>(<MemberName username={data.actorUsernames[event.actorSub]} visibleUsernames={data.visibleUsernames} />)</span
-			>{/if}
+		<AuditActor
+			label={event.actorLabel}
+			username={data.actorUsernames[event.actorSub]}
+			visibleUsernames={data.visibleUsernames}
+		/>
 	{:else}
 		Vous
 	{/if}

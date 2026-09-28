@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import { actionLabel, sourceLabel, detailRows } from '$lib/auditDisplay';
+	import AuditActor from '$lib/components/AuditActor.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -34,6 +35,7 @@
 			if (!q) return true;
 			const haystack = [
 				event.actorLabel,
+				data.actorUsernames[event.actorSub] ?? '',
 				sourceLabel(event.source),
 				actionLabel(event.action),
 				targetLabel(event)
@@ -53,6 +55,14 @@
 	}
 
 </script>
+
+{#snippet actor(event: AuditEvent)}
+	<AuditActor
+		label={event.actorLabel}
+		username={data.actorUsernames[event.actorSub]}
+		visibleUsernames={data.visibleUsernames}
+	/>
+{/snippet}
 
 <svelte:head>
 	<title>Historique d'audit — Administration — Passport</title>
@@ -98,7 +108,7 @@
 						>
 							{sourceLabel(event.source)}
 						</span>
-						{event.actorLabel}
+						{@render actor(event)}
 					</p>
 					<p class="mt-1 text-gray-600">
 						{#if event.targetPk}
@@ -133,7 +143,7 @@
 								>
 									{sourceLabel(event.source)}
 								</span>
-								<span class="ml-1">{event.actorLabel}</span>
+								<span class="ml-1">{@render actor(event)}</span>
 							</td>
 							<td class="border border-black px-3 py-2 whitespace-nowrap">
 								<button
@@ -219,7 +229,7 @@
 				>
 					{sourceLabel(selectedEvent.source)}
 				</span>
-				{selectedEvent.actorLabel} →
+				{@render actor(selectedEvent)} →
 				{#if selectedEvent.targetPk}
 					<a href="/admin/users/{selectedEvent.targetPk}">{targetLabel(selectedEvent)}</a>
 				{:else}
