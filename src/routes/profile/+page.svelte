@@ -1,4 +1,11 @@
 <script lang="ts">
+	// "Révoquer" asks first, like the other destructive buttons: the device gets logged out.
+	function confirmRevoke(session: { os: string; browser: string }) {
+		return ({ cancel }: { cancel: () => void }) => {
+			if (!confirm(`Révoquer la session ${session.os} — ${session.browser} ? Cet appareil sera déconnecté.`)) cancel();
+		};
+	}
+
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -266,9 +273,9 @@
 							{#if session.current}
 								<span class="text-xs font-bold uppercase">Session actuelle</span>
 							{:else}
-								<form method="POST" action="?/revokeSession" use:enhance>
+								<form method="POST" action="?/revokeSession" use:enhance={confirmRevoke(session)}>
 									<input type="hidden" name="uuid" value={session.uuid} />
-									<button type="submit" class="text-xs font-bold uppercase underline">
+									<button type="submit" class="text-xs font-bold text-red-700 uppercase underline">
 										Révoquer
 									</button>
 								</form>
@@ -300,9 +307,9 @@
 									{#if session.current}
 										<span class="text-xs font-bold uppercase">Session actuelle</span>
 									{:else}
-										<form method="POST" action="?/revokeSession" use:enhance>
+										<form method="POST" action="?/revokeSession" use:enhance={confirmRevoke(session)}>
 											<input type="hidden" name="uuid" value={session.uuid} />
-											<button type="submit" class="text-xs font-bold uppercase underline">
+											<button type="submit" class="text-xs font-bold text-red-700 uppercase underline">
 												Révoquer
 											</button>
 										</form>
