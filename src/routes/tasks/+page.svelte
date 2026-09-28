@@ -301,7 +301,7 @@
 		editing = false;
 	}}
 	aria-labelledby="task-title"
-	class="m-auto w-[calc(100%-2rem)] max-w-lg border border-black bg-white p-0 text-left backdrop:bg-black/60"
+	class="m-auto max-h-[90vh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto border border-black bg-white p-0 text-left backdrop:bg-black/60"
 >
 	{#if selected}
 		{@const task = selected}
@@ -505,8 +505,9 @@
 				{:else if history.length === 0}
 					<p class="text-xs text-gray-500">Aucun événement.</p>
 				{:else}
-					<ol class="space-y-1.5 border-l-2 border-black pl-3 text-xs">
-						{#each history as event (event.id)}
+					<!-- Newest first, in its own scroll area: a long history never stretches the modal. -->
+					<ol class="max-h-48 space-y-1.5 overflow-y-auto border-l-2 border-black pl-3 text-xs">
+						{#each [...history].reverse() as event (event.id)}
 							<li>
 								<span class="font-bold">@{event.actorLabel}</span>
 								{describe(event)}
