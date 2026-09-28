@@ -587,7 +587,7 @@
 		setTaskParam(null);
 	}}
 	aria-labelledby="task-title"
-	class="m-auto max-h-[80vh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto border-4 border-black bg-white p-4 text-left backdrop:bg-black/50"
+	class="m-auto max-h-[85vh] w-[calc(100%-2rem)] max-w-4xl overflow-y-auto border-4 border-black bg-white p-4 text-left backdrop:bg-black/50"
 >
 	{#if selected}
 		{@const task = selected}
@@ -622,232 +622,241 @@
 				</div>
 			</form>
 		{:else}
-			<p class="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold uppercase">
-				{@render priorityBadge(task)}
-				{ALL_COLUMNS.find((c) => c.status === task.status)?.label}
-				{#if task.dueDate}
-					<span class="font-normal normal-case {isOverdue(task) ? 'font-bold text-red-600' : 'text-gray-600'}">
-						— {@render dueLabel(task)}
-					</span>
-				{/if}
-			</p>
+			<!-- Wide screens: content on the left (status, description, history), management on the
+			     right (people, actions, blocking). One column on phones. -->
+			<div class="md:grid md:grid-cols-[3fr_2fr] md:gap-6">
+				<div class="min-w-0">
+					<p class="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold uppercase">
+						{@render priorityBadge(task)}
+						{ALL_COLUMNS.find((c) => c.status === task.status)?.label}
+						{#if task.dueDate}
+							<span class="font-normal normal-case {isOverdue(task) ? 'font-bold text-red-600' : 'text-gray-600'}">
+								— {@render dueLabel(task)}
+							</span>
+						{/if}
+					</p>
 
-			{#if task.description}
-				<p class="mb-3 text-sm whitespace-pre-wrap">{@html renderMiniMarkdown(task.description)}</p>
-			{/if}
-
-			<p class="mb-3 text-xs text-gray-500">
-				Proposée par @{task.authorLabel} le {formatWhen(task.createdAt)}
-			</p>
-
-			{#if task.blocked}
-				<div class="mb-3 border border-orange-700 bg-orange-50 p-3 text-sm">
-					<p class="text-xs font-bold uppercase text-orange-700">Bloqué ({BLOCKED_LABEL[task.blocked.kind]})</p>
-					<p class="mt-1 whitespace-pre-wrap">{@html renderMiniMarkdown(task.blocked.note)}</p>
-					{#if canFlagBlocked(task)}
-						<form method="POST" action="?/unblock" use:enhance class="mt-2">
-							<input type="hidden" name="taskId" value={task.id} />
-							<button class={buttonFor(!isOwnerOrLeader(task))}>Débloquer</button>
-						</form>
+					{#if task.description}
+						<p class="mb-3 text-sm whitespace-pre-wrap">{@html renderMiniMarkdown(task.description)}</p>
 					{/if}
-				</div>
-			{/if}
 
-			<div class="mb-3 border-t border-black pt-3 text-sm">
-				<p class="mb-1 font-bold">Participants et assignés ({task.members.length})</p>
-				{#if task.members.length === 0}
-					<p class="text-gray-600">—</p>
-				{:else}
-					<ul class="space-y-1">
-						{#each task.members as member (member.sub)}
-							<li class="flex items-center justify-between gap-2">
-								<span>
-									{member.isLeader ? '★ ' : ''}@{member.label}
-									<span class="text-xs text-gray-500">
-										({member.imposed ? 'assigné' : 'participant'}{member.isLeader ? ', leader' : ''})
-									</span>
-								</span>
-								{#if canAssign(task)}
-									<form method="POST" action="?/removeMember" use:enhance>
-										<input type="hidden" name="taskId" value={task.id} />
-										<input type="hidden" name="memberSub" value={member.sub} />
-										<button
-											class="{buttonFor(!isOwnerOrLeader(task))} px-1.5 py-0"
-											aria-label="Retirer @{member.label}"
-										>
-											×
-										</button>
-									</form>
-								{/if}
-							</li>
-						{/each}
-					</ul>
-				{/if}
+					<p class="mb-3 text-xs text-gray-500">
+						Proposée par @{task.authorLabel} le {formatWhen(task.createdAt)}
+					</p>
 
-				<div class="mt-3 flex flex-wrap gap-2">
-					{#if task.status !== 'done' && !isMember(task)}
-						<form method="POST" action="?/join" use:enhance>
-							<input type="hidden" name="taskId" value={task.id} />
-							<button class="btn-primary px-3 py-1.5 text-xs">Je participe</button>
-						</form>
-					{/if}
-					{#if task.status !== 'done' && myMembership(task) && !myMembership(task)?.imposed}
-						<form method="POST" action="?/leave" use:enhance>
-							<input type="hidden" name="taskId" value={task.id} />
-							<button class={buttonClass}>Je me retire</button>
-						</form>
-					{/if}
-				</div>
-
-				{#if canEdit(task) && task.members.length > 0}
-					<form method="POST" action="?/setLeader" use:enhance class="mt-3 flex gap-2">
-						<input type="hidden" name="taskId" value={task.id} />
-						<select name="leaderSub" class="min-w-0 flex-1 border border-black px-2 py-1 text-xs">
-							<option value="">Pas de leader</option>
-							{#each task.members as member (member.sub)}
-								<option value={member.sub} selected={member.isLeader}>★ @{member.label}</option>
-							{/each}
-						</select>
-						<button class={buttonFor(task.authorSub !== data.mySub)}>Définir le leader</button>
-					</form>
-				{/if}
-
-				{#if canAssign(task) && data.members && task.status !== 'done'}
-					<details class="mt-3 border border-black">
-						<summary
-							class="cursor-pointer px-3 py-1.5 text-xs font-bold uppercase {isOwnerOrLeader(task) ? '' : 'bg-lghs-yellow'}"
-						>
-							Assigner des membres
-						</summary>
-						<form method="POST" action="?/assign" use:enhance class="border-t border-black p-3">
-							<input type="hidden" name="taskId" value={task.id} />
-							<div class="max-h-40 space-y-1 overflow-y-auto">
-								{#each data.members.filter((m) => !task.members.some((tm) => tm.sub === String(m.pk))) as member (member.pk)}
-									<label class="flex items-center gap-2">
-										<input type="checkbox" name="assigneePk" value={member.pk} />
-										@{member.label}
-									</label>
-								{/each}
-							</div>
-							<button class="{buttonFor(!isOwnerOrLeader(task), 'btn-primary px-3 py-1.5 text-xs')} mt-2">
-								Assigner
-							</button>
-						</form>
-					</details>
-				{/if}
-			</div>
-
-			{#if isMember(task) || data.isAdmin || (task.status !== 'done' && !task.blocked && canFlagBlocked(task))}
-				<div class="mb-3 flex flex-wrap gap-2 border-t border-black pt-3">
-					{#if task.status !== 'done' && !task.startedAt && (isMember(task) || data.isAdmin)}
-						<form method="POST" action="?/start" use:enhance>
-							<input type="hidden" name="taskId" value={task.id} />
-							<button class={buttonFor(!isMember(task), 'btn-primary px-3 py-1.5 text-xs')}>Démarrer</button>
-						</form>
-					{/if}
-					{#if task.status !== 'done' && task.startedAt && (isMember(task) || data.isAdmin)}
-						<form method="POST" action="?/unstart" use:enhance>
-							<input type="hidden" name="taskId" value={task.id} />
-							<button class={buttonFor(!isMember(task))}>Remettre à faire</button>
-						</form>
-					{/if}
-					{#if task.status !== 'done' && (isMember(task) || data.isAdmin)}
-						<form method="POST" action="?/done" use:enhance>
-							<input type="hidden" name="taskId" value={task.id} />
-							<button class={buttonFor(!isMember(task), 'btn-primary px-3 py-1.5 text-xs')}>
-								Marquer comme faite
-							</button>
-						</form>
-					{/if}
-					{#if task.status === 'done' && (isMember(task) || data.isAdmin)}
-						<form method="POST" action="?/reopen" use:enhance>
-							<input type="hidden" name="taskId" value={task.id} />
-							<button class={buttonFor(!isMember(task))}>Rouvrir</button>
-						</form>
-					{/if}
-				</div>
-			{/if}
-
-			{#if !task.blocked && task.status !== 'done' && canFlagBlocked(task)}
-				<details class="mb-3 border border-black">
-					<summary
-						class="cursor-pointer px-3 py-1.5 text-xs font-bold uppercase {isOwnerOrLeader(task) ? '' : 'bg-lghs-yellow'}"
-					>
-						Signaler un blocage
-					</summary>
-					<form method="POST" action="?/block" use:enhance class="space-y-2 border-t border-black p-3">
-						<input type="hidden" name="taskId" value={task.id} />
-						<div class="flex gap-4 text-sm">
-							<label class="flex items-center gap-1.5">
-								<input type="radio" name="blockedKind" value="internal" checked />
-								Interne
-							</label>
-							<label class="flex items-center gap-1.5">
-								<input type="radio" name="blockedKind" value="external" />
-								Externe
-							</label>
+					{#if task.blocked}
+						<div class="mb-3 border border-orange-700 bg-orange-50 p-3 text-sm">
+							<p class="text-xs font-bold uppercase text-orange-700">Bloqué ({BLOCKED_LABEL[task.blocked.kind]})</p>
+							<p class="mt-1 whitespace-pre-wrap">{@html renderMiniMarkdown(task.blocked.note)}</p>
+							{#if canFlagBlocked(task)}
+								<form method="POST" action="?/unblock" use:enhance class="mt-2">
+									<input type="hidden" name="taskId" value={task.id} />
+									<button class={buttonFor(!isOwnerOrLeader(task))}>Débloquer</button>
+								</form>
+							{/if}
 						</div>
-						<textarea
-							name="blockedNote"
-							required
-							maxlength="500"
-							rows="2"
-							placeholder="Ce qui bloque (ex. en attente de la livraison des pièces)"
-							class="w-full border border-black px-3 py-2 text-sm"
-						></textarea>
-						<button class={buttonFor(!isOwnerOrLeader(task), 'btn-primary px-3 py-1.5 text-xs')}>
-							Marquer comme bloquée
-						</button>
-					</form>
-				</details>
-			{/if}
+					{/if}
 
-			<div class="mb-3 border-t border-black pt-3">
-				<p class="mb-2 text-sm font-bold">Historique et commentaires</p>
-				<form
-					method="POST"
-					action="?/comment"
-					class="mb-3 flex gap-2"
-					use:enhance={() =>
-						async ({ result, update }) => {
-							await update();
-							if (result.type === 'success') loadHistory(task.id);
-						}}
-				>
-					<input type="hidden" name="taskId" value={task.id} />
-					<textarea
-						name="comment"
-						required
-						maxlength="1000"
-						rows="1"
-						placeholder="Ajouter un commentaire… (**gras**, *italique*, __souligné__)"
-						class="min-w-0 flex-1 border border-black px-2 py-1 text-xs"
-					></textarea>
-					<button class="btn-primary px-3 py-1 text-xs">Envoyer</button>
-				</form>
-				{#if historyFailed}
-					<p class="text-xs text-gray-500">Historique indisponible pour le moment.</p>
-				{:else if history === null}
-					<p class="text-xs text-gray-500">Chargement…</p>
-				{:else if history.length === 0}
-					<p class="text-xs text-gray-500">Aucun événement.</p>
-				{:else}
-					<!-- Newest first, in its own scroll area: a long history never stretches the modal. -->
-					<ol class="max-h-40 space-y-1.5 overflow-y-auto border-l-2 border-black pl-3 text-xs">
-						{#each [...history].reverse() as event (event.id)}
-							<li>
-								<span class="font-bold">@{event.actorLabel}</span>
-								{describe(event)}
-								<span class="text-gray-500">· {formatWhen(event.createdAt)}</span>
-								{#if event.action === 'task.comment' && typeof event.details?.text === 'string'}
-									<p class="mt-0.5 border border-gray-300 bg-gray-50 px-2 py-1 whitespace-pre-wrap">
-										{@html renderMiniMarkdown(event.details.text)}
-									</p>
-								{/if}
-							</li>
-						{/each}
-					</ol>
-				{/if}
+					<div class="mb-3 border-t border-black pt-3">
+						<p class="mb-2 text-sm font-bold">Historique et commentaires</p>
+						<form
+							method="POST"
+							action="?/comment"
+							class="mb-3 flex gap-2"
+							use:enhance={() =>
+								async ({ result, update }) => {
+									await update();
+									if (result.type === 'success') loadHistory(task.id);
+								}}
+						>
+							<input type="hidden" name="taskId" value={task.id} />
+							<textarea
+								name="comment"
+								required
+								maxlength="1000"
+								rows="1"
+								placeholder="Ajouter un commentaire… (**gras**, *italique*, __souligné__)"
+								class="min-w-0 flex-1 border border-black px-2 py-1 text-xs"
+							></textarea>
+							<button class="btn-primary px-3 py-1 text-xs">Envoyer</button>
+						</form>
+						{#if historyFailed}
+							<p class="text-xs text-gray-500">Historique indisponible pour le moment.</p>
+						{:else if history === null}
+							<p class="text-xs text-gray-500">Chargement…</p>
+						{:else if history.length === 0}
+							<p class="text-xs text-gray-500">Aucun événement.</p>
+						{:else}
+							<!-- Newest first, in its own scroll area: a long history never stretches the modal. -->
+							<ol class="max-h-40 space-y-1.5 overflow-y-auto border-l-2 md:max-h-80 border-black pl-3 text-xs">
+								{#each [...history].reverse() as event (event.id)}
+									<li>
+										<span class="font-bold">@{event.actorLabel}</span>
+										{describe(event)}
+										<span class="text-gray-500">· {formatWhen(event.createdAt)}</span>
+										{#if event.action === 'task.comment' && typeof event.details?.text === 'string'}
+											<p class="mt-0.5 border border-gray-300 bg-gray-50 px-2 py-1 whitespace-pre-wrap">
+												{@html renderMiniMarkdown(event.details.text)}
+											</p>
+										{/if}
+									</li>
+								{/each}
+							</ol>
+						{/if}
+					</div>
+
+				</div>
+				<div class="min-w-0">
+					<div class="mb-3 border-t border-black pt-3 text-sm md:border-t-0 md:pt-0">
+						<p class="mb-1 font-bold">Participants et assignés ({task.members.length})</p>
+						{#if task.members.length === 0}
+							<p class="text-gray-600">—</p>
+						{:else}
+							<ul class="space-y-1">
+								{#each task.members as member (member.sub)}
+									<li class="flex items-center justify-between gap-2">
+										<span>
+											{member.isLeader ? '★ ' : ''}@{member.label}
+											<span class="text-xs text-gray-500">
+												({member.imposed ? 'assigné' : 'participant'}{member.isLeader ? ', leader' : ''})
+											</span>
+										</span>
+										{#if canAssign(task)}
+											<form method="POST" action="?/removeMember" use:enhance>
+												<input type="hidden" name="taskId" value={task.id} />
+												<input type="hidden" name="memberSub" value={member.sub} />
+												<button
+													class="{buttonFor(!isOwnerOrLeader(task))} px-1.5 py-0"
+													aria-label="Retirer @{member.label}"
+												>
+													×
+												</button>
+											</form>
+										{/if}
+									</li>
+								{/each}
+							</ul>
+						{/if}
+
+						<div class="mt-3 flex flex-wrap gap-2">
+							{#if task.status !== 'done' && !isMember(task)}
+								<form method="POST" action="?/join" use:enhance>
+									<input type="hidden" name="taskId" value={task.id} />
+									<button class="btn-primary px-3 py-1.5 text-xs">Je participe</button>
+								</form>
+							{/if}
+							{#if task.status !== 'done' && myMembership(task) && !myMembership(task)?.imposed}
+								<form method="POST" action="?/leave" use:enhance>
+									<input type="hidden" name="taskId" value={task.id} />
+									<button class={buttonClass}>Je me retire</button>
+								</form>
+							{/if}
+						</div>
+
+						{#if canEdit(task) && task.members.length > 0}
+							<form method="POST" action="?/setLeader" use:enhance class="mt-3 flex gap-2">
+								<input type="hidden" name="taskId" value={task.id} />
+								<select name="leaderSub" class="min-w-0 flex-1 border border-black px-2 py-1 text-xs">
+									<option value="">Pas de leader</option>
+									{#each task.members as member (member.sub)}
+										<option value={member.sub} selected={member.isLeader}>★ @{member.label}</option>
+									{/each}
+								</select>
+								<button class={buttonFor(task.authorSub !== data.mySub)}>Définir le leader</button>
+							</form>
+						{/if}
+
+						{#if canAssign(task) && data.members && task.status !== 'done'}
+							<details class="mt-3 border border-black">
+								<summary
+									class="cursor-pointer px-3 py-1.5 text-xs font-bold uppercase {isOwnerOrLeader(task) ? '' : 'bg-lghs-yellow'}"
+								>
+									Assigner des membres
+								</summary>
+								<form method="POST" action="?/assign" use:enhance class="border-t border-black p-3">
+									<input type="hidden" name="taskId" value={task.id} />
+									<div class="max-h-40 space-y-1 overflow-y-auto">
+										{#each data.members.filter((m) => !task.members.some((tm) => tm.sub === String(m.pk))) as member (member.pk)}
+											<label class="flex items-center gap-2">
+												<input type="checkbox" name="assigneePk" value={member.pk} />
+												@{member.label}
+											</label>
+										{/each}
+									</div>
+									<button class="{buttonFor(!isOwnerOrLeader(task), 'btn-primary px-3 py-1.5 text-xs')} mt-2">
+										Assigner
+									</button>
+								</form>
+							</details>
+						{/if}
+					</div>
+
+					{#if isMember(task) || data.isAdmin || (task.status !== 'done' && !task.blocked && canFlagBlocked(task))}
+						<div class="mb-3 flex flex-wrap gap-2 border-t border-black pt-3">
+							{#if task.status !== 'done' && !task.startedAt && (isMember(task) || data.isAdmin)}
+								<form method="POST" action="?/start" use:enhance>
+									<input type="hidden" name="taskId" value={task.id} />
+									<button class={buttonFor(!isMember(task), 'btn-primary px-3 py-1.5 text-xs')}>Démarrer</button>
+								</form>
+							{/if}
+							{#if task.status !== 'done' && task.startedAt && (isMember(task) || data.isAdmin)}
+								<form method="POST" action="?/unstart" use:enhance>
+									<input type="hidden" name="taskId" value={task.id} />
+									<button class={buttonFor(!isMember(task))}>Remettre à faire</button>
+								</form>
+							{/if}
+							{#if task.status !== 'done' && (isMember(task) || data.isAdmin)}
+								<form method="POST" action="?/done" use:enhance>
+									<input type="hidden" name="taskId" value={task.id} />
+									<button class={buttonFor(!isMember(task), 'btn-primary px-3 py-1.5 text-xs')}>
+										Marquer comme faite
+									</button>
+								</form>
+							{/if}
+							{#if task.status === 'done' && (isMember(task) || data.isAdmin)}
+								<form method="POST" action="?/reopen" use:enhance>
+									<input type="hidden" name="taskId" value={task.id} />
+									<button class={buttonFor(!isMember(task))}>Rouvrir</button>
+								</form>
+							{/if}
+						</div>
+					{/if}
+
+					{#if !task.blocked && task.status !== 'done' && canFlagBlocked(task)}
+						<details class="mb-3 border border-black">
+							<summary
+								class="cursor-pointer px-3 py-1.5 text-xs font-bold uppercase {isOwnerOrLeader(task) ? '' : 'bg-lghs-yellow'}"
+							>
+								Signaler un blocage
+							</summary>
+							<form method="POST" action="?/block" use:enhance class="space-y-2 border-t border-black p-3">
+								<input type="hidden" name="taskId" value={task.id} />
+								<div class="flex gap-4 text-sm">
+									<label class="flex items-center gap-1.5">
+										<input type="radio" name="blockedKind" value="internal" checked />
+										Interne
+									</label>
+									<label class="flex items-center gap-1.5">
+										<input type="radio" name="blockedKind" value="external" />
+										Externe
+									</label>
+								</div>
+								<textarea
+									name="blockedNote"
+									required
+									maxlength="500"
+									rows="2"
+									placeholder="Ce qui bloque (ex. en attente de la livraison des pièces)"
+									class="w-full border border-black px-3 py-2 text-sm"
+								></textarea>
+								<button class={buttonFor(!isOwnerOrLeader(task), 'btn-primary px-3 py-1.5 text-xs')}>
+									Marquer comme bloquée
+								</button>
+							</form>
+						</details>
+					{/if}
+
+				</div>
 			</div>
 
 			<div class="flex gap-4 border-t border-black pt-3">
