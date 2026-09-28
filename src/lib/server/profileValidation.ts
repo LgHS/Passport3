@@ -189,6 +189,49 @@ function validateMatrixId(raw: string): { ok: true; value: string } | { ok: fals
 	return { ok: true, value };
 }
 
+// Format Mastodon : @pseudo@instance — fédéré comme Matrix, deux parties à valider séparément.
+// - pseudo : contraintes de Mastodon lui-même = lettres, chiffres et "_" (30 caractères max) ;
+//   Mastodon ignore la casse, on garde celle saisie
+// - instance : nom de domaine du serveur (ex. mastodon.social), mis en minuscules
+// Accepte aussi l'URL du profil (https://mastodon.social/@ana), convertie en @ana@mastodon.social.
+function validateMastodonHandle(raw: string): { ok: true; value: string } | { ok: false; error: string } {
+	const trimmed = raw.trim();
+	if (!trimmed) return { ok: true, value: '' };
+
+	let username: string;
+	let instance: string;
+	const url = trimmed.match(/^https?:\/\/([^/\s]+)\/@([^/\s]+)\/?$/i);
+	if (url) {
+		[, instance, username] = url;
+	} else {
+		const parts = trimmed.replace(/^@/, '').split('@');
+		if (parts.length !== 2) {
+			return {
+				ok: false,
+				error: 'Mastodon : format attendu @pseudo@instance (ex. @ana@mastodon.social).'
+			};
+		}
+		[username, instance] = parts;
+	}
+
+	if (!username) return { ok: false, error: 'Mastodon : le pseudo ne peut pas être vide.' };
+	if (!/^[A-Za-z0-9_]{1,30}$/.test(username)) {
+		return {
+			ok: false,
+			error: 'Mastodon : le pseudo ne peut contenir que des lettres, chiffres et "_" (30 caractères maximum).'
+		};
+	}
+	instance = instance.toLowerCase();
+	if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(instance) || instance.length > 253) {
+		return {
+			ok: false,
+			error: "Mastodon : l'instance doit être un nom de domaine valide (ex. mastodon.social)."
+		};
+	}
+
+	return { ok: true, value: `@${username}@${instance}` };
+}
+
 // Même regex que admin/invite/+page.server.ts pour l'email d'invitation — optionnel ici (une
 // valeur vide veut juste dire "pas de remplacement, afficher l'email du compte").
 const TROMBI_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -380,6 +423,14 @@ export function validateProfileSubmission(formData: FormData): ProfileValidation
 			return { ok: false, error: matrixResult.error, firstName, lastName, attributes };
 		}
 		attributes.matrix = matrixResult.value;
+	}
+
+	if ('mastodon' in attributes) {
+		const mastodonResult = validateMastodonHandle(attributes.mastodon);
+		if (!mastodonResult.ok) {
+			return { ok: false, error: mastodonResult.error, firstName, lastName, attributes };
+		}
+		attributes.mastodon = mastodonResult.value;
 	}
 
 	const birthdayResult = validateBirthday(attributes.birthday ?? '');

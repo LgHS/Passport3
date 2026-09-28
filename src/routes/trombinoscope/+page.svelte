@@ -50,18 +50,26 @@
 	// No brand icon per network on purpose — Signal/Telegram/Discord/Matrix logos are colorful and
 	// would clash with the site's black/white brutalist look. Plain "Réseau : valeur" text instead,
 	// only for whichever the member actually filled in on /profile.
+	// Mastodon's handle ("@user@instance") links to the profile page on that instance.
+	function mastodonUrl(handle: string): string | null {
+		const match = handle.match(/^@([A-Za-z0-9_]+)@([a-z0-9.-]+)$/);
+		return match ? `https://${match[2]}/@${match[1]}` : null;
+	}
+
 	function socialLinks(member: {
 		signal: string | null;
 		telegram: string | null;
 		discord: string | null;
 		matrix: string | null;
-	}): { label: string; value: string }[] {
+		mastodon: string | null;
+	}): { label: string; value: string; href: string | null }[] {
 		return [
-			{ label: 'Signal', value: member.signal },
-			{ label: 'Telegram', value: member.telegram },
-			{ label: 'Discord', value: member.discord },
-			{ label: 'Matrix', value: member.matrix }
-		].filter((entry): entry is { label: string; value: string } => !!entry.value);
+			{ label: 'Signal', value: member.signal, href: null },
+			{ label: 'Telegram', value: member.telegram, href: member.telegram ? socialUrl('Telegram', member.telegram) : null },
+			{ label: 'Discord', value: member.discord, href: null },
+			{ label: 'Matrix', value: member.matrix, href: member.matrix ? socialUrl('Matrix', member.matrix) : null },
+			{ label: 'Mastodon', value: member.mastodon, href: member.mastodon ? mastodonUrl(member.mastodon) : null }
+		].filter((entry): entry is { label: string; value: string; href: string | null } => !!entry.value);
 	}
 
 	// Profile link for the networks where the handle alone is enough to build one (opened in a new
@@ -574,7 +582,14 @@
 								</span>
 							{/if}
 							{#each socialLinks(member) as link (link.label)}
-								<span>{link.label} : {link.value}</span>
+								<span>
+									{link.label} :
+									{#if link.href}
+										<a href={link.href} target="_blank" rel="noopener">{link.value}</a>
+									{:else}
+										{link.value}
+									{/if}
+								</span>
 							{/each}
 						</p>
 					{/if}
@@ -681,8 +696,8 @@
 						<div class="flex gap-2">
 							<dt class="w-24 shrink-0 font-bold">{link.label}</dt>
 							<dd class="min-w-0 break-all">
-								{#if socialUrl(link.label, link.value)}
-									<a href={socialUrl(link.label, link.value)} target="_blank" rel="noopener">{link.value}</a>
+								{#if link.href}
+									<a href={link.href} target="_blank" rel="noopener">{link.value}</a>
 								{:else}
 									{link.value}
 								{/if}
