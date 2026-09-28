@@ -165,9 +165,8 @@ const migrations: Migration[] = [
 		version: 10,
 		name: 'create tasks',
 		up: async (sql) => {
-			// Workshop to-do board (replaces the post-its on the wall). One assignee per task:
-			// assigned_by_sub is null when the assignee volunteered, set when an admin imposed it
-			// (an imposed task can't be released by its assignee).
+			// Workshop to-do board (replaces the post-its on the wall). `status` only tracks
+			// done-or-not: "à faire" vs "en cours" is derived from whether anyone is on the task.
 			await sql`
 				CREATE TABLE tasks (
 					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -177,13 +176,27 @@ const migrations: Migration[] = [
 					title TEXT NOT NULL,
 					description TEXT,
 					due_date DATE,
-					status TEXT NOT NULL DEFAULT 'todo',
-					assignee_sub TEXT,
-					assignee_label TEXT,
-					assigned_by_sub TEXT,
-					done_at TIMESTAMPTZ
+					done_at TIMESTAMPTZ,
+					-- 'internal' (waiting on us: a decision, a purchase…) or 'external' (a supplier,
+					-- a third party…), with a note saying what it's waiting on. NULL = not blocked.
+					blocked_kind TEXT,
+					blocked_note TEXT
 				)
 			`;
+			// Everyone on a task: volunteers (assigned_by_sub null) and members an admin put on it
+			// (assigned_by_sub set — they can't remove themselves). At most one leader per task.
+			await sql`
+				CREATE TABLE task_members (
+					task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+					member_sub TEXT NOT NULL,
+					member_label TEXT NOT NULL,
+					assigned_by_sub TEXT,
+					is_leader BOOLEAN NOT NULL DEFAULT false,
+					joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					PRIMARY KEY (task_id, member_sub)
+				)
+			`;
+			await sql`CREATE UNIQUE INDEX task_members_one_leader ON task_members(task_id) WHERE is_leader`;
 		}
 	}
 ];
