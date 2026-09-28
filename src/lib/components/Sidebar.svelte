@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { fade, fly } from 'svelte/transition';
+	import { fade, fly, slide } from 'svelte/transition';
 	import {
 		displayName,
 		isAdmin,
@@ -78,6 +78,13 @@
 		for (const [id, paths] of Object.entries(SECTION_PATHS)) {
 			if (closedSections[id] && paths.some(isActive)) toggleSection(id);
 		}
+	});
+
+	// A light slide when a section folds or unfolds; none for people who asked their system for
+	// reduced motion. Svelte transitions are local, so navigating between pages doesn't trigger it.
+	let foldDuration = $state(150);
+	$effect(() => {
+		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) foldDuration = 0;
 	});
 
 	function toggleSection(id: string) {
@@ -204,47 +211,49 @@
 				</svg>
 			</button>
 			{#if !closedSections.account}
-				<a href="/profile" onclick={closeOverlay} class="{itemClass} {itemStateClass('/profile')}">
-					<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-						<circle cx="10" cy="6.5" r="3" />
-						<path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round" />
-					</svg>
-					Mon profil
-				</a>
-				<a href="/cotisation" onclick={closeOverlay} class="{itemClass} {itemStateClass('/cotisation')}">
-					<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-						<rect x="2.5" y="5" width="15" height="10" rx="1.2" />
-						<path d="M2.5 8.5 H17.5" />
-					</svg>
-					Cotisation
-				</a>
-				<a href="/badge" onclick={closeOverlay} class="{itemClass} {itemStateClass('/badge')}">
-					<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-						<rect x="5" y="2" width="10" height="16" rx="2" />
-						<circle cx="10" cy="7.5" r="2" />
-						<path d="M7.5 13 H12.5 M7.5 15 H12.5" stroke-linecap="round" />
-					</svg>
-					Badge RFID
-				</a>
-				<a href="/permissions" onclick={closeOverlay} class="{itemClass} {itemStateClass('/permissions')}">
-					<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-						<path
-							d="M10 2.5 L16.5 5 V10 C16.5 13.8 13.8 16.7 10 17.5 C6.2 16.7 3.5 13.8 3.5 10 V5 Z"
-							stroke-linejoin="round"
-						/>
-					</svg>
-					Permissions
-				</a>
-				<a href="/github" onclick={closeOverlay} class="{itemClass} {itemStateClass('/github')}">
-					<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-						<circle cx="6" cy="14.5" r="2" />
-						<circle cx="14" cy="5.5" r="2" />
-						<circle cx="6" cy="5.5" r="2" />
-						<path d="M6 7.5 V12.5" />
-						<path d="M8 14.5 H10 C12.2 14.5 14 12.7 14 10.5 V7.5" stroke-linecap="round" />
-					</svg>
-					GitHub
-				</a>
+				<div class="flex flex-col gap-0.5" transition:slide={{ duration: foldDuration }}>
+					<a href="/profile" onclick={closeOverlay} class="{itemClass} {itemStateClass('/profile')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<circle cx="10" cy="6.5" r="3" />
+							<path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round" />
+						</svg>
+						Mon profil
+					</a>
+					<a href="/cotisation" onclick={closeOverlay} class="{itemClass} {itemStateClass('/cotisation')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<rect x="2.5" y="5" width="15" height="10" rx="1.2" />
+							<path d="M2.5 8.5 H17.5" />
+						</svg>
+						Cotisation
+					</a>
+					<a href="/badge" onclick={closeOverlay} class="{itemClass} {itemStateClass('/badge')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<rect x="5" y="2" width="10" height="16" rx="2" />
+							<circle cx="10" cy="7.5" r="2" />
+							<path d="M7.5 13 H12.5 M7.5 15 H12.5" stroke-linecap="round" />
+						</svg>
+						Badge RFID
+					</a>
+					<a href="/permissions" onclick={closeOverlay} class="{itemClass} {itemStateClass('/permissions')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path
+								d="M10 2.5 L16.5 5 V10 C16.5 13.8 13.8 16.7 10 17.5 C6.2 16.7 3.5 13.8 3.5 10 V5 Z"
+								stroke-linejoin="round"
+							/>
+						</svg>
+						Permissions
+					</a>
+					<a href="/github" onclick={closeOverlay} class="{itemClass} {itemStateClass('/github')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<circle cx="6" cy="14.5" r="2" />
+							<circle cx="14" cy="5.5" r="2" />
+							<circle cx="6" cy="5.5" r="2" />
+							<path d="M6 7.5 V12.5" />
+							<path d="M8 14.5 H10 C12.2 14.5 14 12.7 14 10.5 V7.5" stroke-linecap="round" />
+						</svg>
+						GitHub
+					</a>
+				</div>
 			{/if}
 			<button
 				type="button"
@@ -265,38 +274,40 @@
 				</svg>
 			</button>
 			{#if !closedSections.hackerspace}
-				<a href="/trombinoscope" onclick={closeOverlay} class="{itemClass} {itemStateClass('/trombinoscope')}">
-					<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-						<circle cx="7" cy="7" r="2.5" />
-						<path d="M2.5 16c0-2.8 2-4.5 4.5-4.5s4.5 1.7 4.5 4.5" stroke-linecap="round" />
-						<circle cx="14" cy="7.5" r="2" />
-						<path d="M11.5 12c1-.7 2-1 2.5-1 2 0 3.5 1.5 3.5 4" stroke-linecap="round" />
-					</svg>
-					Trombinoscope
-				</a>
-				<a href="/tasks" onclick={closeOverlay} class="{itemClass} {itemStateClass('/tasks')}">
-					<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-						<rect x="3.5" y="3.5" width="13" height="13" rx="1" />
-						<path d="M6.5 10l2.5 2.5 4.5-5" stroke-linecap="round" stroke-linejoin="round" />
-					</svg>
-					Tâches
-				</a>
-				<a href="/wishlist" onclick={closeOverlay} class="{itemClass} {itemStateClass('/wishlist')}">
-					<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-						<rect x="3" y="8.5" width="14" height="8" rx="1" />
-						<path d="M3 8.5 L17 8.5" />
-						<path d="M10 8.5 V17" />
-						<path
-							d="M10 8.5C10 8.5 7 8.5 6.3 6.8C5.8 5.6 6.6 4.5 7.7 4.5C9 4.5 10 6 10 8.5Z"
-							stroke-linejoin="round"
-						/>
-						<path
-							d="M10 8.5C10 8.5 13 8.5 13.7 6.8C14.2 5.6 13.4 4.5 12.3 4.5C11 4.5 10 6 10 8.5Z"
-							stroke-linejoin="round"
-						/>
-					</svg>
-					Wishlist
-				</a>
+				<div class="flex flex-col gap-0.5" transition:slide={{ duration: foldDuration }}>
+					<a href="/trombinoscope" onclick={closeOverlay} class="{itemClass} {itemStateClass('/trombinoscope')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<circle cx="7" cy="7" r="2.5" />
+							<path d="M2.5 16c0-2.8 2-4.5 4.5-4.5s4.5 1.7 4.5 4.5" stroke-linecap="round" />
+							<circle cx="14" cy="7.5" r="2" />
+							<path d="M11.5 12c1-.7 2-1 2.5-1 2 0 3.5 1.5 3.5 4" stroke-linecap="round" />
+						</svg>
+						Trombinoscope
+					</a>
+					<a href="/tasks" onclick={closeOverlay} class="{itemClass} {itemStateClass('/tasks')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<rect x="3.5" y="3.5" width="13" height="13" rx="1" />
+							<path d="M6.5 10l2.5 2.5 4.5-5" stroke-linecap="round" stroke-linejoin="round" />
+						</svg>
+						Tâches
+					</a>
+					<a href="/wishlist" onclick={closeOverlay} class="{itemClass} {itemStateClass('/wishlist')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<rect x="3" y="8.5" width="14" height="8" rx="1" />
+							<path d="M3 8.5 L17 8.5" />
+							<path d="M10 8.5 V17" />
+							<path
+								d="M10 8.5C10 8.5 7 8.5 6.3 6.8C5.8 5.6 6.6 4.5 7.7 4.5C9 4.5 10 6 10 8.5Z"
+								stroke-linejoin="round"
+							/>
+							<path
+								d="M10 8.5C10 8.5 13 8.5 13.7 6.8C14.2 5.6 13.4 4.5 12.3 4.5C11 4.5 10 6 10 8.5Z"
+								stroke-linejoin="round"
+							/>
+						</svg>
+						Wishlist
+					</a>
+				</div>
 			{/if}
 			<p class="{sectionLabelClass}">Sécurité</p>
 			<a href="/incidents" onclick={closeOverlay} class="{itemClass} {itemStateClass('/incidents')}">
