@@ -13,6 +13,7 @@
 	import ProfileForm from '$lib/components/ProfileForm.svelte';
 	import EmergencyContactsForm from '$lib/components/EmergencyContactsForm.svelte';
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
+	import MemberName from '$lib/components/MemberName.svelte';
 	import { actionLabel, sourceLabel, detailRows } from '$lib/auditDisplay';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -114,6 +115,17 @@
 		el.scrollLeft += event.deltaY;
 	}
 </script>
+
+<!-- "Admin Loïc Keyeux (@iooner)", the username linking to their trombinoscope card. -->
+{#snippet author(event: AuditEvent)}
+	{#if event.source === 'admin'}
+		{event.actorLabel}{#if data.actorUsernames[event.actorSub]}{' '}<span class="italic"
+				>(<MemberName username={data.actorUsernames[event.actorSub]} visibleUsernames={data.visibleUsernames} />)</span
+			>{/if}
+	{:else}
+		Vous
+	{/if}
+{/snippet}
 
 <svelte:window onclick={handleWindowClick} />
 
@@ -520,7 +532,7 @@
 							>
 								{sourceLabel(event.source)}
 							</span>
-							{event.source === 'admin' ? event.actorLabel : 'Vous'}
+							{@render author(event)}
 						</p>
 					</div>
 				{/each}
@@ -547,7 +559,7 @@
 									>
 										{sourceLabel(event.source)}
 									</span>
-									<span class="ml-1">{event.source === 'admin' ? event.actorLabel : 'Vous'}</span>
+									<span class="ml-1">{@render author(event)}</span>
 								</td>
 								<td class="border border-black px-3 py-2">
 									<button
@@ -605,7 +617,7 @@
 				>
 					{sourceLabel(selectedEvent.source)}
 				</span>
-				{selectedEvent.source === 'admin' ? selectedEvent.actorLabel : 'Vous'}
+				{@render author(selectedEvent)}
 			</p>
 			<div class="space-y-1 border-t border-black pt-3 font-mono text-xs">
 				{#each detailRows(selectedEvent.details) as row (row.path)}
