@@ -44,7 +44,13 @@
 		}
 	}
 
+	// Same confirmation as the other deletions — only for a contact that has something in it, an
+	// empty row just goes.
 	function removeRow(index: number) {
+		const row = rows[index];
+		if ((row.name.trim() || row.phone.trim()) && !confirm(`Retirer le contact « ${row.name.trim() || row.phone.trim()} » ?`)) {
+			return;
+		}
 		const next = rows.filter((_, i) => i !== index);
 		rows = next.length > 0 ? next : [emptyRow()];
 	}
@@ -126,7 +132,7 @@
 				<button
 					type="button"
 					onclick={() => removeRow(i)}
-					class="h-fit px-3 py-2 text-xs font-bold uppercase underline"
+					class="h-fit px-3 py-2 text-xs font-bold text-red-700 uppercase underline"
 				>
 					Retirer
 				</button>

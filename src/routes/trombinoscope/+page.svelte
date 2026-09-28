@@ -65,11 +65,20 @@
 	}): { label: string; value: string; href: string | null }[] {
 		return [
 			{ label: 'Signal', value: member.signal, href: null },
-			{ label: 'Telegram', value: member.telegram, href: null },
+			{ label: 'Telegram', value: member.telegram, href: member.telegram ? socialUrl('Telegram', member.telegram) : null },
 			{ label: 'Discord', value: member.discord, href: null },
-			{ label: 'Matrix', value: member.matrix, href: null },
+			{ label: 'Matrix', value: member.matrix, href: member.matrix ? socialUrl('Matrix', member.matrix) : null },
 			{ label: 'Mastodon', value: member.mastodon, href: member.mastodon ? mastodonUrl(member.mastodon) : null }
 		].filter((entry): entry is { label: string; value: string; href: string | null } => !!entry.value);
+	}
+
+	// Profile link for the networks where the handle alone is enough to build one (opened in a new
+	// tab from the member card). Discord has no username-based profile URL (it needs the numeric
+	// account id) and Signal's share links carry an encrypted token, so those two stay plain text.
+	function socialUrl(label: string, value: string): string | null {
+		if (label === 'Telegram') return `https://t.me/${encodeURIComponent(value)}`;
+		if (label === 'Matrix') return `https://matrix.to/#/${encodeURIComponent(value)}`;
+		return null;
 	}
 
 	type Member = PageData['members'][number];
