@@ -2,6 +2,7 @@ import type { PageServerLoad } from './$types';
 import { requireAdmin } from '$lib/server/auth';
 import { listAuditEvents } from '$lib/server/auditLog';
 import { getUserProfile } from '$lib/server/authentikAdmin';
+import { resolveActorUsernames } from '$lib/server/auditActors';
 
 export interface AuditTargetLabel {
 	firstName: string;
@@ -31,5 +32,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		}
 	});
 
-	return { events, targetLabels };
+	// "Loïc Keyeux (@iooner)" for each event's author, admin or member.
+	const { actorUsernames, visibleUsernames } = await resolveActorUsernames(events);
+
+	return { events, targetLabels, actorUsernames, visibleUsernames };
 };

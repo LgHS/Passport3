@@ -19,7 +19,6 @@ import {
 	updateUsername,
 	revokeAllSessions,
 	changeAvatarColor,
-	listTrombinoscopeUsernames,
 	AuthentikUnavailableError
 } from '$lib/server/authentikAdmin';
 import { lookupMattermostUsername } from '$lib/server/mattermost';
@@ -31,6 +30,7 @@ import {
 } from '$lib/server/profileValidation';
 import { clearSessionCookie } from '$lib/server/session';
 import { logAuditEvent, listAuditEventsForTarget } from '$lib/server/auditLog';
+import { resolveActorUsernames } from '$lib/server/auditActors';
 import { authentikPk, displayName } from '$lib/types';
 
 const AUTHENTIK_UNAVAILABLE_MESSAGE = 'Service temporairement indisponible. Réessayez dans quelques instants.';
@@ -99,20 +99,10 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		return [];
 	});
 
-	// "Admin Loïc Keyeux (@iooner)": each admin who acted on this account, resolved once to their
-	// current username. Best-effort — an unresolvable admin just shows their name as logged.
-	const actorPks = [
-		...new Set(auditEvents.filter((e) => e.source === 'admin').map((e) => Number(e.actorSub)))
-	].filter((actorPk) => Number.isInteger(actorPk) && actorPk > 0);
-	const [actorProfiles, visibleUsernames] = await Promise.all([
-		Promise.all(actorPks.map((actorPk) => getUserProfile(actorPk).catch(() => null))),
-		actorPks.length ? listTrombinoscopeUsernames().catch(() => []) : []
-	]);
-	const actorUsernames: Record<string, string> = {};
-	actorPks.forEach((actorPk, i) => {
-		const username = actorProfiles[i]?.username;
-		if (username) actorUsernames[String(actorPk)] = username;
-	});
+	// "Admin Loïc Keyeux (@iooner)" for each admin who acted on this account.
+	const { actorUsernames, visibleUsernames } = await resolveActorUsernames(
+		auditEvents.filter((e) => e.source === 'admin')
+	);
 
 	return {
 		profile,
