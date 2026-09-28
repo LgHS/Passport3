@@ -1,5 +1,6 @@
 import { getDb } from '$lib/server/db';
-import { requireEnv } from '$lib/server/env';
+import { env } from '$env/dynamic/private';
+import { getSetting, SETTING_KEYS } from '$lib/server/appSettings';
 import { getBirthdaySettings } from '$lib/server/birthdaySettings';
 import { listBirthdayAnnounceMembers } from '$lib/server/authentikAdmin';
 import { lookupMattermostUsername } from '$lib/server/mattermost';
@@ -98,7 +99,13 @@ async function checkAndAnnounceBirthdays(): Promise<void> {
 	// the whole year. alreadySentThisYear() is what actually prevents duplicates.
 	if (hour < settings.hour) return;
 
-	const channelId = requireEnv('MATTERMOST_BIRTHDAY_CHANNEL_ID');
+	// Chosen on /admin/settings; MATTERMOST_BIRTHDAY_CHANNEL_ID stays as a fallback for instances
+	// that set it in .env before that setting existed.
+	const channelId = (await getSetting(SETTING_KEYS.birthdayChannel)) || env.MATTERMOST_BIRTHDAY_CHANNEL_ID;
+	if (!channelId) {
+		console.error('[birthdayScheduler] no Mattermost channel configured (Paramètres admin), skipping.');
+		return;
+	}
 	const members = await listBirthdayAnnounceMembers();
 
 	for (const member of members) {
