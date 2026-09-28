@@ -278,9 +278,7 @@
 			: 'text-gray-500'}"
 	>
 		<input type="checkbox" bind:checked={showBlocked} disabled={blockedCount === 0} />
-		{blockedCount > 0
-			? `${blockedCount} tâche${blockedCount > 1 ? 's' : ''} bloquée${blockedCount > 1 ? 's' : ''} — afficher`
-			: 'Aucune tâche bloquée'}
+		Afficher les tâches bloquées ({blockedCount})
 	</label>
 </div>
 
