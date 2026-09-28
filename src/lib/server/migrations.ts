@@ -326,6 +326,15 @@ const migrations: Migration[] = [
 				ON CONFLICT (key) DO NOTHING
 			`;
 		}
+	},
+	{
+		version: 18,
+		name: 'drop birthday_settings',
+		up: async (sql) => {
+			// Unread since migration 17 moved its values into app_settings; kept until that release
+			// was verified in production so a rollback still worked.
+			await sql`DROP TABLE IF EXISTS birthday_settings`;
+		}
 	}
 ];
 
