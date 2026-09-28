@@ -11,8 +11,33 @@
 	let hour = $state(form?.hour ?? data.birthdaySettings.hour);
 	// svelte-ignore state_referenced_locally
 	let wishlistAnnounce = $state({ ...data.wishlistAnnounce });
+	// svelte-ignore state_referenced_locally
+	let tasksAnnounce = $state({ ...data.tasksAnnounce });
+	const TASK_TOGGLES = [
+		['announceCreated', 'Annoncer les nouvelles tâches sur Mattermost'],
+		['announceDone', 'Annoncer les tâches terminées sur Mattermost'],
+		['announceBlocked', 'Annoncer les tâches bloquées sur Mattermost'],
+		['announceUrgent', 'Annoncer les tâches urgentes sur Mattermost'],
+		['weeklyRecap', 'Récap hebdomadaire : urgentes à 7 jours, en retard, sans participant']
+	] as const;
+
 	let savingBirthday = $state(false);
 	let savingWishlist = $state(false);
+	let savingTasks = $state(false);
+	// svelte-ignore state_referenced_locally
+	let recapDay = $state(data.tasksRecap.day);
+	// svelte-ignore state_referenced_locally
+	let recapHour = $state(data.tasksRecap.hour);
+	// Monday first; values are JS getDay() numbers (0 = Sunday).
+	const WEEKDAYS = [
+		[1, 'Lundi'],
+		[2, 'Mardi'],
+		[3, 'Mercredi'],
+		[4, 'Jeudi'],
+		[5, 'Vendredi'],
+		[6, 'Samedi'],
+		[0, 'Dimanche']
+	] as const;
 	let refreshingMattermostCache = $state(false);
 	let generatingAvatars = $state(false);
 
@@ -25,6 +50,10 @@
 			showToast('success', 'Réglages de la wishlist enregistrés.');
 		} else if (form?.wishlistError) {
 			showToast('error', form.wishlistError);
+		} else if (form?.tasksSaved) {
+			showToast('success', 'Réglages de la todolist enregistrés.');
+		} else if (form?.tasksError) {
+			showToast('error', form.tasksError);
 		} else if (form?.mattermostCacheRefreshed) {
 			showToast('success', 'Cache Mattermost régénéré.');
 		} else if (form?.mattermostCacheError) {
@@ -148,24 +177,58 @@
 			<div class="flex flex-1 flex-col gap-4 p-4">
 				{@render toggle(
 					'announce',
-					wishlistAnnounce.created,
-					(v) => (wishlistAnnounce.created = v),
+					wishlistAnnounce.announce,
+					(v) => (wishlistAnnounce.announce = v),
 					'Annoncer les nouvelles propositions sur Mattermost'
 				)}
 				{@render toggle(
 					'announceGranted',
-					wishlistAnnounce.granted,
-					(v) => (wishlistAnnounce.granted = v),
+					wishlistAnnounce.announceGranted,
+					(v) => (wishlistAnnounce.announceGranted = v),
 					'Annoncer les propositions exaucées sur Mattermost'
 				)}
 				{@render toggle(
 					'announceRejected',
-					wishlistAnnounce.rejected,
-					(v) => (wishlistAnnounce.rejected = v),
+					wishlistAnnounce.announceRejected,
+					(v) => (wishlistAnnounce.announceRejected = v),
 					'Annoncer les propositions refusées sur Mattermost'
 				)}
 				{@render channelField('wishlistChannel', data.mattermostChannels.wishlist)}
 				{@render submit(savingWishlist, 'Enregistrer', 'Enregistrement…')}
+			</div>
+		</form>
+
+		<form
+			method="POST"
+			action="?/updateTaskSettings"
+			class="flex flex-col border border-black"
+			use:enhance={busy((v) => (savingTasks = v))}
+		>
+			<h2 class="bg-black px-4 py-3 text-base font-bold text-white uppercase">Todolist</h2>
+			<div class="flex flex-1 flex-col gap-4 p-4">
+				{#each TASK_TOGGLES as [field, label] (field)}
+					{@render toggle(field, tasksAnnounce[field], (v) => (tasksAnnounce[field] = v), label)}
+				{/each}
+				<div class="grid grid-cols-2 gap-3">
+					<div>
+						<label class="mb-1 block text-sm font-bold uppercase" for="recapDay">Jour du récap</label>
+						<select id="recapDay" name="recapDay" bind:value={recapDay} class="w-full border border-black px-3 py-2 text-sm">
+							{#each WEEKDAYS as [value, label] (value)}
+								<option {value}>{label}</option>
+							{/each}
+						</select>
+					</div>
+					<div>
+						<label class="mb-1 block text-sm font-bold uppercase" for="recapHour">Heure du récap</label>
+						<select id="recapHour" name="recapHour" bind:value={recapHour} class="w-full border border-black px-3 py-2 text-sm">
+							{#each Array.from({ length: 24 }, (_, h) => h) as h (h)}
+								<option value={h}>{h}h00</option>
+							{/each}
+						</select>
+					</div>
+				</div>
+				{@render channelField('tasksChannel', data.mattermostChannels.tasks)}
+				{@render submit(savingTasks, 'Enregistrer', 'Enregistrement…')}
 			</div>
 		</form>
 
