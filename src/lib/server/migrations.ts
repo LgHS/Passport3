@@ -290,6 +290,21 @@ const migrations: Migration[] = [
 					ADD COLUMN IF NOT EXISTS overdue_reminded_for DATE
 			`;
 		}
+	},
+	{
+		version: 16,
+		name: 'create app_settings',
+		up: async (sql) => {
+			// Small admin-editable settings that used to live in .env (e.g. which Mattermost channel
+			// gets which announcement), one row per key. See appSettings.ts.
+			await sql`
+				CREATE TABLE IF NOT EXISTS app_settings (
+					key TEXT PRIMARY KEY,
+					value TEXT NOT NULL,
+					updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+				)
+			`;
+		}
 	}
 ];
 

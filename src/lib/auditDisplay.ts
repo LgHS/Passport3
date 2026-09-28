@@ -20,6 +20,7 @@ export const ACTION_LABELS: Record<string, string> = {
 	'wishlist.edit': 'Proposition wishlist modifiée',
 	'wishlist.delete': 'Proposition wishlist supprimée',
 	'wishlist.resolve': 'Statut de la proposition wishlist changé',
+	'settings.mattermostChannels.update': 'Canaux Mattermost modifiés',
 	'task.create': 'Tâche créée',
 	'task.edit': 'Tâche modifiée',
 	'task.delete': 'Tâche supprimée',

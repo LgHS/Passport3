@@ -11,6 +11,7 @@
 	// svelte-ignore state_referenced_locally
 	let hour = $state(form?.hour ?? data.birthdaySettings.hour);
 	let refreshingMattermostCache = $state(false);
+	let savingChannels = $state(false);
 	let generatingAvatars = $state(false);
 
 	$effect(() => {
@@ -18,6 +19,10 @@
 			showToast('success', 'Paramètres enregistrés.');
 		} else if (form?.birthdayError) {
 			showToast('error', form.birthdayError);
+		} else if (form?.channelsSaved) {
+			showToast('success', 'Canaux Mattermost enregistrés.');
+		} else if (form?.channelsError) {
+			showToast('error', form.channelsError);
 		} else if (form?.mattermostCacheRefreshed) {
 			showToast('success', 'Cache Mattermost régénéré.');
 		} else if (form?.mattermostCacheError) {
@@ -106,6 +111,65 @@
 	</form>
 
 	<h2 class="mt-8 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Mattermost</h2>
+	{#snippet channelPicker(id: string, label: string, help: string, current: string)}
+		<div class="mb-4">
+			<label class="mb-1 block text-sm font-bold uppercase" for={id}>{label}</label>
+			{#if data.channels}
+				<select {id} name={id} class="w-full border border-black px-3 py-2 text-sm">
+					<option value="">— Aucun (désactivé) —</option>
+					{#each data.channels as channel (channel.id)}
+						<option value={channel.id} selected={channel.id === current}>~{channel.name}</option>
+					{/each}
+					{#if current && !data.channels.some((c) => c.id === current)}
+						<option value={current} selected>Canal actuel ({current})</option>
+					{/if}
+				</select>
+			{:else}
+				<!-- Fallback when the channel list can't be loaded from Mattermost. -->
+				<input
+					{id}
+					name={id}
+					value={current}
+					placeholder="Identifiant du canal (26 caractères)"
+					class="w-full border border-black px-3 py-2 font-mono text-sm placeholder:text-gray-300"
+				/>
+			{/if}
+			<p class="mt-1 text-xs text-gray-500">{help}</p>
+		</div>
+	{/snippet}
+	<form
+		method="POST"
+		action="?/updateMattermostChannels"
+		class="mb-4 border border-black p-4"
+		use:enhance={() => {
+			savingChannels = true;
+			return async ({ update }) => {
+				await update({ reset: false });
+				savingChannels = false;
+			};
+		}}
+	>
+		{#if !data.channels}
+			<p class="mb-4 text-sm text-gray-600">
+				La liste des canaux n'a pas pu être chargée depuis Mattermost : indiquez leur identifiant.
+			</p>
+		{/if}
+		{@render channelPicker(
+			'birthdayChannel',
+			"Canal des anniversaires",
+			"Où sont souhaités les anniversaires. Le bot doit être membre du canal.",
+			data.mattermostChannels.birthday
+		)}
+		{@render channelPicker(
+			'wishlistChannel',
+			'Canal des propositions wishlist',
+			'Chaque nouvelle proposition y est annoncée. Aucun canal = pas d’annonce.',
+			data.mattermostChannels.wishlist
+		)}
+		<button type="submit" disabled={savingChannels} class="btn-primary px-4 py-2 text-sm disabled:opacity-50">
+			{savingChannels ? 'Enregistrement…' : 'Enregistrer les canaux'}
+		</button>
+	</form>
 	<form
 		method="POST"
 		action="?/refreshMattermostCache"

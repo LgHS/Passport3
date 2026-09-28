@@ -11,6 +11,10 @@ import {
 } from '$lib/server/wishlist';
 import { validateWishlistItemSubmission } from '$lib/server/wishlistValidation';
 import { logAuditEvent } from '$lib/server/auditLog';
+import { getSetting, SETTING_KEYS } from '$lib/server/appSettings';
+import { postToChannel } from '$lib/server/mattermostBot';
+import { typeMeta } from '$lib/wishlistDisplay';
+import { env } from '$env/dynamic/private';
 import { listTrombinoscopeUsernames } from '$lib/server/authentikAdmin';
 import { displayName, isAdmin, type AppUser } from '$lib/types';
 
@@ -35,6 +39,25 @@ function usernameLabel(user: AppUser): string {
 function targetFromSub(sub: string): { pk: number } | Record<string, never> {
 	const pk = Number(sub);
 	return Number.isInteger(pk) && pk > 0 ? { pk } : {};
+}
+
+// Posts a new proposal to the Mattermost channel chosen on /admin/settings, if any. Best-effort
+// (postToChannel never throws): the proposal is created either way. The link uses Passport's
+// public origin, taken from the OIDC redirect URI like the task board's links.
+async function announceNewProposal(itemId: number, title: string, type: string, author: string): Promise<void> {
+	const channelId = await getSetting(SETTING_KEYS.wishlistChannel).catch(() => null);
+	if (!channelId) return;
+	let link = '';
+	try {
+		if (env.AUTHENTIK_REDIRECT_URI) link = ` ${new URL(env.AUTHENTIK_REDIRECT_URI).origin}/wishlist?item=${itemId}`;
+	} catch {
+		link = '';
+	}
+	const meta = typeMeta(type as Parameters<typeof typeMeta>[0]);
+	await postToChannel(
+		channelId,
+		`${meta.icon} Nouvelle proposition dans la wishlist : **${title}** (${meta.label}) par @${author}.${link}`
+	);
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -77,6 +100,8 @@ export const actions: Actions = {
 			targetFromSub(user.sub),
 			{ itemId, title: result.input.title, type: result.input.type }
 		);
+
+		await announceNewProposal(itemId, result.input.title, result.input.type, usernameLabel(user));
 
 		return { created: true };
 	},

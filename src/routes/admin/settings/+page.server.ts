@@ -7,10 +7,34 @@ import { logAuditEvent } from '$lib/server/auditLog';
 import { displayName } from '$lib/types';
 import { getBirthdaySettings, updateBirthdaySettings } from '$lib/server/birthdaySettings';
 import { refreshMattermostCache } from '$lib/server/mattermost';
+import { listTeamChannels } from '$lib/server/mattermostBot';
+import { getSetting, setSetting, SETTING_KEYS } from '$lib/server/appSettings';
+import { env } from '$env/dynamic/private';
+
+// Mattermost channel ids are 26 lowercase alphanumerics.
+const CHANNEL_ID_RE = /^[a-z0-9]{26}$/;
 
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
-	return { birthdaySettings: await getBirthdaySettings() };
+	const [birthdaySettings, birthdayChannel, wishlistChannel, channels] = await Promise.all([
+		getBirthdaySettings(),
+		getSetting(SETTING_KEYS.birthdayChannel),
+		getSetting(SETTING_KEYS.wishlistChannel),
+		// Best-effort: without the list, the page falls back to plain channel-id fields.
+		listTeamChannels().catch((err) => {
+			console.error('[admin/settings] could not list Mattermost channels', err);
+			return null;
+		})
+	]);
+	return {
+		birthdaySettings,
+		mattermostChannels: {
+			// The .env value is shown as the current one until a channel is picked here.
+			birthday: birthdayChannel ?? env.MATTERMOST_BIRTHDAY_CHANNEL_ID ?? '',
+			wishlist: wishlistChannel ?? ''
+		},
+		channels
+	};
 };
 
 export const actions: Actions = {
@@ -28,6 +52,30 @@ export const actions: Actions = {
 		await updateBirthdaySettings({ enabled, hour });
 
 		return { birthdaySuccess: true, enabled, hour };
+	},
+
+	updateMattermostChannels: async ({ request, locals }) => {
+		const admin = requireAdminUser(locals);
+		const formData = await request.formData();
+		const birthday = String(formData.get('birthdayChannel') ?? '').trim();
+		const wishlist = String(formData.get('wishlistChannel') ?? '').trim();
+		for (const value of [birthday, wishlist]) {
+			if (value && !CHANNEL_ID_RE.test(value)) {
+				return fail(400, { channelsError: 'Identifiant de canal invalide (26 caractères, minuscules et chiffres).' });
+			}
+		}
+
+		const before = {
+			birthday: await getSetting(SETTING_KEYS.birthdayChannel),
+			wishlist: await getSetting(SETTING_KEYS.wishlistChannel)
+		};
+		await setSetting(SETTING_KEYS.birthdayChannel, birthday || null);
+		await setSetting(SETTING_KEYS.wishlistChannel, wishlist || null);
+		await logAuditEvent({ sub: admin.sub, label: displayName(admin) }, 'admin', 'settings.mattermostChannels.update', {}, {
+			before,
+			after: { birthday: birthday || null, wishlist: wishlist || null }
+		});
+		return { channelsSaved: true };
 	},
 
 	refreshMattermostCache: async ({ locals }) => {
