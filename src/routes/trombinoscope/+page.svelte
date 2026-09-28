@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { replaceState } from '$app/navigation';
+	import { page } from '$app/state';
+	import { onMount } from 'svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { avatarSize } from '$lib/avatar';
 	import type { ActionData, PageData } from './$types';
@@ -69,10 +72,26 @@
 	let selectedMember = $state<Member | null>(null);
 	let memberDialog = $state<HTMLDialogElement | null>(null);
 
+	// Deep link: /trombinoscope?member=<username> opens that member's card (usernames in the task
+	// board and the wishlist link here), and the address follows the open card.
+	function setMemberParam(username: string | null) {
+		const url = new URL(page.url);
+		if (username === null) url.searchParams.delete('member');
+		else url.searchParams.set('member', username);
+		replaceState(url, {});
+	}
+
 	function openMember(member: Member) {
 		selectedMember = member;
 		memberDialog?.showModal();
+		setMemberParam(member.username);
 	}
+
+	onMount(() => {
+		const username = page.url.searchParams.get('member');
+		const linked = username ? data.members.find((m) => m.username === username) : undefined;
+		if (linked) openMember(linked);
+	});
 
 	function closeMember() {
 		memberDialog?.close();
@@ -561,7 +580,10 @@
 <dialog
 	bind:this={memberDialog}
 	onclick={handleDialogClick}
-	onclose={() => (selectedMember = null)}
+	onclose={() => {
+		selectedMember = null;
+		setMemberParam(null);
+	}}
 	aria-labelledby="member-card-title"
 	class="m-auto max-h-[85vh] w-[calc(100%-2rem)] max-w-sm overflow-y-auto border-4 border-black bg-white p-0 text-left backdrop:bg-black/50 md:max-w-3xl"
 >

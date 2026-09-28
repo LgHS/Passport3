@@ -11,6 +11,7 @@ import {
 } from '$lib/server/wishlist';
 import { validateWishlistItemSubmission } from '$lib/server/wishlistValidation';
 import { logAuditEvent } from '$lib/server/auditLog';
+import { listTrombinoscopeUsernames } from '$lib/server/authentikAdmin';
 import { displayName, isAdmin, type AppUser } from '$lib/types';
 
 function requireUser(locals: App.Locals): AppUser {
@@ -51,7 +52,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		};
 	});
 
-	return { items, isAdmin: admin };
+	// Best-effort: without it, usernames just aren't links to the trombinoscope.
+	const visibleUsernames = await listTrombinoscopeUsernames().catch(() => []);
+	// The viewer's own username, shown in bold wherever it appears (same as the task board).
+	return { items, isAdmin: admin, visibleUsernames, myUsername: usernameLabel(user) };
 };
 
 export const actions: Actions = {

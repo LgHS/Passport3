@@ -6,6 +6,7 @@
 	import { onMount } from 'svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { renderMiniMarkdown } from '$lib/renderMiniMarkdown';
+	import MemberName from '$lib/components/MemberName.svelte';
 	import { DEFAULT_TASK_PRIORITY, TASK_PRIORITIES, priorityMeta } from '$lib/taskPriority';
 	import type { ActionData, PageData } from './$types';
 
@@ -641,7 +642,8 @@
 					{/if}
 
 					<p class="mb-3 text-xs text-gray-500">
-						Proposée par @{task.authorLabel} le {formatWhen(task.createdAt)}
+						Proposée par <MemberName username={task.authorLabel} visibleUsernames={data.visibleUsernames} />
+						le {formatWhen(task.createdAt)}
 					</p>
 
 					{#if task.blocked}
@@ -691,7 +693,15 @@
 							<ol class="max-h-40 space-y-1.5 overflow-y-auto border-l-2 md:max-h-80 border-black pl-3 text-xs">
 								{#each [...history].reverse() as event (event.id)}
 									<li>
-										<span class="font-bold">@{event.actorLabel}</span>
+										{#if event.actorLabel === 'Passport'}
+											<span class="font-bold">Passport</span>
+										{:else}
+											<MemberName
+												username={event.actorLabel}
+												visibleUsernames={data.visibleUsernames}
+												class="font-bold"
+											/>
+										{/if}
 										{describe(event)}
 										<span class="text-gray-500">· {formatWhen(event.createdAt)}</span>
 										{#if event.action === 'task.comment' && typeof event.details?.text === 'string'}
@@ -716,7 +726,10 @@
 								{#each task.members as member (member.sub)}
 									<li class="flex items-center justify-between gap-2">
 										<span>
-											{member.isLeader ? '★ ' : ''}@{member.label}
+											{member.isLeader ? '★ ' : ''}<MemberName
+												username={member.label}
+												visibleUsernames={data.visibleUsernames}
+											/>
 											<span class="text-xs text-gray-500">
 												({member.imposed ? 'assigné' : 'participant'}{member.isLeader ? ', leader' : ''})
 											</span>

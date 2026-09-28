@@ -4,6 +4,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { WISHLIST_TYPES, STATUS_META, typeMeta, type WishlistType } from '$lib/wishlistDisplay';
 	import { renderMiniMarkdown } from '$lib/renderMiniMarkdown';
+	import MemberName from '$lib/components/MemberName.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	const TITLE_MAX_LENGTH = 100;
@@ -409,7 +410,14 @@
 					</div>
 
 					<div class="flex items-center justify-between text-xs text-gray-500">
-						<span>{item.authorLabel} — {formatDate(item.createdAt)}</span>
+						<span>
+							<MemberName
+										username={item.authorLabel}
+										visibleUsernames={data.visibleUsernames}
+										class={item.authorLabel === data.myUsername ? 'font-bold text-black' : ''}
+									/> —
+							{formatDate(item.createdAt)}
+						</span>
 						{#if item.status === 'pending'}
 							<div class="flex gap-2">
 								<form method="POST" action="?/vote" use:enhance={() => markJustVoted(item.id, 'up')}>
@@ -624,7 +632,12 @@
 						{/if}
 
 						<p class="mb-3 text-xs text-gray-500">
-							Proposé par {selectedItem.authorLabel} le {formatDate(selectedItem.createdAt)}
+							Proposé par <MemberName
+										username={selectedItem.authorLabel}
+										visibleUsernames={data.visibleUsernames}
+										class={selectedItem.authorLabel === data.myUsername ? 'font-bold text-black' : ''}
+									/>
+							le {formatDate(selectedItem.createdAt)}
 						</p>
 
 					</div>
@@ -664,11 +677,19 @@
 							{/if}
 							<p class="mb-1 font-bold text-green-700">Pour ({selectedItem.upVoters.length})</p>
 							<p class="mb-3 text-gray-600">
-								{selectedItem.upVoters.length > 0 ? selectedItem.upVoters.join(', ') : '—'}
+								{#each selectedItem.upVoters as voter, i (voter)}{i > 0 ? ', ' : ''}<MemberName
+										username={voter}
+										visibleUsernames={data.visibleUsernames}
+										class={voter === data.myUsername ? 'font-bold text-black' : ''}
+									/>{:else}—{/each}
 							</p>
 							<p class="mb-1 font-bold text-red-700">Contre ({selectedItem.downVoters.length})</p>
 							<p class="text-gray-600">
-								{selectedItem.downVoters.length > 0 ? selectedItem.downVoters.join(', ') : '—'}
+								{#each selectedItem.downVoters as voter, i (voter)}{i > 0 ? ', ' : ''}<MemberName
+										username={voter}
+										visibleUsernames={data.visibleUsernames}
+										class={voter === data.myUsername ? 'font-bold text-black' : ''}
+									/>{:else}—{/each}
 							</p>
 						</div>
 
