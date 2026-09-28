@@ -13,15 +13,18 @@
 
 	interface ChecklistEntry {
 		href: string;
-		done: boolean | null;
+		done: boolean;
 		doneLabel: string;
 		todoLabel: string;
 	}
 
-	// Completed items sink to the bottom — what still needs attention (or couldn't be verified)
-	// stays visible first, instead of getting buried under items already taken care of.
+	// Completed items sink to the bottom — what still needs attention stays visible first, instead
+	// of getting buried under items already taken care of. An item that couldn't be checked right
+	// now (done: null, e.g. Authentik or Mattermost unreachable) is left out rather than shown as a
+	// cryptic "can't verify" line: it comes back on the next load.
 	let checklistItems = $derived<ChecklistEntry[]>(
-		[
+		(
+			[
 			{
 				href: '/profile?tab=mfa',
 				done: data.checklist.mfaConfigured,
@@ -68,11 +71,14 @@
 						}
 					]
 				: [])
-		].sort((a, b) => (a.done === true ? 1 : 0) - (b.done === true ? 1 : 0))
+			] as (Omit<ChecklistEntry, 'done'> & { done: boolean | null })[]
+		)
+			.filter((item): item is ChecklistEntry => item.done !== null)
+			.sort((a, b) => Number(a.done) - Number(b.done))
 	);
 </script>
 
-{#snippet checklistItem(href: string, done: boolean | null, doneLabel: string, todoLabel: string)}
+{#snippet checklistItem(href: string, done: boolean, doneLabel: string, todoLabel: string)}
 	<a
 		{href}
 		class="no-underline-fx flex items-center gap-3 px-4 py-2 text-sm transition-colors hover:bg-gray-50"
@@ -85,9 +91,7 @@
 		>
 			✓
 		</span>
-		{#if done === null}
-			<span class="text-gray-500">Impossible de vérifier pour le moment</span>
-		{:else if done}
+		{#if done}
 			<span>{doneLabel}</span>
 		{:else}
 			<span class="font-bold">{todoLabel}</span>
@@ -146,14 +150,16 @@
 			{/if}
 		</section>
 
-		<section class="w-full md:w-1/2">
-			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma check-list</h2>
-			<div class="border border-black">
-				{#each checklistItems as item, i (i)}
-					{@render checklistItem(item.href, item.done, item.doneLabel, item.todoLabel)}
-				{/each}
-			</div>
-		</section>
+		{#if checklistItems.length > 0}
+			<section class="w-full md:w-1/2">
+				<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma check-list</h2>
+				<div class="border border-black">
+					{#each checklistItems as item, i (i)}
+						{@render checklistItem(item.href, item.done, item.doneLabel, item.todoLabel)}
+					{/each}
+				</div>
+			</section>
+		{/if}
 	</div>
 
 	{#if data.myTasks && data.myTasks.length > 0}
