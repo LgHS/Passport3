@@ -25,9 +25,10 @@ export interface Task {
 	title: string;
 	description: string | null;
 	dueDate: string | null;
-	// Derived: done when marked so, else blocked when flagged, else "en cours" as soon as someone
-	// is on it.
+	// Derived: done when marked so, else blocked when flagged, else "en cours" once someone
+	// explicitly started it — people being on it isn't enough.
 	status: TaskStatus;
+	startedAt: string | null;
 	blocked: { kind: BlockedKind; note: string } | null;
 	members: TaskMember[];
 	doneAt: string | null;
@@ -48,6 +49,7 @@ interface TaskRow {
 	description: string | null;
 	due_date: Date | null;
 	done_at: Date | null;
+	started_at: Date | null;
 	blocked_kind: string | null;
 	blocked_note: string | null;
 }
@@ -80,7 +82,8 @@ function toTask(r: TaskRow, memberRows: MemberRow[]): Task {
 		title: r.title,
 		description: r.description,
 		dueDate: r.due_date ? isoDay(r.due_date) : null,
-		status: r.done_at ? 'done' : r.blocked_kind ? 'blocked' : members.length > 0 ? 'in_progress' : 'todo',
+		status: r.done_at ? 'done' : r.blocked_kind ? 'blocked' : r.started_at ? 'in_progress' : 'todo',
+		startedAt: r.started_at ? r.started_at.toISOString() : null,
 		blocked: r.blocked_kind
 			? { kind: r.blocked_kind as BlockedKind, note: r.blocked_note ?? '' }
 			: null,
@@ -165,6 +168,11 @@ export async function setTaskDone(id: number, done: boolean): Promise<void> {
 	await sql`UPDATE tasks SET done_at = ${done ? new Date() : null} WHERE id = ${id}`;
 }
 
+export async function setTaskStarted(id: number, started: boolean): Promise<void> {
+	const sql = await getDb();
+	await sql`UPDATE tasks SET started_at = ${started ? new Date() : null} WHERE id = ${id}`;
+}
+
 // `blocked` null unblocks the task.
 export async function setTaskBlocked(
 	id: number,
@@ -180,4 +188,46 @@ export async function setTaskBlocked(
 export async function deleteTask(id: number): Promise<void> {
 	const sql = await getDb();
 	await sql`DELETE FROM tasks WHERE id = ${id}`;
+}
+
+export interface TaskEvent {
+	id: number;
+	createdAt: string;
+	actorLabel: string;
+	action: string;
+	details: Record<string, unknown> | null;
+}
+
+// Best-effort, like logAuditEvent: a history entry that fails to write never fails the action.
+export async function addTaskEvent(
+	taskId: number,
+	actorLabel: string,
+	action: string,
+	details: Record<string, unknown>
+): Promise<void> {
+	try {
+		const sql = await getDb();
+		await sql`
+			INSERT INTO task_events (task_id, actor_label, action, details)
+			VALUES (${taskId}, ${actorLabel}, ${action}, ${JSON.stringify(details)})
+		`;
+	} catch (err) {
+		console.error('Failed to write task event', err);
+	}
+}
+
+export async function listTaskEvents(taskId: number): Promise<TaskEvent[]> {
+	const sql = await getDb();
+	const rows = await sql<
+		{ id: number; created_at: Date; actor_label: string; action: string; details: string | null }[]
+	>`SELECT id, created_at, actor_label, action, details FROM task_events WHERE task_id = ${taskId} ORDER BY id`;
+	return rows.map((r) => {
+		let details: Record<string, unknown> | null = null;
+		try {
+			details = r.details ? (JSON.parse(r.details) as Record<string, unknown>) : null;
+		} catch {
+			details = null;
+		}
+		return { id: r.id, createdAt: r.created_at.toISOString(), actorLabel: r.actor_label, action: r.action, details };
+	});
 }

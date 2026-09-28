@@ -73,6 +73,64 @@
 	}
 
 	const buttonClass = 'border border-black px-2 py-1 text-xs font-bold uppercase hover:bg-black hover:text-white';
+	// Same yellow as the wishlist's admin-only buttons: used whenever the current user can only do
+	// this because they're an admin.
+	const adminButtonClass = 'border border-black bg-lghs-yellow px-2 py-1 text-xs font-bold uppercase';
+	// Picks the admin look when the user's right to act comes only from being an admin.
+	const buttonFor = (onlyAsAdmin: boolean, base = buttonClass) => (onlyAsAdmin ? adminButtonClass : base);
+
+	// The open task's own history, fetched when its modal opens.
+	type TaskEvent = { id: number; createdAt: string; actorLabel: string; action: string; details: Record<string, unknown> | null };
+	let history = $state<TaskEvent[] | null>(null);
+	let historyFailed = $state(false);
+
+	async function loadHistory(taskId: number) {
+		history = null;
+		historyFailed = false;
+		try {
+			const res = await fetch(`/tasks/${taskId}/history`);
+			if (!res.ok) throw new Error(String(res.status));
+			history = (await res.json()) as TaskEvent[];
+		} catch {
+			historyFailed = true;
+		}
+	}
+
+	// Reload the history after every action on the open task (the page data changes each time).
+	$effect(() => {
+		if (selected) {
+			void data.tasks;
+			loadHistory(selected.id);
+		}
+	});
+
+	function describe(event: TaskEvent): string {
+		const d = event.details ?? {};
+		const who = typeof d.member === 'string' ? `@${d.member}` : 'un membre';
+		switch (event.action) {
+			case 'task.create': return 'a créé la tâche';
+			case 'task.edit': return 'a modifié la tâche';
+			case 'task.join': return 'participe';
+			case 'task.leave': return "s'est retiré·e";
+			case 'task.assign': return `a assigné ${who}`;
+			case 'task.removeMember': return `a retiré ${who}`;
+			case 'task.setLeader': return typeof d.leader === 'string' ? `a désigné @${d.leader} comme leader` : 'a retiré le leader';
+			case 'task.start': return 'a démarré la tâche';
+			case 'task.unstart': return 'a remis la tâche à faire';
+			case 'task.block': {
+				const after = d.after as { kind?: string; note?: string } | undefined;
+				return `a signalé un blocage ${after?.kind === 'external' ? 'externe' : 'interne'}${after?.note ? ` : « ${after.note} »` : ''}`;
+			}
+			case 'task.unblock': return 'a débloqué la tâche';
+			case 'task.done': return 'a marqué la tâche comme faite';
+			case 'task.reopen': return 'a rouvert la tâche';
+			default: return event.action;
+		}
+	}
+
+	function formatWhen(iso: string): string {
+		return new Date(iso).toLocaleString('fr-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+	}
 </script>
 
 <svelte:head>
@@ -100,8 +158,11 @@
 			{/if}
 			{@render dueLabel(task)}
 			{#each task.members as member (member.sub)}
-				<span class={member.sub === data.mySub ? 'font-bold text-black' : ''}>
-					{member.isLeader ? '★ ' : ''}@{member.label}
+				<span
+					class={member.sub === data.mySub ? 'font-bold text-black' : ''}
+					title={member.imposed ? 'Assigné par un admin' : 'Participant (volontaire)'}
+				>
+					{member.isLeader ? '★ ' : ''}@{member.label}{member.imposed ? ' (assigné)' : ''}
 				</span>
 			{/each}
 		</span>
@@ -289,7 +350,7 @@
 					{#if canFlagBlocked(task)}
 						<form method="POST" action="?/unblock" use:enhance class="mt-2">
 							<input type="hidden" name="taskId" value={task.id} />
-							<button class={buttonClass}>Débloquer</button>
+							<button class={buttonFor(task.authorSub !== data.mySub && !isMember(task))}>Débloquer</button>
 						</form>
 					{/if}
 				</div>
@@ -322,7 +383,7 @@
 			{/if}
 
 			<div>
-				<p class="mb-1 text-xs font-bold uppercase text-gray-600">Sur la tâche</p>
+				<p class="mb-1 text-xs font-bold uppercase text-gray-600">Participants et assignés</p>
 				{#if task.members.length === 0}
 					<p class="text-gray-500">Personne pour l'instant.</p>
 				{:else}
@@ -332,16 +393,14 @@
 								<span>
 									{member.isLeader ? '★ ' : ''}@{member.label}
 									<span class="text-xs text-gray-500">
-										{member.isLeader ? '(leader)' : ''}{member.imposed ? ' (assigné)' : ''}
+										({member.imposed ? 'assigné' : 'participant'}{member.isLeader ? ', leader' : ''})
 									</span>
 								</span>
 								{#if data.isAdmin}
 									<form method="POST" action="?/removeMember" use:enhance>
 										<input type="hidden" name="taskId" value={task.id} />
 										<input type="hidden" name="memberSub" value={member.sub} />
-										<button class="px-1 text-xs text-gray-500 hover:text-black" aria-label="Retirer @{member.label}">
-											✕
-										</button>
+										<button class="{adminButtonClass} px-1.5 py-0" aria-label="Retirer @{member.label}">✕</button>
 									</form>
 								{/if}
 							</li>
@@ -359,13 +418,13 @@
 							<option value={member.sub} selected={member.isLeader}>★ @{member.label}</option>
 						{/each}
 					</select>
-					<button class={buttonClass}>Définir le leader</button>
+					<button class={buttonFor(task.authorSub !== data.mySub)}>Définir le leader</button>
 				</form>
 			{/if}
 
 			{#if data.isAdmin && data.members && task.status !== 'done'}
 				<details class="border border-black">
-					<summary class="cursor-pointer px-3 py-2 text-xs font-bold uppercase">Assigner des membres</summary>
+					<summary class="cursor-pointer bg-lghs-yellow px-3 py-2 text-xs font-bold uppercase">Assigner des membres</summary>
 					<form method="POST" action="?/assign" use:enhance class="border-t border-black p-3">
 						<input type="hidden" name="taskId" value={task.id} />
 						<div class="max-h-48 space-y-1 overflow-y-auto">
@@ -376,7 +435,7 @@
 								</label>
 							{/each}
 						</div>
-						<button class="btn-primary mt-2 px-3 py-1 text-xs">Assigner</button>
+						<button class="{adminButtonClass} mt-2">Assigner</button>
 					</form>
 				</details>
 			{/if}
@@ -394,20 +453,34 @@
 						<button class={buttonClass}>Je me retire</button>
 					</form>
 				{/if}
+				{#if task.status !== 'done' && !task.startedAt && (isMember(task) || data.isAdmin)}
+					<form method="POST" action="?/start" use:enhance>
+						<input type="hidden" name="taskId" value={task.id} />
+						<button class={buttonFor(!isMember(task), 'btn-primary px-3 py-1 text-xs')}>Démarrer</button>
+					</form>
+				{/if}
+				{#if task.status !== 'done' && task.startedAt && (isMember(task) || data.isAdmin)}
+					<form method="POST" action="?/unstart" use:enhance>
+						<input type="hidden" name="taskId" value={task.id} />
+						<button class={buttonFor(!isMember(task))}>Remettre à faire</button>
+					</form>
+				{/if}
 				{#if task.status !== 'done' && (isMember(task) || data.isAdmin)}
 					<form method="POST" action="?/done" use:enhance>
 						<input type="hidden" name="taskId" value={task.id} />
-						<button class="btn-primary px-3 py-1 text-xs">Marquer comme faite</button>
+						<button class={buttonFor(!isMember(task), 'btn-primary px-3 py-1 text-xs')}>Marquer comme faite</button>
 					</form>
 				{/if}
 				{#if task.status === 'done' && (isMember(task) || data.isAdmin)}
 					<form method="POST" action="?/reopen" use:enhance>
 						<input type="hidden" name="taskId" value={task.id} />
-						<button class={buttonClass}>Rouvrir</button>
+						<button class={buttonFor(!isMember(task))}>Rouvrir</button>
 					</form>
 				{/if}
 				{#if canEdit(task) && !editing}
-					<button type="button" onclick={() => (editing = true)} class={buttonClass}>Modifier</button>
+					<button type="button" onclick={() => (editing = true)} class={buttonFor(task.authorSub !== data.mySub)}>
+						Modifier
+					</button>
 				{/if}
 				{#if canDelete(task)}
 					<form
@@ -418,8 +491,29 @@
 						}}
 					>
 						<input type="hidden" name="taskId" value={task.id} />
-						<button class={buttonClass}>Supprimer</button>
+						<button class={buttonFor(task.authorSub !== data.mySub)}>Supprimer</button>
 					</form>
+				{/if}
+			</div>
+
+			<div class="border-t border-black pt-3">
+				<p class="mb-2 text-xs font-bold uppercase text-gray-600">Historique</p>
+				{#if historyFailed}
+					<p class="text-xs text-gray-500">Historique indisponible pour le moment.</p>
+				{:else if history === null}
+					<p class="text-xs text-gray-500">Chargement…</p>
+				{:else if history.length === 0}
+					<p class="text-xs text-gray-500">Aucun événement.</p>
+				{:else}
+					<ol class="space-y-1.5 border-l-2 border-black pl-3 text-xs">
+						{#each history as event (event.id)}
+							<li>
+								<span class="font-bold">@{event.actorLabel}</span>
+								{describe(event)}
+								<span class="text-gray-500">· {formatWhen(event.createdAt)}</span>
+							</li>
+						{/each}
+					</ol>
 				{/if}
 			</div>
 		</div>

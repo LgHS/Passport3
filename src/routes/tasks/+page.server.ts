@@ -7,7 +7,9 @@ import {
 	getTask,
 	listTasks,
 	removeTaskMember,
+	addTaskEvent,
 	setTaskBlocked,
+	setTaskStarted,
 	setTaskDone,
 	setTaskLeader,
 	updateTask,
@@ -68,8 +70,22 @@ const isOnTask = (task: Task, sub: string) => task.members.some((m) => m.sub ===
 const canFlagBlocked = (task: Task, user: AppUser) =>
 	isAdmin(user) || task.authorSub === user.sub || isOnTask(task, user.sub);
 
-// Every task event is written once to the audit log with the member concerned as its target, so
-// it shows up both in /admin/audit and in that member's own "Historique" on /profile.
+// Every task action is recorded twice: in the audit log, with the member concerned as its target
+// (so it shows in /admin/audit and in that member's own "Historique" on /profile), and in the
+// task's own history (task_events, shown in its modal).
+async function record(
+	user: AppUser,
+	source: 'user' | 'admin',
+	action: string,
+	target: { pk: number } | Record<string, never>,
+	taskId: number,
+	details: Record<string, unknown>
+): Promise<void> {
+	await logAuditEvent(actor(user), source, action, target, { taskId, ...details });
+	// A deleted task has no history left to add to (task_events goes with it).
+	if (action !== 'task.delete') await addTaskEvent(taskId, usernameLabel(user), action, details);
+}
+
 function sourceFor(task: Task, user: AppUser): 'user' | 'admin' {
 	return task.authorSub === user.sub || isOnTask(task, user.sub) ? 'user' : 'admin';
 }
@@ -102,8 +118,7 @@ export const actions: Actions = {
 		if (!result.ok) return fail(400, { error: result.error });
 
 		const taskId = await createTask({ sub: user.sub, label: usernameLabel(user) }, result.input);
-		await logAuditEvent(actor(user), 'user', 'task.create', targetFromSub(user.sub), {
-			taskId,
+		await record(user, 'user', 'task.create', targetFromSub(user.sub), taskId, {
 			title: result.input.title
 		});
 		return { created: true };
@@ -120,13 +135,7 @@ export const actions: Actions = {
 		if (!result.ok) return fail(400, { error: result.error });
 
 		await updateTask(task.id, result.input);
-		await logAuditEvent(
-			actor(user),
-			task.authorSub === user.sub ? 'user' : 'admin',
-			'task.edit',
-			targetFromSub(task.authorSub),
-			{
-				taskId: task.id,
+		await record(user, task.authorSub === user.sub ? 'user' : 'admin', 'task.edit', targetFromSub(task.authorSub), task.id, {
 				before: { title: task.title, description: task.description, dueDate: task.dueDate },
 				after: result.input
 			}
@@ -142,8 +151,7 @@ export const actions: Actions = {
 		if (task.status === 'done') return fail(409, { error: 'Cette tâche est déjà faite.' });
 
 		await addTaskMember(task.id, { sub: user.sub, label: usernameLabel(user) }, null);
-		await logAuditEvent(actor(user), 'user', 'task.join', targetFromSub(user.sub), {
-			taskId: task.id,
+		await record(user, 'user', 'task.join', targetFromSub(user.sub), task.id, {
 			title: task.title
 		});
 		return { updated: true };
@@ -159,8 +167,7 @@ export const actions: Actions = {
 		if (me.imposed) return fail(403, { error: 'Une tâche assignée par un admin ne peut pas être refusée.' });
 
 		await removeTaskMember(task.id, user.sub);
-		await logAuditEvent(actor(user), 'user', 'task.leave', targetFromSub(user.sub), {
-			taskId: task.id,
+		await record(user, 'user', 'task.leave', targetFromSub(user.sub), task.id, {
 			title: task.title
 		});
 		return { updated: true };
@@ -182,8 +189,8 @@ export const actions: Actions = {
 			const sub = String(member.pk);
 			const alreadyOn = isOnTask(task, sub);
 			await addTaskMember(task.id, { sub, label: member.username }, user.sub);
-			await logAuditEvent(actor(user), 'admin', 'task.assign', { pk: member.pk }, {
-				taskId: task.id,
+			await record(user, 'admin', 'task.assign', { pk: member.pk }, task.id, {
+				member: member.username,
 				title: task.title
 			});
 			if (alreadyOn || !member.email) continue;
@@ -209,8 +216,8 @@ export const actions: Actions = {
 		if (!isOnTask(task, memberSub)) return fail(400, { error: "Ce membre n'est pas sur cette tâche." });
 
 		await removeTaskMember(task.id, memberSub);
-		await logAuditEvent(actor(user), 'admin', 'task.removeMember', targetFromSub(memberSub), {
-			taskId: task.id,
+		await record(user, 'admin', 'task.removeMember', targetFromSub(memberSub), task.id, {
+				member: task.members.find((m) => m.sub === memberSub)?.label,
 			title: task.title
 		});
 		return { updated: true };
@@ -229,12 +236,7 @@ export const actions: Actions = {
 		}
 
 		await setTaskLeader(task.id, leaderSub);
-		await logAuditEvent(
-			actor(user),
-			task.authorSub === user.sub ? 'user' : 'admin',
-			'task.setLeader',
-			leaderSub ? targetFromSub(leaderSub) : targetFromSub(task.authorSub),
-			{ taskId: task.id, title: task.title }
+		await record(user, task.authorSub === user.sub ? 'user' : 'admin', 'task.setLeader', leaderSub ? targetFromSub(leaderSub) : targetFromSub(task.authorSub), task.id, { title: task.title, leader: task.members.find((m) => m.sub === leaderSub)?.label ?? null }
 		);
 		return { updated: true };
 	},
@@ -249,12 +251,7 @@ export const actions: Actions = {
 		}
 
 		await setTaskDone(task.id, true);
-		await logAuditEvent(
-			actor(user),
-			isOnTask(task, user.sub) ? 'user' : 'admin',
-			'task.done',
-			targetFromSub(user.sub),
-			{ taskId: task.id, title: task.title }
+		await record(user, isOnTask(task, user.sub) ? 'user' : 'admin', 'task.done', targetFromSub(user.sub), task.id, { title: task.title }
 		);
 		return { updated: true };
 	},
@@ -266,10 +263,36 @@ export const actions: Actions = {
 		if (!isAdmin(user) && !isOnTask(task, user.sub)) return fail(403, { error: 'Action non autorisée.' });
 
 		await setTaskDone(task.id, false);
-		await logAuditEvent(actor(user), sourceFor(task, user), 'task.reopen', targetFromSub(user.sub), {
-			taskId: task.id,
+		await record(user, sourceFor(task, user), 'task.reopen', targetFromSub(user.sub), task.id, {
 			title: task.title
 		});
+		return { updated: true };
+	},
+
+	// "Démarrer": people being on a task doesn't mean it has started. Anyone on it, or an admin.
+	start: async ({ request, locals }) => {
+		const user = requireUser(locals);
+		const task = await taskFrom(await request.formData());
+		if (!task) return fail(404, { error: 'Tâche introuvable.' });
+		if (!isAdmin(user) && !isOnTask(task, user.sub)) {
+			return fail(403, { error: 'Seules les personnes sur la tâche peuvent la démarrer.' });
+		}
+		if (task.status === 'done') return fail(409, { error: 'Cette tâche est déjà faite.' });
+
+		await setTaskStarted(task.id, true);
+		await record(user, sourceFor(task, user), 'task.start', targetFromSub(user.sub), task.id, { title: task.title });
+		return { updated: true };
+	},
+
+	// Back to "à faire" (e.g. started by mistake), people stay on it.
+	unstart: async ({ request, locals }) => {
+		const user = requireUser(locals);
+		const task = await taskFrom(await request.formData());
+		if (!task) return fail(404, { error: 'Tâche introuvable.' });
+		if (!isAdmin(user) && !isOnTask(task, user.sub)) return fail(403, { error: 'Action non autorisée.' });
+
+		await setTaskStarted(task.id, false);
+		await record(user, sourceFor(task, user), 'task.unstart', targetFromSub(user.sub), task.id, { title: task.title });
 		return { updated: true };
 	},
 
@@ -288,8 +311,7 @@ export const actions: Actions = {
 		}
 
 		await setTaskBlocked(task.id, { kind, note });
-		await logAuditEvent(actor(user), sourceFor(task, user), 'task.block', targetFromSub(task.authorSub), {
-			taskId: task.id,
+		await record(user, sourceFor(task, user), 'task.block', targetFromSub(task.authorSub), task.id, {
 			title: task.title,
 			before: task.blocked,
 			after: { kind, note }
@@ -304,8 +326,7 @@ export const actions: Actions = {
 		if (!canFlagBlocked(task, user)) return fail(403, { error: 'Action non autorisée.' });
 
 		await setTaskBlocked(task.id, null);
-		await logAuditEvent(actor(user), sourceFor(task, user), 'task.unblock', targetFromSub(task.authorSub), {
-			taskId: task.id,
+		await record(user, sourceFor(task, user), 'task.unblock', targetFromSub(task.authorSub), task.id, {
 			title: task.title,
 			before: task.blocked
 		});
@@ -322,12 +343,7 @@ export const actions: Actions = {
 		}
 
 		await deleteTask(task.id);
-		await logAuditEvent(
-			actor(user),
-			task.authorSub === user.sub ? 'user' : 'admin',
-			'task.delete',
-			targetFromSub(task.authorSub),
-			{ taskId: task.id, title: task.title }
+		await record(user, task.authorSub === user.sub ? 'user' : 'admin', 'task.delete', targetFromSub(task.authorSub), task.id, { title: task.title }
 		);
 		return { deleted: true };
 	}

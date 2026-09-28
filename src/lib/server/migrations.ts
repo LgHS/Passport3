@@ -236,6 +236,29 @@ const migrations: Migration[] = [
 					ADD COLUMN IF NOT EXISTS blocked_note TEXT
 			`;
 		}
+	},
+	{
+		version: 12,
+		name: 'tasks: explicit start, per-task history',
+		up: async (sql) => {
+			// People on a task doesn't mean it has started: "en cours" is now an explicit step
+			// ("Démarrer"), recorded here. NULL = not started.
+			await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ`;
+			// Each task's own history, shown in its modal. Every entry is also written to
+			// audit_events (see /tasks' +page.server.ts): this one is per task and goes away with it,
+			// the audit log keeps everything.
+			await sql`
+				CREATE TABLE IF NOT EXISTS task_events (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					actor_label TEXT NOT NULL,
+					action TEXT NOT NULL,
+					details TEXT
+				)
+			`;
+			await sql`CREATE INDEX IF NOT EXISTS task_events_task_id ON task_events(task_id, id)`;
+		}
 	}
 ];
 
