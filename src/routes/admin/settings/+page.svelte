@@ -114,26 +114,13 @@
 	{#snippet channelPicker(id: string, label: string, help: string, current: string)}
 		<div class="mb-4">
 			<label class="mb-1 block text-sm font-bold uppercase" for={id}>{label}</label>
-			{#if data.channels}
-				<select {id} name={id} class="w-full border border-black px-3 py-2 text-sm">
-					<option value="">— Aucun (désactivé) —</option>
-					{#each data.channels as channel (channel.id)}
-						<option value={channel.id} selected={channel.id === current}>~{channel.name}</option>
-					{/each}
-					{#if current && !data.channels.some((c) => c.id === current)}
-						<option value={current} selected>Canal actuel ({current})</option>
-					{/if}
-				</select>
-			{:else}
-				<!-- Fallback when the channel list can't be loaded from Mattermost. -->
-				<input
-					{id}
-					name={id}
-					value={current}
-					placeholder="Identifiant du canal (26 caractères)"
-					class="w-full border border-black px-3 py-2 font-mono text-sm placeholder:text-gray-300"
-				/>
-			{/if}
+			<input
+				{id}
+				name={id}
+				value={current}
+				placeholder="Identifiant du canal (26 caractères) — vide pour désactiver"
+				class="w-full border border-black px-3 py-2 font-mono text-sm placeholder:text-gray-300"
+			/>
 			<p class="mt-1 text-xs text-gray-500">{help}</p>
 		</div>
 	{/snippet}
@@ -149,11 +136,10 @@
 			};
 		}}
 	>
-		{#if !data.channels}
-			<p class="mb-4 text-sm text-gray-600">
-				La liste des canaux n'a pas pu être chargée depuis Mattermost : indiquez leur identifiant.
-			</p>
-		{/if}
+		<p class="mb-4 text-sm text-gray-600">
+			Collez l'identifiant du canal : dans Mattermost, menu du canal → « Afficher les infos », en bas
+			de la fenêtre.
+		</p>
 		{@render channelPicker(
 			'birthdayChannel',
 			"Canal des anniversaires",

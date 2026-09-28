@@ -7,7 +7,6 @@ import { logAuditEvent } from '$lib/server/auditLog';
 import { displayName } from '$lib/types';
 import { getBirthdaySettings, updateBirthdaySettings } from '$lib/server/birthdaySettings';
 import { refreshMattermostCache } from '$lib/server/mattermost';
-import { listTeamChannels } from '$lib/server/mattermostBot';
 import { getSetting, setSetting, SETTING_KEYS } from '$lib/server/appSettings';
 import { env } from '$env/dynamic/private';
 
@@ -16,15 +15,10 @@ const CHANNEL_ID_RE = /^[a-z0-9]{26}$/;
 
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
-	const [birthdaySettings, birthdayChannel, wishlistChannel, channels] = await Promise.all([
+	const [birthdaySettings, birthdayChannel, wishlistChannel] = await Promise.all([
 		getBirthdaySettings(),
 		getSetting(SETTING_KEYS.birthdayChannel),
-		getSetting(SETTING_KEYS.wishlistChannel),
-		// Best-effort: without the list, the page falls back to plain channel-id fields.
-		listTeamChannels().catch((err) => {
-			console.error('[admin/settings] could not list Mattermost channels', err);
-			return null;
-		})
+		getSetting(SETTING_KEYS.wishlistChannel)
 	]);
 	return {
 		birthdaySettings,
@@ -32,8 +26,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			// The .env value is shown as the current one until a channel is picked here.
 			birthday: birthdayChannel ?? env.MATTERMOST_BIRTHDAY_CHANNEL_ID ?? '',
 			wishlist: wishlistChannel ?? ''
-		},
-		channels
+		}
 	};
 };
 

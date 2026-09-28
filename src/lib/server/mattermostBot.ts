@@ -49,19 +49,6 @@ export async function postToChannel(channelId: string, message: string): Promise
 	}
 }
 
-// Public channels of Passport's Mattermost team (MATTERMOST_TEAM_SLUG), for the admin settings'
-// channel pickers. Unlike the notify functions above this one throws: the caller shows a plain
-// channel-id field instead when the list can't be loaded.
-export async function listTeamChannels(): Promise<{ id: string; name: string }[]> {
-	const teamRes = await mattermostBotFetch(`teams/name/${encodeURIComponent(requireEnv('MATTERMOST_TEAM_SLUG'))}`);
-	const team = (await teamRes.json()) as { id: string };
-	const res = await mattermostBotFetch(`teams/${team.id}/channels?per_page=200`);
-	const channels = (await res.json()) as { id: string; display_name: string; name: string }[];
-	return channels
-		.map((c) => ({ id: c.id, name: c.display_name || c.name }))
-		.sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
-}
-
 async function getUserIdByUsername(username: string): Promise<string> {
 	const res = await mattermostBotFetch(`users/username/${encodeURIComponent(username)}`);
 	const user = (await res.json()) as { id: string };
