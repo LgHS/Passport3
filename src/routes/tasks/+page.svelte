@@ -169,7 +169,9 @@
 		<button
 			type="button"
 			onclick={() => openTask(task)}
-			class="block w-full cursor-pointer border border-black bg-white p-3 pr-10 text-left text-sm hover:bg-gray-100"
+			class="block w-full cursor-pointer p-3 pr-10 text-left text-sm {isOverdue(task)
+				? 'border-2 border-red-600 bg-red-50 hover:bg-red-100'
+				: 'border border-black bg-white hover:bg-gray-100'}"
 		>
 			<span class="block font-bold">{task.title}</span>
 			<span class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
