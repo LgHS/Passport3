@@ -119,8 +119,9 @@
 <!-- "Admin Loïc Keyeux (@iooner)", the username linking to their trombinoscope card. -->
 {#snippet author(event: AuditEvent)}
 	{#if event.source === 'admin'}
-		{event.actorLabel}{#if data.actorUsernames[event.actorSub]}
-			(<MemberName username={data.actorUsernames[event.actorSub]} visibleUsernames={data.visibleUsernames} />){/if}
+		{event.actorLabel}{#if data.actorUsernames[event.actorSub]}{' '}<span class="italic"
+				>(<MemberName username={data.actorUsernames[event.actorSub]} visibleUsernames={data.visibleUsernames} />)</span
+			>{/if}
 	{:else}
 		Vous
 	{/if}
