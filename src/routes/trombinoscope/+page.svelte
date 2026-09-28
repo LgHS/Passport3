@@ -563,10 +563,12 @@
 	onclick={handleDialogClick}
 	onclose={() => (selectedMember = null)}
 	aria-labelledby="member-card-title"
-	class="m-auto w-[calc(100%-2rem)] max-w-sm border border-black bg-white p-0 text-left backdrop:bg-black/60"
+	class="m-auto max-h-[85vh] w-[calc(100%-2rem)] max-w-sm overflow-y-auto border-4 border-black bg-white p-0 text-left backdrop:bg-black/50 md:max-w-3xl"
 >
 	{#if selectedMember}
 		{@const member = selectedMember}
+		<!-- Wide screens: photo on the left, details on the right. Stacked on phones. -->
+		<div class="md:grid md:grid-cols-2">
 		<div class="relative">
 			{#if member.avatar}
 				<img src={avatarSize(member.avatar, 512)} alt="" class="aspect-square w-full object-cover" />
@@ -586,14 +588,23 @@
 			<button
 				type="button"
 				onclick={closeMember}
-				class="absolute top-0 right-0 bg-black px-3 py-1 text-sm font-bold text-white"
+				class="absolute top-0 right-0 bg-black px-3 py-1 text-sm font-bold text-white md:hidden"
 				aria-label="Fermer la fiche"
 			>
 				✕
 			</button>
 		</div>
 
-		<div class="space-y-3 p-4 text-sm">
+		<div class="relative space-y-3 p-4 text-sm">
+			<!-- Wide screens: the photo is on the left, so the close button moves to the card's corner. -->
+			<button
+				type="button"
+				onclick={closeMember}
+				class="absolute top-0 right-0 hidden bg-black px-3 py-1 text-sm font-bold text-white md:block"
+				aria-label="Fermer la fiche"
+			>
+				✕
+			</button>
 			<div>
 				<h2 id="member-card-title" class="text-base font-bold break-all">@{member.username}</h2>
 				{#if member.tagExtended}
@@ -655,6 +666,7 @@
 			{#if !fullName(member) && !member.tagExtended && !member.email && !member.phone && !member.mattermostUsername && socialLinks(member).length === 0}
 				<p class="text-gray-500">Ce membre n'a partagé que son pseudo.</p>
 			{/if}
+		</div>
 		</div>
 	{/if}
 </dialog>
