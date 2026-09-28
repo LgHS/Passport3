@@ -80,6 +80,17 @@
 		return task.status !== 'done' && !!task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10);
 	}
 
+	// A bit of fun for the quick "+" on the cards.
+	const QUICK_JOIN_QUESTIONS = [
+		'« {t} » : tu signes, et pas avec le sang cette fois ?',
+		"« {t} » : l'atelier compte sur toi. Pas de pression. Enfin, un peu.",
+		'« {t} » : volontaire désigné·e par toi-même, on confirme ?',
+		"« {t} » : les post-its au mur t'en seront éternellement reconnaissants. On y va ?",
+		"« {t} » : c'est parti ? (« Je me retire » existe, on ne juge pas… trop.)"
+	];
+	const quickJoinQuestion = (t: Task) =>
+		QUICK_JOIN_QUESTIONS[Math.floor(Math.random() * QUICK_JOIN_QUESTIONS.length)].replace('{t}', t.title);
+
 	const buttonClass = 'border border-black px-3 py-1.5 text-xs font-bold uppercase hover:bg-black hover:text-white';
 	// Same yellow as the wishlist's admin-only buttons: used whenever the current user can only do
 	// this because they're an admin.
@@ -154,27 +165,54 @@
 {/snippet}
 
 {#snippet taskCard(task: Task)}
-	<button
-		type="button"
-		onclick={() => openTask(task)}
-		class="block w-full cursor-pointer border border-black bg-white p-3 text-left text-sm hover:bg-gray-100"
-	>
-		<span class="block font-bold">{task.title}</span>
-		<span class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
-			{#if task.blocked}
-				<span class="font-bold text-orange-700">Bloqué ({BLOCKED_LABEL[task.blocked.kind]})</span>
-			{/if}
-			{@render dueLabel(task)}
-			{#each task.members as member (member.sub)}
-				<span
-					class={member.sub === data.mySub ? 'font-bold text-black' : ''}
-					title={member.imposed ? 'Assigné par un admin' : 'Participant (volontaire)'}
+	<div class="relative">
+		<button
+			type="button"
+			onclick={() => openTask(task)}
+			class="block w-full cursor-pointer border border-black bg-white p-3 pr-10 text-left text-sm hover:bg-gray-100"
+		>
+			<span class="block font-bold">{task.title}</span>
+			<span class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+				{#if task.blocked}
+					<span class="font-bold text-orange-700">Bloqué ({BLOCKED_LABEL[task.blocked.kind]})</span>
+				{/if}
+				{@render dueLabel(task)}
+				{#each task.members as member (member.sub)}
+					<span
+						class={member.sub === data.mySub ? 'font-bold text-black' : ''}
+						title={member.imposed ? 'Assigné sur la tâche' : 'Participant (volontaire)'}
+					>
+						{member.isLeader ? '★ ' : ''}@{member.label}{member.imposed ? ' (assigné)' : ''}
+					</span>
+				{/each}
+			</span>
+		</button>
+		<!-- Quick join, without opening the task. Outside the card's own button: a form can't sit
+		     inside a <button>. -->
+		{#if task.status !== 'done' && !isMember(task)}
+			<form
+				method="POST"
+				action="?/join"
+				class="absolute right-1.5 bottom-1.5"
+				use:enhance={({ cancel }) => {
+					if (!confirm(quickJoinQuestion(task))) return cancel();
+					return async ({ result, update }) => {
+						await update();
+						if (result.type === 'success') showToast('success', `Bienvenue sur « ${task.title} » !`);
+					};
+				}}
+			>
+				<input type="hidden" name="taskId" value={task.id} />
+				<button
+					class="h-7 w-7 border border-black bg-white text-base leading-none font-bold hover:bg-black hover:text-white"
+					title="Je participe"
+					aria-label="Participer à « {task.title} »"
 				>
-					{member.isLeader ? '★ ' : ''}@{member.label}{member.imposed ? ' (assigné)' : ''}
-				</span>
-			{/each}
-		</span>
-	</button>
+					+
+				</button>
+			</form>
+		{/if}
+	</div>
 {/snippet}
 
 <h1 class="mb-2 bg-black px-4 py-3 text-base font-bold text-white uppercase">Tâches</h1>
@@ -190,7 +228,7 @@
 			êtes alors le <strong>propriétaire</strong>.
 		</p>
 		<p>
-			<strong>Participant</strong> : vous vous portez volontaire avec « Je participe », et pouvez vous
+			<strong>Participant</strong> : vous vous portez volontaire avec « Je participe » (ou le « + » en bas de la carte), et pouvez vous
 			retirer quand vous voulez. Plusieurs personnes peuvent participer à la même tâche.
 		</p>
 		<p>
@@ -208,10 +246,7 @@
 			démarrée, puis « Fait ». Une tâche <strong>bloquée</strong> (interne ou externe, avec une note
 			sur ce qu'on attend) est masquée par défaut.
 		</p>
-		<p class="text-gray-600">
-			Les boutons jaunes sont réservés aux admins. Chaque action est gardée dans l'historique de la
-			tâche.
-		</p>
+		<p class="text-gray-600">Chaque action est gardée dans l'historique de la tâche.</p>
 	</div>
 </details>
 
@@ -623,7 +658,7 @@
 						>
 							<input type="hidden" name="taskId" value={task.id} />
 							<button
-								class="text-xs font-bold uppercase underline {canDeleteWithoutAdmin(task) ? '' : 'bg-lghs-yellow px-1'}"
+								class="text-xs font-bold uppercase text-red-700 underline {canDeleteWithoutAdmin(task) ? '' : 'bg-lghs-yellow px-1'}"
 							>
 								Supprimer
 							</button>
