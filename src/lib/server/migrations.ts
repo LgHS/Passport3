@@ -160,6 +160,136 @@ const migrations: Migration[] = [
 			await sql`DROP TABLE member_avatars`;
 			await sql`DROP TABLE avatar_variants`;
 		}
+	},
+	{
+		version: 10,
+		name: 'create tasks',
+		up: async (sql) => {
+			// First shape of the task board (one assignee per task). Kept exactly as it first ran:
+			// migration 11 below turns it into the current shape.
+			await sql`
+				CREATE TABLE tasks (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					author_sub TEXT NOT NULL,
+					author_label TEXT NOT NULL,
+					title TEXT NOT NULL,
+					description TEXT,
+					due_date DATE,
+					status TEXT NOT NULL DEFAULT 'todo',
+					assignee_sub TEXT,
+					assignee_label TEXT,
+					assigned_by_sub TEXT,
+					done_at TIMESTAMPTZ
+				)
+			`;
+		}
+	},
+	{
+		version: 11,
+		name: 'tasks: several members, leader, blocked state',
+		up: async (sql) => {
+			// Written to work on any database that ran a draft of migration 10 (whichever shape it
+			// had), hence the IF [NOT] EXISTS everywhere.
+			// Everyone on a task: volunteers (assigned_by_sub null) and members an admin put on it
+			// (assigned_by_sub set — they can't remove themselves). At most one leader per task.
+			await sql`
+				CREATE TABLE IF NOT EXISTS task_members (
+					task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+					member_sub TEXT NOT NULL,
+					member_label TEXT NOT NULL,
+					assigned_by_sub TEXT,
+					is_leader BOOLEAN NOT NULL DEFAULT false,
+					joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					PRIMARY KEY (task_id, member_sub)
+				)
+			`;
+			await sql`
+				CREATE UNIQUE INDEX IF NOT EXISTS task_members_one_leader ON task_members(task_id) WHERE is_leader
+			`;
+
+			// The single assignee of the first shape becomes the task's first member.
+			const [{ has_assignee }] = await sql<{ has_assignee: boolean }[]>`
+				SELECT EXISTS (
+					SELECT 1 FROM information_schema.columns
+					WHERE table_name = 'tasks' AND column_name = 'assignee_sub'
+				) AS has_assignee
+			`;
+			if (has_assignee) {
+				await sql`
+					INSERT INTO task_members (task_id, member_sub, member_label, assigned_by_sub)
+					SELECT id, assignee_sub, assignee_label, assigned_by_sub FROM tasks WHERE assignee_sub IS NOT NULL
+					ON CONFLICT DO NOTHING
+				`;
+			}
+			// "à faire" vs "en cours" is now derived from whether anyone is on the task, and "fait"
+			// from done_at.
+			await sql`
+				ALTER TABLE tasks
+					DROP COLUMN IF EXISTS status,
+					DROP COLUMN IF EXISTS assignee_sub,
+					DROP COLUMN IF EXISTS assignee_label,
+					DROP COLUMN IF EXISTS assigned_by_sub,
+					-- 'internal' (waiting on us: a decision, a purchase…) or 'external' (a supplier, a
+					-- third party…), with a note saying what it's waiting on. NULL = not blocked.
+					ADD COLUMN IF NOT EXISTS blocked_kind TEXT,
+					ADD COLUMN IF NOT EXISTS blocked_note TEXT
+			`;
+		}
+	},
+	{
+		version: 12,
+		name: 'tasks: explicit start, per-task history',
+		up: async (sql) => {
+			// People on a task doesn't mean it has started: "en cours" is now an explicit step
+			// ("Démarrer"), recorded here. NULL = not started.
+			await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ`;
+			// Each task's own history, shown in its modal. Every entry is also written to
+			// audit_events (see /tasks' +page.server.ts): this one is per task and goes away with it,
+			// the audit log keeps everything.
+			await sql`
+				CREATE TABLE IF NOT EXISTS task_events (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					actor_label TEXT NOT NULL,
+					action TEXT NOT NULL,
+					details TEXT
+				)
+			`;
+			await sql`CREATE INDEX IF NOT EXISTS task_events_task_id ON task_events(task_id, id)`;
+		}
+	},
+	{
+		version: 13,
+		name: 'tasks: created_by_admin',
+		up: async (sql) => {
+			// Whether an admin created the task: its leader can delete a task, except one an admin
+			// created. Existing rows default to false.
+			await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by_admin BOOLEAN NOT NULL DEFAULT false`;
+		}
+	},
+	{
+		version: 14,
+		name: 'tasks: priority',
+		up: async (sql) => {
+			// 1 Bas, 2 Moyen, 3 Normal, 4 Élevé, 5 Urgent (see $lib/taskPriority). Existing tasks: Normal.
+			await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority SMALLINT NOT NULL DEFAULT 3`;
+		}
+	},
+	{
+		version: 15,
+		name: 'tasks: reminder tracking',
+		up: async (sql) => {
+			// Which due date each Mattermost reminder was already sent for (see taskReminders.ts):
+			// one "due tomorrow" and one "overdue" reminder per due date, sent again only if the due
+			// date is changed.
+			await sql`
+				ALTER TABLE tasks
+					ADD COLUMN IF NOT EXISTS due_soon_reminded_for DATE,
+					ADD COLUMN IF NOT EXISTS overdue_reminded_for DATE
+			`;
+		}
 	}
 ];
 
