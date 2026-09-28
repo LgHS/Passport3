@@ -81,7 +81,11 @@
 					Réessayer
 				</button>
 			{:else}
-				<button type="button" onclick={() => history.back()} class="text-sm font-bold uppercase underline">
+				<button
+					type="button"
+					onclick={() => history.back()}
+					class="border border-black px-4 py-2 text-sm font-bold uppercase transition-colors hover:bg-black hover:text-white"
+				>
 					Page précédente
 				</button>
 			{/if}
