@@ -9,10 +9,10 @@
 	let enabled = $state(form?.enabled ?? data.birthdaySettings.enabled);
 	// svelte-ignore state_referenced_locally
 	let hour = $state(form?.hour ?? data.birthdaySettings.hour);
+	// svelte-ignore state_referenced_locally
+	let wishlistAnnounce = $state({ ...data.wishlistAnnounce });
 	let savingBirthday = $state(false);
 	let savingWishlist = $state(false);
-	// svelte-ignore state_referenced_locally
-	let wishlistAnnounce = $state(data.wishlistAnnounce);
 	let refreshingMattermostCache = $state(false);
 	let generatingAvatars = $state(false);
 
@@ -40,7 +40,7 @@
 		}
 	});
 
-	// Keeps the submit button's busy state in sync with a form's round-trip.
+	// Keeps a block's submit button busy for the form's round-trip.
 	function busy(set: (v: boolean) => void) {
 		return () => {
 			set(true);
@@ -76,9 +76,9 @@
 	</label>
 {/snippet}
 
-{#snippet channelField(id: string, label: string, current: string)}
+{#snippet channelField(id: string, current: string)}
 	<div>
-		<label class="mb-1 block text-sm font-bold uppercase" for={id}>{label}</label>
+		<label class="mb-1 block text-sm font-bold uppercase" for={id}>Canal Mattermost</label>
 		<input
 			{id}
 			name={id}
@@ -93,11 +93,7 @@
 {/snippet}
 
 {#snippet submit(pending: boolean, idle: string, working: string)}
-	<button
-		type="submit"
-		disabled={pending}
-		class="btn-primary mt-auto w-fit px-4 py-2 text-sm disabled:opacity-50"
-	>
+	<button type="submit" disabled={pending} class="btn-primary mt-auto w-fit px-4 py-2 text-sm disabled:opacity-50">
 		{pending ? working : idle}
 	</button>
 {/snippet}
@@ -131,18 +127,13 @@
 							>(Heure de la République libre d'Outremeuse)</span
 						>
 					</label>
-					<select
-						id="hour"
-						name="hour"
-						bind:value={hour}
-						class="w-full border border-black px-3 py-2 text-sm"
-					>
+					<select id="hour" name="hour" bind:value={hour} class="w-full border border-black px-3 py-2 text-sm">
 						{#each Array.from({ length: 24 }, (_, h) => h) as h (h)}
 							<option value={h}>{h}h00</option>
 						{/each}
 					</select>
 				</div>
-				{@render channelField('birthdayChannel', 'Canal Mattermost', data.mattermostChannels.birthday)}
+				{@render channelField('birthdayChannel', data.mattermostChannels.birthday)}
 				{@render submit(savingBirthday, 'Enregistrer', 'Enregistrement…')}
 			</div>
 		</form>
@@ -156,12 +147,24 @@
 			<h2 class="bg-black px-4 py-3 text-base font-bold text-white uppercase">Wishlist</h2>
 			<div class="flex flex-1 flex-col gap-4 p-4">
 				{@render toggle(
-					'wishlistAnnounce',
-					wishlistAnnounce,
-					(v) => (wishlistAnnounce = v),
+					'announce',
+					wishlistAnnounce.created,
+					(v) => (wishlistAnnounce.created = v),
 					'Annoncer les nouvelles propositions sur Mattermost'
 				)}
-				{@render channelField('wishlistChannel', 'Canal Mattermost', data.mattermostChannels.wishlist)}
+				{@render toggle(
+					'announceGranted',
+					wishlistAnnounce.granted,
+					(v) => (wishlistAnnounce.granted = v),
+					'Annoncer les propositions exaucées sur Mattermost'
+				)}
+				{@render toggle(
+					'announceRejected',
+					wishlistAnnounce.rejected,
+					(v) => (wishlistAnnounce.rejected = v),
+					'Annoncer les propositions refusées sur Mattermost'
+				)}
+				{@render channelField('wishlistChannel', data.mattermostChannels.wishlist)}
 				{@render submit(savingWishlist, 'Enregistrer', 'Enregistrement…')}
 			</div>
 		</form>

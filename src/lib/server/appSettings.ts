@@ -7,7 +7,10 @@ export const SETTING_KEYS = {
 	birthdayChannel: 'mattermost.birthday_channel_id',
 	wishlistChannel: 'mattermost.wishlist_channel_id',
 	// "true" when new wishlist proposals are announced (off by default, like birthdays).
-	wishlistAnnounce: 'mattermost.wishlist_announce_enabled'
+	wishlistAnnounce: 'mattermost.wishlist_announce_enabled',
+	// Same, for proposals an admin grants or turns down.
+	wishlistAnnounceGranted: 'mattermost.wishlist_announce_granted_enabled',
+	wishlistAnnounceRejected: 'mattermost.wishlist_announce_rejected_enabled'
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

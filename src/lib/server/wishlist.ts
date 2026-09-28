@@ -120,6 +120,7 @@ export async function castVote(itemId: number, voter: WishlistAuthor, value: 1 |
 
 export interface WishlistItemForAuth {
 	authorSub: string;
+	authorLabel: string;
 	status: WishlistStatus;
 	voteCount: number;
 	title: string;
@@ -139,6 +140,7 @@ export async function getWishlistItemForAuth(itemId: number): Promise<WishlistIt
 	const [row] = await sql<
 		{
 			author_sub: string;
+			author_label: string;
 			status: string;
 			title: string;
 			description: string | null;
@@ -149,7 +151,7 @@ export async function getWishlistItemForAuth(itemId: number): Promise<WishlistIt
 			vote_count: number;
 		}[]
 	>`
-		SELECT i.author_sub, i.status, i.title, i.description, i.link, i.quantity, i.estimated_amount, i.type,
+		SELECT i.author_sub, i.author_label, i.status, i.title, i.description, i.link, i.quantity, i.estimated_amount, i.type,
 		       (SELECT COUNT(*)::int FROM wishlist_votes v WHERE v.item_id = i.id) AS vote_count
 		FROM wishlist_items i WHERE i.id = ${itemId}
 	`;
@@ -157,6 +159,7 @@ export async function getWishlistItemForAuth(itemId: number): Promise<WishlistIt
 	return row
 		? {
 				authorSub: row.author_sub,
+				authorLabel: row.author_label,
 				status: row.status as WishlistStatus,
 				voteCount: row.vote_count,
 				title: row.title,

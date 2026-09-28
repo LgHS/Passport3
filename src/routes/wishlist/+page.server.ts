@@ -41,12 +41,25 @@ function targetFromSub(sub: string): { pk: number } | Record<string, never> {
 	return Number.isInteger(pk) && pk > 0 ? { pk } : {};
 }
 
-// Posts a new proposal to the Mattermost channel chosen on /admin/settings, if any. Best-effort
-// (postToChannel never throws): the proposal is created either way. The link uses Passport's
-// public origin, taken from the OIDC redirect URI like the task board's links.
-async function announceNewProposal(itemId: number, title: string, type: string, author: string): Promise<void> {
+// Posts a wishlist event to the Mattermost channel chosen on /admin/settings, when its switch is
+// on. Best-effort (postToChannel never throws): the action succeeds either way. The link uses
+// Passport's public origin, taken from the OIDC redirect URI like the task board's links.
+const ANNOUNCEMENTS = {
+	created: { key: SETTING_KEYS.wishlistAnnounce, text: 'Nouvelle proposition dans la wishlist', by: 'par' },
+	exauce: { key: SETTING_KEYS.wishlistAnnounceGranted, text: 'Proposition exaucée', by: 'proposée par' },
+	rejete: { key: SETTING_KEYS.wishlistAnnounceRejected, text: 'Proposition refusée', by: 'proposée par' }
+} as const;
+
+async function announceWishlist(
+	event: keyof typeof ANNOUNCEMENTS,
+	itemId: number,
+	title: string,
+	type: string,
+	author: string
+): Promise<void> {
+	const { key, text, by } = ANNOUNCEMENTS[event];
 	const [enabled, channelId] = await Promise.all([
-		getSetting(SETTING_KEYS.wishlistAnnounce).catch(() => null),
+		getSetting(key).catch(() => null),
 		getSetting(SETTING_KEYS.wishlistChannel).catch(() => null)
 	]);
 	if (enabled !== 'true' || !channelId) return;
@@ -57,10 +70,7 @@ async function announceNewProposal(itemId: number, title: string, type: string, 
 		link = '';
 	}
 	const meta = typeMeta(type as Parameters<typeof typeMeta>[0]);
-	await postToChannel(
-		channelId,
-		`${meta.icon} Nouvelle proposition dans la wishlist : **${title}** (${meta.label}) par @${author}.${link}`
-	);
+	await postToChannel(channelId, `${meta.icon} ${text} : **${title}** (${meta.label}) ${by} @${author}.${link}`);
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -104,7 +114,7 @@ export const actions: Actions = {
 			{ itemId, title: result.input.title, type: result.input.type }
 		);
 
-		await announceNewProposal(itemId, result.input.title, result.input.type, usernameLabel(user));
+		await announceWishlist('created', itemId, result.input.title, result.input.type, usernameLabel(user));
 
 		return { created: true };
 	},
@@ -249,6 +259,11 @@ export const actions: Actions = {
 			targetFromSub(item.authorSub),
 			{ before: { status: item.status }, after: { status } }
 		);
+
+		// Only a fresh decision is announced, not a revert to pending nor a repeat of the same status.
+		if (status !== 'pending' && status !== item.status) {
+			await announceWishlist(status, itemId, item.title, item.type, item.authorLabel);
+		}
 
 		return { resolved: true };
 	}
