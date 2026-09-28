@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { renderMiniMarkdown } from '$lib/renderMiniMarkdown';
+	import { DEFAULT_TASK_PRIORITY, TASK_PRIORITIES, priorityMeta } from '$lib/taskPriority';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -164,6 +165,12 @@
 	{/if}
 {/snippet}
 
+{#snippet priorityBadge(task: Task)}
+	<span class="border border-black px-1.5 py-0.5 text-[10px] font-bold uppercase {priorityMeta(task.priority).badge}">
+		{priorityMeta(task.priority).label}
+	</span>
+{/snippet}
+
 {#snippet taskCard(task: Task)}
 	<div class="relative">
 		<button
@@ -173,7 +180,10 @@
 				? 'border-2 border-red-600 bg-red-50 hover:bg-red-100'
 				: 'border border-black bg-white hover:bg-gray-100'}"
 		>
-			<span class="block font-bold">{task.title}</span>
+			<span class="flex items-start justify-between gap-2">
+				<span class="font-bold">{task.title}</span>
+				{@render priorityBadge(task)}
+			</span>
 			<span class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
 				{#if task.blocked}
 					<span class="font-bold text-orange-700">Bloqué ({BLOCKED_LABEL[task.blocked.kind]})</span>
@@ -227,7 +237,8 @@
 	<div class="space-y-2 border-t border-black p-4">
 		<p>
 			<strong>Proposer</strong> : tout membre peut ajouter une tâche, visible tout de suite. Vous en
-			êtes alors le <strong>propriétaire</strong>.
+			êtes alors le <strong>propriétaire</strong>. Sa <strong>priorité</strong> (Bas, Moyen, Normal,
+			Élevé, Urgent) décide de sa place dans chaque colonne, les plus urgentes en haut.
 		</p>
 		<p>
 			<strong>Participant</strong> : vous vous portez volontaire avec « Je participe » (ou le « + » en bas de la carte), et pouvez vous
@@ -289,6 +300,20 @@
 			value={task?.title ?? ''}
 			class="w-full border border-black px-3 py-2 text-sm"
 		/>
+	</div>
+	<div>
+		<label class="mb-1 block text-sm font-bold uppercase" for="{task ? 'edit' : 'new'}-priority">Priorité</label>
+		<select
+			id="{task ? 'edit' : 'new'}-priority"
+			name="priority"
+			class="border border-black px-3 py-2 text-sm"
+		>
+			{#each TASK_PRIORITIES as priority (priority.value)}
+				<option value={priority.value} selected={(task?.priority ?? DEFAULT_TASK_PRIORITY) === priority.value}>
+					{priority.label}
+				</option>
+			{/each}
+		</select>
 	</div>
 	<div>
 		<label class="mb-1 block text-sm font-bold uppercase" for="{task ? 'edit' : 'new'}-description">
@@ -438,7 +463,8 @@
 				</div>
 			</form>
 		{:else}
-			<p class="mb-3 text-sm font-bold uppercase">
+			<p class="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold uppercase">
+				{@render priorityBadge(task)}
 				{ALL_COLUMNS.find((c) => c.status === task.status)?.label}
 				{#if task.dueDate}
 					<span class="font-normal normal-case {isOverdue(task) ? 'font-bold text-red-600' : 'text-gray-600'}">

@@ -21,6 +21,7 @@ import { getMattermostUsername } from '$lib/server/mattermost';
 import { postDirectMessage } from '$lib/server/mattermostBot';
 import { logAuditEvent } from '$lib/server/auditLog';
 import { displayName, isAdmin, type AppUser } from '$lib/types';
+import { DEFAULT_TASK_PRIORITY, TASK_PRIORITIES } from '$lib/taskPriority';
 
 const TITLE_MAX_LENGTH = 120;
 const DESCRIPTION_MAX_LENGTH = 2000;
@@ -61,7 +62,9 @@ function validateTaskInput(formData: FormData): { ok: true; input: TaskInput } |
 		return { ok: false, error: `Description : ${DESCRIPTION_MAX_LENGTH} caractères maximum.` };
 	}
 	if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return { ok: false, error: 'Date limite invalide.' };
-	return { ok: true, input: { title, description: description || null, dueDate: dueDate || null } };
+	const priority = Number(formData.get('priority') ?? DEFAULT_TASK_PRIORITY);
+	if (!TASK_PRIORITIES.some((p) => p.value === priority)) return { ok: false, error: 'Priorité invalide.' };
+	return { ok: true, input: { title, description: description || null, dueDate: dueDate || null, priority } };
 }
 
 const isOnTask = (task: Task, sub: string) => task.members.some((m) => m.sub === sub);
@@ -145,7 +148,7 @@ export const actions: Actions = {
 
 		await updateTask(task.id, result.input);
 		await record(user, task.authorSub === user.sub ? 'user' : 'admin', 'task.edit', targetFromSub(task.authorSub), task.id, {
-				before: { title: task.title, description: task.description, dueDate: task.dueDate },
+				before: { title: task.title, description: task.description, dueDate: task.dueDate, priority: task.priority },
 				after: result.input
 			}
 		);

@@ -268,6 +268,14 @@ const migrations: Migration[] = [
 			// created. Existing rows default to false.
 			await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by_admin BOOLEAN NOT NULL DEFAULT false`;
 		}
+	},
+	{
+		version: 14,
+		name: 'tasks: priority',
+		up: async (sql) => {
+			// 1 Bas, 2 Moyen, 3 Normal, 4 Élevé, 5 Urgent (see $lib/taskPriority). Existing tasks: Normal.
+			await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority SMALLINT NOT NULL DEFAULT 3`;
+		}
 	}
 ];
 
