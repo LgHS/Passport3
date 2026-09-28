@@ -31,7 +31,8 @@ export const PROFILE_ATTRIBUTE_FIELDS: ProfileAttributeField[] = [
 	{ key: 'signal', label: 'Signal', required: false },
 	{ key: 'telegram', label: 'Telegram', required: false },
 	{ key: 'discord', label: 'Discord', required: false },
-	{ key: 'matrix', label: 'Matrix', required: false }
+	{ key: 'matrix', label: 'Matrix', required: false },
+	{ key: 'mastodon', label: 'Mastodon', required: false }
 ];
 
 interface AuthentikUserRecord {
@@ -922,6 +923,8 @@ export interface DirectoryMember {
 	telegram: string | null;
 	discord: string | null;
 	matrix: string | null;
+	// "@user@instance", validated on /profile.
+	mastodon: string | null;
 	// Gated by TrombinoscopeOptin.showChat (unlike signal/telegram/discord/matrix above) — this
 	// isn't member-entered, it's looked up from Mattermost by email, so presence alone can't be the
 	// consent signal the way it is for those. null if showChat is off, or no active Mattermost
@@ -1007,6 +1010,7 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 					telegram: stringAttr(u.attributes, 'telegram'),
 					discord: stringAttr(u.attributes, 'discord'),
 					matrix: stringAttr(u.attributes, 'matrix'),
+					mastodon: stringAttr(u.attributes, 'mastodon'),
 					mattermostUsername,
 					mattermostDmUrl: mattermostUsername ? buildMattermostDmUrl(mattermostUsername) : null
 				};

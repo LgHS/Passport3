@@ -45,7 +45,7 @@
 	// validateBirthday) starts its error message with the field's own label — used to detect that
 	// the error concerns something inside the panel, not the generic top banner.
 	let isDiversError = $derived(
-		/^(Signal|Telegram|Discord|Matrix|Date de naissance) :/.test(form?.error ?? '')
+		/^(Signal|Telegram|Discord|Matrix|Mastodon|Date de naissance) :/.test(form?.error ?? '')
 	);
 
 	// The panel is collapsed by default, so an error inside it would otherwise be invisible — force
@@ -109,6 +109,22 @@
 		matrixLocalpart.trim() || matrixDomain.trim()
 			? `@${matrixLocalpart.trim()}:${matrixDomain.trim()}`
 			: ''
+	);
+
+	// Mastodon, same idea as Matrix: "@user@instance" split into the two editable parts around the
+	// fixed "@"s, recombined into a hidden input for validateMastodonHandle().
+	function splitMastodonHandle(value: string): { user: string; instance: string } {
+		const [user = '', instance = ''] = value.replace(/^@/, '').split('@');
+		return { user, instance };
+	}
+
+	const mastodonInitial = splitMastodonHandle(fieldValue('mastodon'));
+	// svelte-ignore state_referenced_locally
+	let mastodonUser = $state(mastodonInitial.user);
+	// svelte-ignore state_referenced_locally
+	let mastodonInstance = $state(mastodonInitial.instance);
+	let mastodonCombined = $derived(
+		mastodonUser.trim() || mastodonInstance.trim() ? `@${mastodonUser.trim()}@${mastodonInstance.trim()}` : ''
 	);
 
 	const MONTHS = [
@@ -419,6 +435,33 @@
 						/>
 					</div>
 					<input type="hidden" name="matrix" value={matrixCombined} />
+				</div>
+				<div>
+					<label class="mb-1 block text-sm font-bold uppercase" for="mastodonUser">Mastodon</label>
+					<div class="flex items-stretch border border-black">
+						<span class="flex items-center border-r border-black bg-gray-100 px-2 text-sm text-gray-500">
+							@
+						</span>
+						<input
+							id="mastodonUser"
+							type="text"
+							placeholder="ana"
+							bind:value={mastodonUser}
+							title="Pseudo Mastodon : lettres, chiffres et _ (30 caractères maximum)"
+							class="min-w-0 flex-1 px-2 py-2 text-sm placeholder:text-gray-300"
+						/>
+						<span class="flex items-center border-x border-black bg-gray-100 px-2 text-sm text-gray-500">
+							@
+						</span>
+						<input
+							type="text"
+							placeholder="mastodon.social"
+							bind:value={mastodonInstance}
+							title="Instance Mastodon, ex. mastodon.social"
+							class="min-w-0 flex-1 px-2 py-2 text-sm placeholder:text-gray-300"
+						/>
+					</div>
+					<input type="hidden" name="mastodon" value={mastodonCombined} />
 				</div>
 			</div>
 		{/if}
