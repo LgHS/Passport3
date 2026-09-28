@@ -31,6 +31,7 @@ Passport3 vise à offrir aux membres un endroit central pour :
 - [x] Gérer ses contacts d'urgence
 - [x] Consulter ses propres permissions et groupes d'appartenance
 - [x] Consulter l'historique des actions effectuées sur son compte, par soi-même ou par un admin
+- [x] Déclarer un incident ou un accident survenu au hackerspace
 - [x] Partager la liste des tâches de l'atelier : proposer, rejoindre et suivre des tâches
 - [ ] Accéder aux informations de paiement et de comptabilité
 - [ ] Voir leurs droits d'accès physique

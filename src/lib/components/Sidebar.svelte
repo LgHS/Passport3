@@ -220,6 +220,14 @@
 				</svg>
 				Wishlist
 			</a>
+			<a href="/incidents" onclick={closeOverlay} class="{itemClass} {itemStateClass('/incidents')}">
+				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+					<path d="M10 3.5 L18 16.5 H2 Z" stroke-linejoin="round" />
+					<path d="M10 8 V11.5" stroke-linecap="round" />
+					<path d="M10 14 V14.01" stroke-linecap="round" />
+				</svg>
+				Incidents
+			</a>
 
 			{#if isAdmin(user)}
 				<a href="/admin" onclick={closeOverlay} class="{itemClass} {itemStateClass('/admin')} mt-4">

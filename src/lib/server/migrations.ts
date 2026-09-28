@@ -335,6 +335,43 @@ const migrations: Migration[] = [
 			// was verified in production so a rollback still worked.
 			await sql`DROP TABLE IF EXISTS birthday_settings`;
 		}
+	},
+	{
+		version: 19,
+		name: 'create incidents',
+		up: async (sql) => {
+			// Member-filed declarations of what happened at the hackerspace, read by admins only.
+			// `kind` is 'incident' (damage, or a near miss that hurt nobody) or 'accident' (someone
+			// was injured) — the vocabulary lives in $lib/incidentDisplay.ts rather than in a CHECK
+			// constraint, same as the wishlist's status.
+			// `created_at` is when it was declared, `occurred_at` when it actually happened: the form
+			// pre-fills the latter but lets it be corrected, so the two genuinely differ.
+			// First-aid columns are only ever filled for an accident (the question isn't asked
+			// otherwise), the fire-device ones for both — a fire put out with nobody hurt is exactly
+			// the near-miss case `incident` is for.
+			// No extra index: this table gains a handful of rows a year, the primary key covers the
+			// single ORDER BY the list does.
+			await sql`
+				CREATE TABLE incidents (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					author_sub TEXT NOT NULL,
+					author_label TEXT NOT NULL,
+					kind TEXT NOT NULL,
+					occurred_at TIMESTAMPTZ NOT NULL,
+					people TEXT NOT NULL,
+					visitor_involved BOOLEAN NOT NULL DEFAULT false,
+					witnesses TEXT,
+					equipment TEXT,
+					description TEXT NOT NULL,
+					emergency_services_called BOOLEAN NOT NULL DEFAULT false,
+					first_aid_used BOOLEAN NOT NULL DEFAULT false,
+					first_aid_details TEXT,
+					fire_device_used BOOLEAN NOT NULL DEFAULT false,
+					fire_device_details TEXT
+				)
+			`;
+		}
 	}
 ];
 
