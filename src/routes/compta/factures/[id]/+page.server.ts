@@ -36,7 +36,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	return {
 		facture,
 		tiers: tiers.map((t) => ({ id: t.id, nom: tiersDisplayName(t), nature: t.nature })),
-		mailConfigured: isMailConfigured(),
+		mailConfigured: await isMailConfigured(),
 		destinataires: facture.sens === 'emise' ? await destinatairesDe(facture) : []
 	};
 };

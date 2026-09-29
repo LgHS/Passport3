@@ -3,7 +3,7 @@ import { getDb } from '$lib/server/db';
 import { parseIsoDate, toIsoDate } from './dates';
 import type { TiersNature } from './tiers';
 
-// Person ↔ organisation links (table tiers_liens, migration 10). A link carries cumulative roles
+// Person ↔ organisation links (table tiers_liens, migration 20). A link carries cumulative roles
 // and a period; it's closed with `jusqua`, never deleted — see docs/compta.md, "Liens".
 
 export interface Lien {

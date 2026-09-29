@@ -75,6 +75,38 @@
 		@apply block px-4 py-3 font-bold uppercase transition-colors hover:bg-black hover:text-white;
 	}
 
+	/* A table that becomes a stack of cards on a phone: one markup for both, where the rest of the
+	   app writes the cards and the table twice. Each <td> names its column with data-label; a
+	   cell without one (the row's title, an actions cell) takes the full width. Used by the
+	   treasury pages, which are mostly tables. */
+	@media (width < 40rem) {
+		.table-cards,
+		.table-cards tbody,
+		.table-cards tfoot {
+			display: block;
+		}
+		.table-cards thead {
+			@apply sr-only;
+		}
+		.table-cards tr {
+			@apply mb-2 block border border-black p-3;
+		}
+		.table-cards td,
+		.table-cards th[scope='row'] {
+			@apply flex items-baseline justify-between gap-4 border-0 px-0 py-0.5 text-right;
+		}
+		.table-cards td[data-label]::before {
+			content: attr(data-label);
+			@apply shrink-0 text-left text-xs font-bold text-gray-600 uppercase;
+		}
+		.table-cards td:not([data-label]) {
+			@apply block text-left;
+		}
+		.table-cards td:empty {
+			display: none;
+		}
+	}
+
 	.hazard-stripes {
 		background-image: repeating-linear-gradient(
 			45deg,

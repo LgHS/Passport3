@@ -1,7 +1,8 @@
 import { getDb } from '$lib/server/db';
 
-// The compta_settings table (one row, id = 1) is created and seeded by migration 10 in
-// src/lib/server/migrations.ts; the invoice fields were added by migration 11.
+// The compta_settings table (one row, id = 1) is created and seeded by migration 20 in
+// src/lib/server/migrations.ts; the invoice fields were added by migration 21,
+// the reception and reminder ones by migrations 25 and 26.
 
 export interface ComptaSettings {
 	// Days after coverage ends during which a member keeps access (status `en_grace`) before being
@@ -17,8 +18,14 @@ export interface ComptaSettings {
 	mentionTva: string;
 	// Default due date = issue date + this many days.
 	delaiPaiementJours: number;
-	// Whether adhesionSync.ts may deactivate/reactivate Authentik accounts — see migration 14.
+	// Whether adhesionSync.ts may deactivate/reactivate Authentik accounts — see migration 24.
 	desactivationAuto: boolean;
+	// Sender domains accepted as Doccle's when collecting supplier invoices from the mailbox
+	// (reception.ts), comma-separated; and whether the mailbox is collected every hour by itself.
+	receptionDomaines: string;
+	receptionAuto: boolean;
+	// Days past the due date before a first reminder is proposed, and between two reminders.
+	rappelDelaiJours: number;
 }
 
 interface SettingsRow {
@@ -31,13 +38,17 @@ interface SettingsRow {
 	mention_tva: string;
 	delai_paiement_jours: number;
 	desactivation_auto: boolean;
+	reception_domaines: string;
+	reception_auto: boolean;
+	rappel_delai_jours: number;
 }
 
 export async function getComptaSettings(): Promise<ComptaSettings> {
 	const sql = await getDb();
 	const [r] = await sql<SettingsRow[]>`
 		SELECT delai_grace_jours, emetteur_nom, emetteur_adresse, emetteur_numero_entreprise, emetteur_email,
-		       emetteur_iban, mention_tva, delai_paiement_jours, desactivation_auto
+		       emetteur_iban, mention_tva, delai_paiement_jours, desactivation_auto,
+		       reception_domaines, reception_auto, rappel_delai_jours
 		FROM compta_settings WHERE id = 1
 	`;
 	return {
@@ -49,7 +60,10 @@ export async function getComptaSettings(): Promise<ComptaSettings> {
 		emetteurIban: r.emetteur_iban,
 		mentionTva: r.mention_tva,
 		delaiPaiementJours: r.delai_paiement_jours,
-		desactivationAuto: r.desactivation_auto
+		desactivationAuto: r.desactivation_auto,
+		receptionDomaines: r.reception_domaines,
+		receptionAuto: r.reception_auto,
+		rappelDelaiJours: r.rappel_delai_jours
 	};
 }
 
@@ -60,7 +74,8 @@ export async function updateComptaSettings(s: ComptaSettings): Promise<void> {
 			delai_grace_jours = ${s.delaiGraceJours}, emetteur_nom = ${s.emetteurNom}, emetteur_adresse = ${s.emetteurAdresse},
 			emetteur_numero_entreprise = ${s.emetteurNumeroEntreprise}, emetteur_email = ${s.emetteurEmail},
 			emetteur_iban = ${s.emetteurIban}, mention_tva = ${s.mentionTva}, delai_paiement_jours = ${s.delaiPaiementJours},
-			desactivation_auto = ${s.desactivationAuto}
+			desactivation_auto = ${s.desactivationAuto}, reception_domaines = ${s.receptionDomaines},
+			reception_auto = ${s.receptionAuto}, rappel_delai_jours = ${s.rappelDelaiJours}
 		WHERE id = 1
 	`;
 }

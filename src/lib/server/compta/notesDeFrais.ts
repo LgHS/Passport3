@@ -2,7 +2,7 @@ import { getDb } from '$lib/server/db';
 import { parseIsoDate, parseMoney, toIsoDate } from './dates';
 import { tiersDisplayName, type TiersNature } from './tiers';
 
-// Expense claims — docs/compta.md, "Notes de frais"; table in migration 14. A member submits one
+// Expense claims — docs/compta.md, "Notes de frais"; table in migration 24. A member submits one
 // with its receipt; the treasury accepts or refuses; the refund is a bank movement allocated to
 // the claim (banque.ts, cible note_de_frais), which marks it refunded.
 

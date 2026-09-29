@@ -123,7 +123,7 @@
 					{:else}
 						<p class="mb-2 text-xs text-red-700">Aucune adresse email sur ce tiers ni sur une personne « reçoit les factures ».</p>
 					{/if}
-					<button type="submit" disabled={!data.mailConfigured || data.destinataires.length === 0} class="{btn} w-full" title={data.mailConfigured ? '' : 'SMTP non configuré'}>
+					<button type="submit" disabled={!data.mailConfigured || data.destinataires.length === 0} class="{btn} w-full" title={data.mailConfigured ? '' : 'Aucune boîte Gmail connectée'}>
 						{f.envoyeeLe ? 'Renvoyer par email' : 'Envoyer par email'}
 					</button>
 				</form>

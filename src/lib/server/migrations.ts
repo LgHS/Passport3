@@ -722,6 +722,100 @@ const migrations: Migration[] = [
 			// Only accounts Passport itself deactivated are ever reactivated by it.
 			await sql`ALTER TABLE tiers ADD COLUMN desactive_le TIMESTAMPTZ`;
 		}
+	},
+	{
+		version: 25,
+		name: 'create gmail_connexion, messages_releves, documents_recus',
+		up: async (sql) => {
+			// The treasury's Gmail mailbox (gmail.ts): one row, the OAuth refresh token encrypted.
+			await sql`
+				CREATE TABLE gmail_connexion (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					email TEXT NOT NULL,
+					refresh_token TEXT NOT NULL,
+					connecte_le TIMESTAMPTZ NOT NULL DEFAULT now(),
+					connecte_par TEXT NOT NULL
+				)
+			`;
+
+			// Every mail already collected from the mailbox (reception.ts), so that it's fetched
+			// once — the mailbox itself is only ever read, never labelled or modified. The sender
+			// check is kept with its evidence, for the treasurer to review.
+			await sql`
+				CREATE TABLE messages_releves (
+					gmail_message_id TEXT PRIMARY KEY,
+					releve_le TIMESTAMPTZ NOT NULL DEFAULT now(),
+					recu_le TIMESTAMPTZ NOT NULL,
+					expediteur TEXT NOT NULL,
+					sujet TEXT NOT NULL,
+					verifie BOOLEAN NOT NULL,
+					verification JSONB NOT NULL
+				)
+			`;
+
+			// The invoices found in those mails, waiting for the treasurer: nothing here is in the
+			// books until it's imported (facture_id set) — see docs/compta.md, "Réception".
+			await sql`
+				CREATE TABLE documents_recus (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					gmail_message_id TEXT NOT NULL REFERENCES messages_releves(gmail_message_id),
+					-- Rank of the document within its mail (a mail can carry several invoices).
+					position INTEGER NOT NULL,
+					statut TEXT NOT NULL DEFAULT 'a_traiter' CHECK (statut IN ('a_traiter', 'importe', 'ignore')),
+					pdf BYTEA,
+					pdf_nom TEXT,
+					ubl BYTEA,
+					ubl_nom TEXT,
+					-- Read from the UBL when there is one, for the list; the import re-reads the file.
+					fournisseur_nom TEXT,
+					numero TEXT,
+					date_emission DATE,
+					total NUMERIC(12, 2),
+					facture_id INTEGER REFERENCES factures(id) ON DELETE SET NULL,
+					traite_le TIMESTAMPTZ,
+					traite_par TEXT,
+					UNIQUE (gmail_message_id, position),
+					CHECK (pdf IS NOT NULL OR ubl IS NOT NULL)
+				)
+			`;
+			await sql`CREATE INDEX documents_recus_statut ON documents_recus (statut, id DESC)`;
+
+			// Sender domains accepted as "Doccle" (comma-separated), and how far back to look.
+			await sql`
+				ALTER TABLE compta_settings
+					ADD COLUMN reception_domaines TEXT NOT NULL DEFAULT 'doccle.be',
+					ADD COLUMN reception_auto BOOLEAN NOT NULL DEFAULT false
+			`;
+		}
+	},
+	{
+		version: 26,
+		name: 'create rappels',
+		up: async (sql) => {
+			// Payment reminders actually sent for an issued invoice (rappels.ts). A reminder is
+			// proposed by the app and sent only once a treasurer picked it: what's here is history.
+			await sql`
+				CREATE TABLE rappels (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					facture_id INTEGER NOT NULL REFERENCES factures(id) ON DELETE CASCADE,
+					-- 1 for the first reminder of an invoice, 2 for the second, and so on.
+					niveau INTEGER NOT NULL CHECK (niveau >= 1),
+					envoye_le TIMESTAMPTZ NOT NULL DEFAULT now(),
+					envoye_a TEXT NOT NULL,
+					envoye_par TEXT NOT NULL,
+					-- What was still owed when the reminder left, and the text that was sent.
+					reste NUMERIC(12, 2) NOT NULL,
+					message TEXT NOT NULL
+				)
+			`;
+			await sql`CREATE INDEX rappels_facture ON rappels (facture_id, id DESC)`;
+			// Days past the due date before a first reminder is proposed, and between two reminders.
+			await sql`
+				ALTER TABLE compta_settings
+					ADD COLUMN rappel_delai_jours INTEGER NOT NULL DEFAULT 14 CHECK (rappel_delai_jours >= 0)
+			`;
+		}
 	}
 ];
 

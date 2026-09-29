@@ -1,11 +1,9 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireTresorierUser } from '$lib/server/auth';
-import { attachPdf, attachUbl, createFacture, FactureError } from '$lib/server/compta/factures';
+import { attachPdf, createFacture, FactureError } from '$lib/server/compta/factures';
+import { enregistrerFactureUbl, factureRecueExistante, tiersPourFournisseur } from '$lib/server/compta/fournisseurs';
 import { parseUbl, UblError } from '$lib/server/compta/ubl';
-import { createTiers } from '$lib/server/compta/tiers';
-import { getDb } from '$lib/server/db';
-import { parseIsoDate } from '$lib/server/compta/dates';
 import { factureInputFromForm } from '$lib/server/compta/factureForm';
 import { listTiers, tiersDisplayName } from '$lib/server/compta/tiers';
 import { logAuditEvent } from '$lib/server/auditLog';
@@ -33,41 +31,6 @@ function echo(formData: FormData) {
 	return { values, lignes: libelles.map((libelle, i) => ({ libelle, quantite: quantites[i] ?? '1', prix: prix[i] ?? '' })) };
 }
 
-// Finds the supplier a UBL names — by enterprise number, then VAT number, then exact name — or
-// creates it. A tiers created this way carries what the file says; the treasurer completes it.
-async function tiersPourFournisseur(f: Awaited<ReturnType<typeof parseUbl>>['fournisseur']): Promise<number> {
-	const sql = await getDb();
-	const digits = (f.numeroEntreprise ?? f.tva ?? '').replace(/\D/g, '');
-	const formatted = digits.length === 10 ? `${digits.slice(0, 4)}.${digits.slice(4, 7)}.${digits.slice(7)}` : null;
-	const [found] = await sql<{ id: number }[]>`
-		SELECT id FROM tiers
-		WHERE (${formatted}::text IS NOT NULL AND regexp_replace(coalesce(numero_entreprise, ''), '\D', '', 'g') = ${digits})
-		   OR lower(nom) = lower(${f.nom})
-		ORDER BY numero_entreprise IS NULL
-		LIMIT 1
-	`;
-	if (found) return found.id;
-	const created = await createTiers({
-		nature: 'personne_morale',
-		nom: f.nom,
-		prenom: null,
-		email: f.email,
-		telephone: null,
-		adresse: f.adresse,
-		codePostal: f.codePostal,
-		ville: f.ville,
-		pays: f.pays,
-		numeroEntreprise: formatted ?? f.tva,
-		iban: null,
-		exempteCotisation: false,
-		estClient: false,
-		estFournisseur: true,
-		actif: true,
-		notes: 'Créé depuis un fichier UBL.'
-	});
-	return created.id;
-}
-
 export const actions: Actions = {
 	// A received invoice straight from the supplier's UBL file: the tiers is matched or created,
 	// the invoice registered with its lines, and the file (plus any embedded PDF) kept.
@@ -87,26 +50,17 @@ export const actions: Actions = {
 			throw err;
 		}
 		const tiersId = await tiersPourFournisseur(lu.fournisseur);
+		const existante = await factureRecueExistante(tiersId, lu.numero);
+		if (existante) {
+			return fail(400, { error: `La facture ${lu.numero} de ce fournisseur est déjà enregistrée.`, existante });
+		}
 		let id: number;
 		try {
-			const facture = await createFacture({
-				sens: 'recue',
-				tiersId,
-				dateEmission: parseIsoDate(lu.dateEmission),
-				dateEcheance: lu.dateEcheance ? parseIsoDate(lu.dateEcheance) : null,
-				objet: null,
-				note: null,
-				numero: lu.numero,
-				lignes: lu.lignes,
-				cotisation: null
-			});
-			id = facture.id;
+			id = (await enregistrerFactureUbl(lu, tiersId, { ubl: bytes, pdf: null })).id;
 		} catch (err) {
 			if (err instanceof FactureError) return fail(400, { error: err.message });
 			throw err;
 		}
-		await attachUbl(id, bytes);
-		if (lu.pdf) await attachPdf(id, lu.pdf);
 		await logAuditEvent({ sub: tresorier.sub, label: displayName(tresorier) }, 'admin', 'compta.facture.importUbl', {}, {
 			factureId: id,
 			tiersId,

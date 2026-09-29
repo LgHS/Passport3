@@ -40,3 +40,15 @@ export function setGithubOAuthStateCookie(cookies: Cookies, state: string) {
 export function clearGithubOAuthStateCookie(cookies: Cookies) {
 	cookies.delete(GITHUB_OAUTH_STATE_COOKIE, { path: '/' });
 }
+
+// Guards the treasury's "Connecter Gmail" consent flow (/compta/parametres), same idea as the
+// GitHub one above.
+export const GMAIL_OAUTH_STATE_COOKIE = 'gmail_oauth_state';
+
+export function setGmailOAuthStateCookie(cookies: Cookies, state: string) {
+	cookies.set(GMAIL_OAUTH_STATE_COOKIE, state, { ...baseCookieOptions, maxAge: 60 * 10 });
+}
+
+export function clearGmailOAuthStateCookie(cookies: Cookies) {
+	cookies.delete(GMAIL_OAUTH_STATE_COOKIE, { path: '/' });
+}
