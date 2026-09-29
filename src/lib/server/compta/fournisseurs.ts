@@ -21,7 +21,7 @@ export async function trouverFournisseur(f: UblFournisseur): Promise<{ id: numbe
 	const { digits, formatted } = numeroEntreprise(f);
 	const [found] = await sql<{ id: number; nom: string }[]>`
 		SELECT id, nom FROM tiers
-		WHERE (${formatted}::text IS NOT NULL AND regexp_replace(coalesce(numero_entreprise, ''), '\D', '', 'g') = ${digits})
+		WHERE (${formatted}::text IS NOT NULL AND regexp_replace(coalesce(numero_entreprise, ''), '[^0-9]', '', 'g') = ${digits})
 		   OR lower(nom) = lower(${f.nom})
 		ORDER BY numero_entreprise IS NULL
 		LIMIT 1

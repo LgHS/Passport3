@@ -756,8 +756,13 @@ interface RawBankLine {
 	fk_type?: string | null;
 }
 
-// A Dolibarr account's balance is entirely made of its lines (its "Solde initial" is a line), so
-// the compte opens at 0 and every line becomes a movement, keyed by its Dolibarr id.
+// Dolibarr keeps an account's opening balance as a bank line labelled "Solde initial".
+export function estSoldeInitial(label: string | null | undefined): boolean {
+	return /^\(?\s*(solde initial|initialbankbalance)\s*\)?$/i.test((label ?? '').trim());
+}
+
+// A Dolibarr account's balance is entirely made of its lines, its opening balance included: that
+// one becomes the compte's solde_ouverture, every other line a movement keyed by its Dolibarr id.
 async function importBankAccount(tx: postgres.TransactionSql, b: RawBankAccount, lines: RawBankLine[], report: ImportReport): Promise<void> {
 	const type = num(b.type) === 2 ? 'caisse' : 'banque';
 	const ibanValue = normalizeIban(b.iban ?? '') || null;
@@ -778,7 +783,20 @@ async function importBankAccount(tx: postgres.TransactionSql, b: RawBankAccount,
 		compteId = row.id;
 		report.comptes.created += 1;
 	}
+	// Set, not added: re-running the import must leave the same opening balance.
+	const ouvertures = lines.filter((l) => estSoldeInitial(l.label) && num(l.amount) !== null);
+	if (ouvertures.length > 0) {
+		const solde = ouvertures.reduce((a, l) => a + (num(l.amount) ?? 0), 0);
+		const dates = ouvertures.map((l) => calendarDay(l.datev ?? l.dateo)).filter((d): d is Date => d !== null);
+		const premiere = dates.sort((a, b2) => a.getTime() - b2.getTime())[0];
+		await tx`
+			UPDATE comptes SET solde_ouverture = ${Math.round(solde * 100) / 100},
+				date_ouverture = COALESCE(${premiere ? toIsoDate(premiere) : null}::date, date_ouverture)
+			WHERE id = ${compteId}
+		`;
+	}
 	for (const l of lines) {
+		if (estSoldeInitial(l.label)) continue;
 		const lineId = num(l.id) ?? num(l.rowid);
 		const date = calendarDay(l.datev ?? l.dateo);
 		const amount = num(l.amount);

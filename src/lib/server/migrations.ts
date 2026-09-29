@@ -816,6 +816,52 @@ const migrations: Migration[] = [
 					ADD COLUMN rappel_delai_jours INTEGER NOT NULL DEFAULT 14 CHECK (rappel_delai_jours >= 0)
 			`;
 		}
+	},
+	{
+		version: 27,
+		name: 'official headings, comptes_annuels, opening balances',
+		up: async (sql) => {
+			// The heading of the official statement (rubriques.ts) a document falls under, when the
+			// treasurer chose one; NULL means the default for that kind of document.
+			await sql`ALTER TABLE factures ADD COLUMN rubrique TEXT`;
+			await sql`ALTER TABLE notes_de_frais ADD COLUMN rubrique TEXT`;
+			await sql`ALTER TABLE cotisations ADD COLUMN rubrique TEXT`;
+			await sql`ALTER TABLE lettrages ADD COLUMN rubrique TEXT`;
+
+			// What the annual accounts need and the books can't know: the notes of the annexe, and
+			// the assets, debts, rights and commitments that aren't bank balances or invoices.
+			await sql`
+				CREATE TABLE comptes_annuels (
+					annee INTEGER PRIMARY KEY,
+					updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					updated_by TEXT NOT NULL,
+					regles_evaluation TEXT NOT NULL DEFAULT '',
+					adaptation_regles TEXT NOT NULL DEFAULT '',
+					informations_complementaires TEXT NOT NULL DEFAULT '',
+					-- Amounts keyed by line (comptesAnnuels.ts), and free text for what can't be quantified.
+					montants JSONB NOT NULL DEFAULT '{}',
+					droits_engagements_texte TEXT NOT NULL DEFAULT '',
+					-- Date the general assembly approved the accounts, printed on the document.
+					approuves_le DATE
+				)
+			`;
+
+			// Dolibarr keeps an account's opening balance as a bank line ("Solde initial"); imported
+			// as a movement it showed up as a receipt. It's the account's opening balance.
+			const lignes = await sql<{ id: number; compte_id: number; date_valeur: string; montant: string }[]>`
+				SELECT m.id, m.compte_id, m.date_valeur::text AS date_valeur, m.montant
+				FROM mouvements m
+				WHERE m.external_id LIKE 'dolibarr-%' AND m.libelle ~* '^\\(?\\s*(solde initial|initialbankbalance)\\s*\\)?$'
+				  AND NOT EXISTS (SELECT 1 FROM lettrages l WHERE l.mouvement_id = m.id)
+			`;
+			for (const l of lignes) {
+				await sql`
+					UPDATE comptes SET solde_ouverture = solde_ouverture + ${l.montant}, date_ouverture = LEAST(date_ouverture, ${l.date_valeur}::date)
+					WHERE id = ${l.compte_id}
+				`;
+				await sql`DELETE FROM mouvements WHERE id = ${l.id}`;
+			}
+		}
 	}
 ];
 
