@@ -188,6 +188,8 @@ export interface UblFournisseur {
 }
 
 export interface UblLu {
+	// A CreditNote document: the amounts below are then negative.
+	type: 'facture' | 'note_de_credit';
 	numero: string;
 	dateEmission: string; // ISO
 	dateEcheance: string | null;
@@ -283,7 +285,7 @@ export function parseUbl(xml: string): UblLu {
 	const lignesTtc = lignes.map((l) => ({
 		libelle: l.libelle,
 		quantite: l.quantite,
-		prixUnitaire: Math.round(((l.net * factor) / l.quantite) * 100) / 100
+		prixUnitaire: (credit ? -1 : 1) * Math.abs(Math.round(((l.net * factor) / l.quantite) * 100) / 100)
 	}));
 
 	let pdf: Buffer | null = null;
@@ -298,13 +300,15 @@ export function parseUbl(xml: string): UblLu {
 		}
 	}
 
+	const signedTotal = credit ? -Math.abs(total) : total;
 	return {
+		type: credit ? 'note_de_credit' : 'facture',
 		numero,
 		dateEmission,
 		dateEcheance: text(root.DueDate) ?? text(get(root, 'PaymentTerms', 'PaymentDueDate')) ?? null,
-		total: credit ? -Math.abs(total) : total,
+		total: signedTotal,
 		fournisseur,
-		lignes: lignesTtc.length > 0 ? lignesTtc : [{ libelle: `Facture ${numero}`, quantite: 1, prixUnitaire: total }],
+		lignes: lignesTtc.length > 0 ? lignesTtc : [{ libelle: `${credit ? 'Note de crédit' : 'Facture'} ${numero}`, quantite: 1, prixUnitaire: signedTotal }],
 		pdf
 	};
 }

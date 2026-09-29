@@ -6,6 +6,7 @@ import { startBirthdayScheduler } from '$lib/server/birthdayScheduler';
 import { startTaskReminderScheduler } from '$lib/server/taskReminders';
 import { startFactureScheduler } from '$lib/server/compta/factureScheduler';
 import { startAdhesionSync } from '$lib/server/compta/adhesionSync';
+import { startReceptionScheduler } from '$lib/server/compta/reception';
 import { DATABASE_UNAVAILABLE_MESSAGE, isDatabaseUnavailable } from '$lib/server/db';
 import { requireAdmin } from '$lib/server/auth';
 
@@ -15,6 +16,7 @@ startBirthdayScheduler();
 startTaskReminderScheduler();
 startFactureScheduler();
 startAdhesionSync();
+startReceptionScheduler();
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const sessionCookie = event.cookies.get(SESSION_COOKIE);

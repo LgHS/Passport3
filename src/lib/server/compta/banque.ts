@@ -9,7 +9,7 @@ import { getNoteDeFrais, listNotesDeFrais, type NoteDeFrais } from './notesDeFra
 import type { MouvementImporte } from './belfiusCsv';
 
 // Bank and cash accounts, their movements, internal transfers, and the matching (lettrage) of
-// movements against invoices and dues — docs/compta.md, "Banque et caisse"; tables in migration 12.
+// movements against invoices and dues — docs/compta.md, "Banque et caisse"; tables in migration 22.
 //
 // Lettrage is what settles things: an issued invoice becomes `payee` once the allocations against
 // it reach its total (which activates the cotisation it carries), a received invoice likewise, an

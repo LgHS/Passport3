@@ -4,7 +4,7 @@ import { normalizeIban } from '$lib/server/bankValidation';
 import { brusselsToday, toIsoDate } from './dates';
 
 // Third parties — the people and organisations the ASBL deals with. Model in docs/compta.md,
-// "Tiers"; table in migration 10. Roles (client, fournisseur, adhérent, sponsor, membre) are not a
+// "Tiers"; table in migration 20. Roles (client, fournisseur, adhérent, sponsor, membre) are not a
 // type here: the first two are flags, the rest follow from cotisations and liens.
 
 export type TiersNature = 'personne_physique' | 'personne_morale';

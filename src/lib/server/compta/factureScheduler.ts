@@ -88,7 +88,7 @@ export async function issueDueInvoices(today: Date = brusselsToday()): Promise<n
 					await validerFacture(facture.id, today);
 					// Sent right away when email is set up; a send failure is logged, never blocks the
 					// issuing — the treasurer sees "non envoyée" on the invoice and can resend by hand.
-					if (isMailConfigured()) {
+					if (await isMailConfigured()) {
 						await envoyerFacture(facture.id).catch((err) =>
 							console.error(`[factureScheduler] envoi de la facture ${facture.id} échoué:`, (err as Error).message)
 						);

@@ -6,7 +6,7 @@ import { getComptaSettings } from './settings';
 import { listTiers, resolveTiersForUser, tiersDisplayName, type Tiers } from './tiers';
 
 // Cotisations, abonnements, and the membership status derived from them. Model in docs/compta.md
-// ("Cotisations", "Droit de membre"); tables in migration 10.
+// ("Cotisations", "Droit de membre"); tables in migration 20.
 //
 // This module is what the member-facing pages (layout, homepage, /cotisation) call in place of the
 // old dolibarr.ts: getSituationForUser() returns the same status/datefin/gaps/isInactive block they

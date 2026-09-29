@@ -6,7 +6,7 @@ import { renderUbl } from './ubl';
 import { getComptaSettings, type ComptaSettings } from './settings';
 import { getTiers, tiersDisplayName, type Tiers, type TiersNature } from './tiers';
 
-// Issued and received invoices — model in docs/compta.md, "Factures"; tables in migration 11.
+// Issued and received invoices — model in docs/compta.md, "Factures"; tables in migration 21.
 //
 // Lifecycle of an issued invoice: brouillon (editable) → validee (numbered, PDF frozen, cotisation
 // created as attendue) → payee (cotisation active). A brouillon can be annulee; a validated one can
@@ -345,7 +345,7 @@ export function communicationStructuree(numero: string): string {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Documents (stored in the row, see migration 11)
+// Documents (stored in the row, see migration 21)
 
 export async function readFacturePdf(id: number): Promise<Buffer | null> {
 	const sql = await getDb();

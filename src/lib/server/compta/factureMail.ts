@@ -3,12 +3,12 @@ import { getFacture, marquerEnvoyee, readFacturePdf, readFactureUbl, type Factur
 import { getTiers, tiersDisplayName } from './tiers';
 import { listLiensOfOrganisation, lienEnCours } from './liens';
 import { brusselsToday } from './dates';
-import { isMailConfigured, MailError, sendMail } from './mailer';
+import { isMailConfigured, MAIL_NON_CONFIGURE, MailError, sendMail } from './mailer';
 
 // Emailing an issued invoice (PDF + UBL attached) to the customer — docs/compta.md, "Emails".
 // Recipients: the tiers' own email, plus the people linked to an organisation with
-// `destinataire_factures` (see tiers_liens). Used by the invoice page's button and, when SMTP is
-// configured, by the subscription scheduler right after issuing.
+// `destinataire_factures` (see tiers_liens). Used by the invoice page's button and, when a Gmail mailbox is
+// connected, by the subscription scheduler right after issuing.
 
 const dateFormat = new Intl.DateTimeFormat('fr-BE', { dateStyle: 'long', timeZone: 'UTC' });
 const amountFormat = new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' });
@@ -33,7 +33,7 @@ export class FactureMailError extends MailError {}
 
 // Sends, then records when and to whom. Throws FactureMailError with a message fit for the UI.
 export async function envoyerFacture(factureId: number): Promise<string[]> {
-	if (!isMailConfigured()) throw new FactureMailError('SMTP non configuré : renseignez SMTP_URL et SMTP_FROM.');
+	if (!(await isMailConfigured())) throw new FactureMailError(MAIL_NON_CONFIGURE);
 	const facture = await getFacture(factureId);
 	if (!facture || facture.sens !== 'emise') throw new FactureMailError('Facture introuvable.');
 	if (facture.statut === 'brouillon' || facture.statut === 'annulee') {

@@ -363,6 +363,10 @@
 							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 3.5h7l3 3v10H5z" stroke-linejoin="round" /><path d="M12 3.5v3h3 M7.5 10h5 M7.5 13h5" stroke-linecap="round" /></svg>
 							Factures
 						</a>
+						<a href="/compta/reception" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/reception')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3.5 11.5 L5.5 4.5 H14.5 L16.5 11.5 V15.5 H3.5 Z" stroke-linejoin="round" /><path d="M3.5 11.5 H7.5 L8.5 13.5 H11.5 L12.5 11.5 H16.5" stroke-linejoin="round" /></svg>
+							Réception Doccle
+						</a>
 						<a href="/compta/banque" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/banque')}">
 							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8 L10 3.5 L17 8 Z" stroke-linejoin="round" /><path d="M5 8 V14.5 M10 8 V14.5 M15 8 V14.5 M3 16.5 H17" stroke-linecap="round" /></svg>
 							Banque &amp; caisse
