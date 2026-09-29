@@ -3,7 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { createIncident } from '$lib/server/incidents';
 import { validateIncidentSubmission } from '$lib/server/incidentValidation';
 import { logAuditEvent } from '$lib/server/auditLog';
-import { displayName, isAdmin, type AppUser } from '$lib/types';
+import { displayName, type AppUser } from '$lib/types';
 
 function requireUser(locals: App.Locals): AppUser {
 	if (!locals.user) {
@@ -28,8 +28,7 @@ function targetFromSub(sub: string): { pk: number } | Record<string, never> {
 
 // The declarations themselves are listed on /admin/incidents; this page only takes new ones.
 export const load: PageServerLoad = async ({ locals }) => {
-	const user = requireUser(locals);
-	return { isAdmin: isAdmin(user) };
+	requireUser(locals);
 };
 
 export const actions: Actions = {

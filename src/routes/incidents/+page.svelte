@@ -203,10 +203,3 @@
 		Déclarer
 	</button>
 </form>
-
-{#if data.isAdmin}
-	<p class="text-sm text-gray-600">
-		Admin : les déclarations sont listées dans
-		<a href="/admin/incidents">Admin → Incidents</a>.
-	</p>
-{/if}
