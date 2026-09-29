@@ -16,10 +16,29 @@ export const ACTION_LABELS: Record<string, string> = {
 	'mfaDevice.delete': 'Appareil MFA supprimé',
 	'bankInfo.update': 'Coordonnées bancaires modifiées',
 	'badge.regenerate': 'Badge RFID régénéré',
+	'incident.create': 'Incident déclaré',
 	'wishlist.create': 'Proposition wishlist créée',
 	'wishlist.edit': 'Proposition wishlist modifiée',
 	'wishlist.delete': 'Proposition wishlist supprimée',
-	'wishlist.resolve': 'Statut de la proposition wishlist changé'
+	'wishlist.resolve': 'Statut de la proposition wishlist changé',
+	'settings.birthday.update': 'Réglages des anniversaires modifiés',
+	'settings.wishlist.update': 'Réglages de la wishlist modifiés',
+	'settings.tasks.update': 'Réglages de la todolist modifiés',
+	'task.create': 'Tâche créée',
+	'task.edit': 'Tâche modifiée',
+	'task.delete': 'Tâche supprimée',
+	'task.join': 'Participation à une tâche',
+	'task.leave': "Retrait d'une tâche",
+	'task.assign': 'Membre assigné à une tâche',
+	'task.removeMember': "Membre retiré d'une tâche",
+	'task.setLeader': "Leader d'une tâche changé",
+	'task.start': 'Tâche démarrée',
+	'task.unstart': 'Tâche remise à faire',
+	'task.block': 'Tâche bloquée',
+	'task.unblock': 'Tâche débloquée',
+	'task.done': 'Tâche terminée',
+	'task.reopen': 'Tâche rouverte',
+	'task.comment': 'Commentaire sur une tâche'
 };
 
 export function actionLabel(action: string): string {

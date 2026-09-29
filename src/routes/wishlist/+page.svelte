@@ -4,6 +4,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { WISHLIST_TYPES, STATUS_META, typeMeta, type WishlistType } from '$lib/wishlistDisplay';
 	import { renderMiniMarkdown } from '$lib/renderMiniMarkdown';
+	import MemberName from '$lib/components/MemberName.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	const TITLE_MAX_LENGTH = 100;
@@ -409,7 +410,14 @@
 					</div>
 
 					<div class="flex items-center justify-between text-xs text-gray-500">
-						<span>{item.authorLabel} — {formatDate(item.createdAt)}</span>
+						<span>
+							<MemberName
+										username={item.authorLabel}
+										visibleUsernames={data.visibleUsernames}
+										class={item.authorLabel === data.myUsername ? 'font-bold text-black' : ''}
+									/> —
+							{formatDate(item.createdAt)}
+						</span>
 						{#if item.status === 'pending'}
 							<div class="flex gap-2">
 								<form method="POST" action="?/vote" use:enhance={() => markJustVoted(item.id, 'up')}>
@@ -474,7 +482,7 @@
 			role="dialog"
 			aria-modal="true"
 			tabindex="-1"
-			class="max-h-[80vh] w-full max-w-lg overflow-y-auto border-4 border-black bg-white p-4"
+			class="max-h-[85vh] w-full max-w-4xl overflow-y-auto border-4 border-black bg-white p-4"
 		>
 			<div class="mb-3 flex items-start justify-between gap-4">
 				<h2 class="text-base font-bold uppercase">{selectedItem.title}</h2>
@@ -590,119 +598,141 @@
 					</div>
 				</form>
 			{:else}
-				<p class="mb-3 text-sm text-gray-600">
-					{typeMeta(selectedItem.type).icon} {typeMeta(selectedItem.type).label}
-					{#if selectedItem.type === 'achat'}
-						— Quantité : {selectedItem.quantity}
-					{/if}
-					{#if selectedItem.estimatedAmount !== null}
-						— {formatAmount(selectedItem.estimatedAmount)}
-					{/if}
-				</p>
+				<!-- Wide screens: the proposal on the left, votes and admin decisions on the right. One
+				     column on phones. -->
+				<div class="md:grid md:grid-cols-[3fr_2fr] md:gap-6">
+					<div class="min-w-0">
+						<p class="mb-3 text-sm text-gray-600">
+							{typeMeta(selectedItem.type).icon} {typeMeta(selectedItem.type).label}
+							{#if selectedItem.type === 'achat'}
+								— Quantité : {selectedItem.quantity}
+							{/if}
+							{#if selectedItem.estimatedAmount !== null}
+								— {formatAmount(selectedItem.estimatedAmount)}
+							{/if}
+						</p>
 
-				{#if selectedItem.status !== 'pending'}
-					<p class="mb-3 text-sm font-bold uppercase">
-						{STATUS_META[selectedItem.status].icon} {STATUS_META[selectedItem.status].label}
-						{#if selectedItem.resolvedAt}
-							— {formatDate(selectedItem.resolvedAt)}
+						{#if selectedItem.status !== 'pending'}
+							<p class="mb-3 text-sm font-bold uppercase">
+								{STATUS_META[selectedItem.status].icon} {STATUS_META[selectedItem.status].label}
+								{#if selectedItem.resolvedAt}
+									— {formatDate(selectedItem.resolvedAt)}
+								{/if}
+							</p>
 						{/if}
-					</p>
-				{/if}
 
-				{#if selectedItem.description}
-					<p class="mb-3 text-sm whitespace-pre-wrap">{@html renderMiniMarkdown(selectedItem.description)}</p>
-				{/if}
-
-				{#if selectedItem.link}
-					<p class="mb-3 text-sm">
-						<a href={selectedItem.link} target="_blank" rel="noopener">{selectedItem.link}</a>
-					</p>
-				{/if}
-
-				<p class="mb-3 text-xs text-gray-500">
-					Proposé par {selectedItem.authorLabel} le {formatDate(selectedItem.createdAt)}
-				</p>
-
-				<div class="mb-3 border-t border-black pt-3 text-sm">
-					{#if selectedItem.status === 'pending'}
-						<div class="mb-3 flex items-center gap-3">
-							<form method="POST" action="?/vote" use:enhance={() => markJustVoted(selectedItem.id, 'up')}>
-								<input type="hidden" name="itemId" value={selectedItem.id} />
-								<input type="hidden" name="value" value="up" />
-								<button
-									type="submit"
-									aria-label="Voter pour"
-									class="border-2 border-green-600 px-3 py-1.5 font-bold text-green-700 transition-transform duration-150 hover:scale-110 active:scale-90 {selectedItem.myVote ===
-									1
-										? 'bg-green-600 text-white'
-										: ''} {justVotedKeys.has(`${selectedItem.id}-up`) ? 'vote-pop' : ''}"
-								>
-									▲
-								</button>
-							</form>
-							<form method="POST" action="?/vote" use:enhance={() => markJustVoted(selectedItem.id, 'down')}>
-								<input type="hidden" name="itemId" value={selectedItem.id} />
-								<input type="hidden" name="value" value="down" />
-								<button
-									type="submit"
-									aria-label="Voter contre"
-									class="border-2 border-red-600 px-3 py-1.5 font-bold text-red-700 transition-transform duration-150 hover:scale-110 active:scale-90 {selectedItem.myVote ===
-									-1
-										? 'bg-red-600 text-white'
-										: ''} {justVotedKeys.has(`${selectedItem.id}-down`) ? 'vote-pop' : ''}"
-								>
-									▼
-								</button>
-							</form>
-						</div>
-					{/if}
-					<p class="mb-1 font-bold text-green-700">Pour ({selectedItem.upVoters.length})</p>
-					<p class="mb-3 text-gray-600">
-						{selectedItem.upVoters.length > 0 ? selectedItem.upVoters.join(', ') : '—'}
-					</p>
-					<p class="mb-1 font-bold text-red-700">Contre ({selectedItem.downVoters.length})</p>
-					<p class="text-gray-600">
-						{selectedItem.downVoters.length > 0 ? selectedItem.downVoters.join(', ') : '—'}
-					</p>
-				</div>
-
-				{#if data.isAdmin}
-					<div class="mb-3 flex gap-2 border-t border-black pt-3">
-						{#if selectedItem.status === 'pending'}
-							<form method="POST" action="?/resolve" use:enhance>
-								<input type="hidden" name="itemId" value={selectedItem.id} />
-								<input type="hidden" name="status" value="exauce" />
-								<button
-									type="submit"
-									class="border border-black bg-lghs-yellow px-3 py-1.5 text-xs font-bold uppercase"
-								>
-									{STATUS_META.exauce.icon} Exaucer
-								</button>
-							</form>
-							<form method="POST" action="?/resolve" use:enhance>
-								<input type="hidden" name="itemId" value={selectedItem.id} />
-								<input type="hidden" name="status" value="rejete" />
-								<button
-									type="submit"
-									class="border border-black bg-lghs-yellow px-3 py-1.5 text-xs font-bold uppercase"
-								>
-									{STATUS_META.rejete.icon} Rejeter
-								</button>
-							</form>
-						{:else}
-							<form method="POST" action="?/resolve" use:enhance>
-								<input type="hidden" name="itemId" value={selectedItem.id} />
-								<input type="hidden" name="status" value="pending" />
-								<button
-									type="submit"
-									class="border border-black bg-lghs-yellow px-3 py-1.5 text-xs font-bold uppercase"
-								>
-									↩️ Remettre en attente
-								</button>
-							</form>
+						{#if selectedItem.description}
+							<p class="mb-3 text-sm whitespace-pre-wrap">{@html renderMiniMarkdown(selectedItem.description)}</p>
 						{/if}
+
+						{#if selectedItem.link}
+							<p class="mb-3 text-sm">
+								<a href={selectedItem.link} target="_blank" rel="noopener">{selectedItem.link}</a>
+							</p>
+						{/if}
+
+						<p class="mb-3 text-xs text-gray-500">
+							Proposé par <MemberName
+										username={selectedItem.authorLabel}
+										visibleUsernames={data.visibleUsernames}
+										class={selectedItem.authorLabel === data.myUsername ? 'font-bold text-black' : ''}
+									/>
+							le {formatDate(selectedItem.createdAt)}
+						</p>
+
 					</div>
-				{/if}
+					<div class="min-w-0">
+						<div class="mb-3 border-t border-black pt-3 text-sm md:border-t-0 md:pt-0">
+							{#if selectedItem.status === 'pending'}
+								<div class="mb-3 flex items-center gap-3">
+									<form method="POST" action="?/vote" use:enhance={() => markJustVoted(selectedItem.id, 'up')}>
+										<input type="hidden" name="itemId" value={selectedItem.id} />
+										<input type="hidden" name="value" value="up" />
+										<button
+											type="submit"
+											aria-label="Voter pour"
+											class="border-2 border-green-600 px-3 py-1.5 font-bold text-green-700 transition-transform duration-150 hover:scale-110 active:scale-90 {selectedItem.myVote ===
+											1
+												? 'bg-green-600 text-white'
+												: ''} {justVotedKeys.has(`${selectedItem.id}-up`) ? 'vote-pop' : ''}"
+										>
+											▲
+										</button>
+									</form>
+									<form method="POST" action="?/vote" use:enhance={() => markJustVoted(selectedItem.id, 'down')}>
+										<input type="hidden" name="itemId" value={selectedItem.id} />
+										<input type="hidden" name="value" value="down" />
+										<button
+											type="submit"
+											aria-label="Voter contre"
+											class="border-2 border-red-600 px-3 py-1.5 font-bold text-red-700 transition-transform duration-150 hover:scale-110 active:scale-90 {selectedItem.myVote ===
+											-1
+												? 'bg-red-600 text-white'
+												: ''} {justVotedKeys.has(`${selectedItem.id}-down`) ? 'vote-pop' : ''}"
+										>
+											▼
+										</button>
+									</form>
+								</div>
+							{/if}
+							<p class="mb-1 font-bold text-green-700">Pour ({selectedItem.upVoters.length})</p>
+							<p class="mb-3 text-gray-600">
+								{#each selectedItem.upVoters as voter, i (voter)}{i > 0 ? ', ' : ''}<MemberName
+										username={voter}
+										visibleUsernames={data.visibleUsernames}
+										class={voter === data.myUsername ? 'font-bold text-black' : ''}
+									/>{:else}—{/each}
+							</p>
+							<p class="mb-1 font-bold text-red-700">Contre ({selectedItem.downVoters.length})</p>
+							<p class="text-gray-600">
+								{#each selectedItem.downVoters as voter, i (voter)}{i > 0 ? ', ' : ''}<MemberName
+										username={voter}
+										visibleUsernames={data.visibleUsernames}
+										class={voter === data.myUsername ? 'font-bold text-black' : ''}
+									/>{:else}—{/each}
+							</p>
+						</div>
+
+						{#if data.isAdmin}
+							<div class="mb-3 flex gap-2 border-t border-black pt-3">
+								{#if selectedItem.status === 'pending'}
+									<form method="POST" action="?/resolve" use:enhance>
+										<input type="hidden" name="itemId" value={selectedItem.id} />
+										<input type="hidden" name="status" value="exauce" />
+										<button
+											type="submit"
+											class="border border-black bg-lghs-yellow px-3 py-1.5 text-xs font-bold uppercase"
+										>
+											{STATUS_META.exauce.icon} Exaucer
+										</button>
+									</form>
+									<form method="POST" action="?/resolve" use:enhance>
+										<input type="hidden" name="itemId" value={selectedItem.id} />
+										<input type="hidden" name="status" value="rejete" />
+										<button
+											type="submit"
+											class="border border-black bg-lghs-yellow px-3 py-1.5 text-xs font-bold uppercase"
+										>
+											{STATUS_META.rejete.icon} Rejeter
+										</button>
+									</form>
+								{:else}
+									<form method="POST" action="?/resolve" use:enhance>
+										<input type="hidden" name="itemId" value={selectedItem.id} />
+										<input type="hidden" name="status" value="pending" />
+										<button
+											type="submit"
+											class="border border-black bg-lghs-yellow px-3 py-1.5 text-xs font-bold uppercase"
+										>
+											↩️ Remettre en attente
+										</button>
+									</form>
+								{/if}
+							</div>
+						{/if}
+
+					</div>
+				</div>
 
 				<div class="flex gap-4 border-t border-black pt-3">
 					<button

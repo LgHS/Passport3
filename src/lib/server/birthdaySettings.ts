@@ -1,7 +1,8 @@
-import { getDb } from '$lib/server/db';
+import { getSetting, setSetting, SETTING_KEYS } from '$lib/server/appSettings';
 
-// The birthday_settings table itself is created (and seeded with its one row) by
-// src/lib/server/migrations.ts (run once from db.ts's getDb()) — see that file's migration 5.
+// Stored in app_settings next to the birthday channel (moved there from the old single-row
+// birthday_settings table by migration 17, dropped by migration 18). Absent keys mean the defaults: off, 9:00.
+const DEFAULT_HOUR = 9;
 
 export interface BirthdaySettings {
 	enabled: boolean;
@@ -11,14 +12,19 @@ export interface BirthdaySettings {
 }
 
 export async function getBirthdaySettings(): Promise<BirthdaySettings> {
-	const sql = await getDb();
-	const [row] = await sql<{ enabled: boolean; hour: number }[]>`
-		SELECT enabled, hour FROM birthday_settings WHERE id = 1
-	`;
-	return { enabled: row.enabled, hour: row.hour };
+	const [enabled, hour] = await Promise.all([
+		getSetting(SETTING_KEYS.birthdayEnabled),
+		getSetting(SETTING_KEYS.birthdayHour)
+	]);
+	const parsedHour = Number(hour);
+	return {
+		enabled: enabled === 'true',
+		// A malformed value (manual DB edit) falls back to the default rather than never matching.
+		hour: hour !== null && Number.isInteger(parsedHour) && parsedHour >= 0 && parsedHour <= 23 ? parsedHour : DEFAULT_HOUR
+	};
 }
 
 export async function updateBirthdaySettings(settings: BirthdaySettings): Promise<void> {
-	const sql = await getDb();
-	await sql`UPDATE birthday_settings SET enabled = ${settings.enabled}, hour = ${settings.hour} WHERE id = 1`;
+	await setSetting(SETTING_KEYS.birthdayEnabled, settings.enabled ? 'true' : null);
+	await setSetting(SETTING_KEYS.birthdayHour, String(settings.hour));
 }

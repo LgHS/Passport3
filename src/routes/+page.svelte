@@ -1,20 +1,30 @@
 <script lang="ts">
 	import { displayName } from '$lib/types';
 	import CotisationStatusBlock from '$lib/components/CotisationStatusBlock.svelte';
+	import { priorityMeta } from '$lib/taskPriority';
+
+	const today = new Date().toISOString().slice(0, 10);
+
+	function formatDay(iso: string): string {
+		return new Date(`${iso}T00:00:00`).toLocaleDateString('fr-BE', { day: 'numeric', month: 'short' });
+	}
 
 	let { data } = $props();
 
 	interface ChecklistEntry {
 		href: string;
-		done: boolean | null;
+		done: boolean;
 		doneLabel: string;
 		todoLabel: string;
 	}
 
-	// Completed items sink to the bottom — what still needs attention (or couldn't be verified)
-	// stays visible first, instead of getting buried under items already taken care of.
+	// Completed items sink to the bottom — what still needs attention stays visible first, instead
+	// of getting buried under items already taken care of. An item that couldn't be checked right
+	// now (done: null, e.g. Authentik or Mattermost unreachable) is left out rather than shown as a
+	// cryptic "can't verify" line: it comes back on the next load.
 	let checklistItems = $derived<ChecklistEntry[]>(
-		[
+		(
+			[
 			{
 				href: '/profile?tab=mfa',
 				done: data.checklist.mfaConfigured,
@@ -32,6 +42,12 @@
 				done: data.checklist.avatarUploaded,
 				doneLabel: 'Photo de profil envoyée',
 				todoLabel: 'Envoyer une photo de profil'
+			},
+			{
+				href: data.mattermostUrl ?? '/profile',
+				done: data.checklist.mattermostActivated,
+				doneLabel: 'Compte Mattermost activé',
+				todoLabel: 'Activer mon compte Mattermost'
 			},
 			{
 				href: '/badge',
@@ -55,11 +71,14 @@
 						}
 					]
 				: [])
-		].sort((a, b) => (a.done === true ? 1 : 0) - (b.done === true ? 1 : 0))
+			] as (Omit<ChecklistEntry, 'done'> & { done: boolean | null })[]
+		)
+			.filter((item): item is ChecklistEntry => item.done !== null)
+			.sort((a, b) => Number(a.done) - Number(b.done))
 	);
 </script>
 
-{#snippet checklistItem(href: string, done: boolean | null, doneLabel: string, todoLabel: string)}
+{#snippet checklistItem(href: string, done: boolean, doneLabel: string, todoLabel: string)}
 	<a
 		{href}
 		class="no-underline-fx flex items-center gap-3 px-4 py-2 text-sm transition-colors hover:bg-gray-50"
@@ -72,9 +91,7 @@
 		>
 			✓
 		</span>
-		{#if done === null}
-			<span class="text-gray-500">Impossible de vérifier pour le moment</span>
-		{:else if done}
+		{#if done}
 			<span>{doneLabel}</span>
 		{:else}
 			<span class="font-bold">{todoLabel}</span>
@@ -134,15 +151,56 @@
 			{/if}
 		</section>
 
-		<section class="w-full md:w-1/2">
-			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma check-list</h2>
-			<div class="border border-black">
-				{#each checklistItems as item, i (i)}
-					{@render checklistItem(item.href, item.done, item.doneLabel, item.todoLabel)}
-				{/each}
-			</div>
-		</section>
+		{#if checklistItems.length > 0}
+			<section class="w-full md:w-1/2">
+				<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma check-list</h2>
+				<div class="border border-black">
+					{#each checklistItems as item, i (i)}
+						{@render checklistItem(item.href, item.done, item.doneLabel, item.todoLabel)}
+					{/each}
+				</div>
+			</section>
+		{/if}
 	</div>
+
+	{#if data.myTasks && data.myTasks.length > 0}
+		<section class="mb-10">
+			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">
+				Mes tâches ({data.myTasks.length})
+			</h2>
+			<ul class="divide-y divide-black border border-black">
+				{#each data.myTasks as task (task.id)}
+					{@const overdue = !!task.dueDate && task.dueDate < today}
+					<li>
+						<a
+							href="/tasks?task={task.id}"
+							class="no-underline-fx flex items-center justify-between gap-3 px-4 py-2 text-sm hover:bg-gray-100 {overdue
+								? 'bg-red-50'
+								: ''}"
+						>
+							<span class="min-w-0">
+								<span class="font-bold">{task.title}</span>
+								<span class="ml-2 text-xs text-gray-500">
+									{task.status === 'blocked' ? 'Bloquée' : task.status === 'in_progress' ? 'En cours' : 'À faire'}
+								</span>
+								{#if task.dueDate}
+									<span class="ml-2 text-xs {overdue ? 'font-bold text-red-600' : 'text-gray-500'}">
+										{overdue ? 'En retard' : 'Pour le'} {formatDay(task.dueDate)}
+									</span>
+								{/if}
+							</span>
+							<span
+								class="shrink-0 border border-black px-1.5 py-0.5 text-[10px] font-bold uppercase {priorityMeta(task.priority).badge}"
+							>
+								{priorityMeta(task.priority).label}
+							</span>
+						</a>
+					</li>
+				{/each}
+			</ul>
+			<a href="/tasks" class="mt-2 inline-block text-sm">Voir toutes les tâches →</a>
+		</section>
+	{/if}
 
 	{#if data.groups === null || data.groups.length === 0}
 		<section>

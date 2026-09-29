@@ -31,6 +31,8 @@ Passport3 aims to provide members with one central place to:
 - [x] Manage emergency contacts
 - [x] View their own permissions and group memberships
 - [x] View a history of actions taken on their account, by themselves or by an admin
+- [x] Declare an incident or an accident that happened at the hackerspace
+- [x] Share the workshop's to-do list: propose, join and follow tasks
 - [ ] Access payment and accounting information
 - [ ] View their physical access permissions
 - Access future hackerspace services through a unified interface
@@ -90,9 +92,12 @@ Depending on the deployed hardware and configuration, it may support:
 
 A restricted admin panel (gated behind an Authentik group) lets designated members:
 
-- List and search member accounts
+- List and search member accounts, seeing at a glance who has MFA enabled and an emergency contact
+  on file
 - Edit a member's profile on their behalf
-- Edit a member's trombinoscope visibility and displayed role on their behalf
+- Edit a member's trombinoscope visibility and displayed role (short tag and extended role) on their
+  behalf
+- See a member's MFA methods
 - Manage a member's emergency contacts on their behalf
 - Regenerate a member's RFID badge on their behalf
 - Create onboarding invitations for new members
@@ -121,6 +126,42 @@ values where relevant.
 - Bank IBANs are logged with their real before/after value (the flagship case this feature exists
   for), viewable the same way as any other entry — by admins in `/admin/audit`, and by the member
   themselves in their own `/profile` history. There is no retention limit or purge policy yet
+
+### Task board
+
+`/tasks` replaces the post-its on the workshop wall: a shared to-do list for the hackerspace.
+
+- **Board or list view**, columns *À faire* / *En cours* / *Fait*, plus *Bloqué* (hidden by
+  default, highlighted when it isn't empty). Filters: "Mes tâches", search, priority, leader.
+  Done tasks leave the board after 30 days
+- **Drag and drop** a card to another column (mouse only): it runs the same actions as the task's
+  buttons, so permissions, history and audit are the same. Dropping on *Bloqué* opens the task,
+  since blocking needs a note
+- **Anyone can add a task** (title, mini-markdown description, optional due date, priority *Bas* →
+  *Urgent*); its author is its **owner**
+- **People on a task**: members volunteer (*participant*, can leave any time, also via the "+" on
+  a card) or are put on it by an admin, the owner or the leader (*assigné*, notified by Mattermost
+  DM, can't leave on their own). One of them can be the **leader** (★)
+- **Owner and leader manage the task** alongside admins: assign or remove people, block/unblock it,
+  delete it (a leader can't delete a task an admin created). Admin-only buttons are yellow
+- **Explicit steps**: people being on a task doesn't start it — *Démarrer* moves it to *En cours*.
+  *Bloqué* takes a kind (internal/external) and a note on what it's waiting on
+- **Per-task history and comments** in the task's modal; every action is also written to the audit
+  log, so it shows in `/admin/audit` and in the member's own history
+- **Mattermost reminders** (hourly check from 9:00 Brussels time): one "due tomorrow" and one
+  "overdue" DM per due date, to everyone on the task (its owner if nobody is); blocked tasks are
+  skipped
+- **Channel announcements** (Admin → Paramètres → Todolist, each off by default): new tasks, done
+  tasks, newly blocked tasks, tasks made urgent (an urgent new task is announced once, as urgent),
+  and a weekly recap (day and hour set there, Monday 9:00 by default) of urgent tasks due within
+  7 days, overdue tasks and tasks nobody is on, all posted to the chosen channel
+- **Deep links**: `/tasks?task=<id>` opens a task; Mattermost messages link there. Passport has no
+  dedicated public-URL setting, so these links use the origin of `AUTHENTIK_REDIRECT_URI` — make
+  sure it points at Passport's public address
+- The homepage lists the member's own open tasks ("Mes tâches")
+
+Planned next: recurring tasks with a rotation between members, peer review of done tasks, a
+full-screen view / API for the workshop's TV.
 
 ## Planned Features
 
@@ -170,8 +211,8 @@ picks up the `preprod` tag update within 5 minutes and redeploys automatically.
 ### Local data storage
 
 Passport3 keeps a small PostgreSQL database for data that has no home in Authentik, Dolibarr, or
-GitHub — e.g. the audit trail of admin and member actions, the wishlist, and the birthday
-scheduler's settings. `docker-compose.yml` and `docker-compose.preprod.yml` both run their own
+GitHub — e.g. the audit trail of admin and member actions, the wishlist, the task board, and the
+birthday scheduler's settings. `docker-compose.yml` and `docker-compose.preprod.yml` both run their own
 `postgres` container (`docker-compose.yml`'s is also reachable from the host on `127.0.0.1:5432`,
 for `pnpm dev` running outside Docker; the preprod one is internal-only, never exposed on the
 host), backed by its own named volume (`passport3-postgres-data`) so it survives container

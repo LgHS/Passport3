@@ -216,7 +216,7 @@
 					>
 						<button
 							type="submit"
-							class="border border-black px-3 py-1.5 text-xs font-bold uppercase transition-colors hover:bg-black hover:text-white"
+							class="border border-black px-3 py-1.5 text-xs font-bold uppercase transition-colors hover:border-red-700 hover:bg-red-700 hover:text-white"
 						>
 							Supprimer la photo
 						</button>

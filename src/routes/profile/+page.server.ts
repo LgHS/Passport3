@@ -30,6 +30,7 @@ import {
 } from '$lib/server/profileValidation';
 import { clearSessionCookie } from '$lib/server/session';
 import { logAuditEvent, listAuditEventsForTarget } from '$lib/server/auditLog';
+import { resolveActorUsernames } from '$lib/server/auditActors';
 import { authentikPk, displayName } from '$lib/types';
 
 const AUTHENTIK_UNAVAILABLE_MESSAGE = 'Service temporairement indisponible. Réessayez dans quelques instants.';
@@ -98,6 +99,11 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		return [];
 	});
 
+	// "Admin Loïc Keyeux (@iooner)" for each admin who acted on this account.
+	const { actorUsernames, visibleUsernames } = await resolveActorUsernames(
+		auditEvents.filter((e) => e.source === 'admin')
+	);
+
 	return {
 		profile,
 		fields: PROFILE_ATTRIBUTE_FIELDS,
@@ -113,7 +119,9 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
 		// Whether profile.avatar is an uploaded photo (deletable) or generated initials.
 		hasLocalAvatar: hasUploadedAvatar(profile.email),
-		auditEvents
+		auditEvents,
+		actorUsernames,
+		visibleUsernames
 	};
 };
 

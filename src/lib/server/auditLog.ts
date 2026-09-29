@@ -16,7 +16,7 @@ export type AuditSource = 'admin' | 'user';
 
 export interface AuditActor {
 	// Stable Authentik subject id — kept alongside the label in case the admin's display name
-	// changes later, though nothing resolves it back to a live account today.
+	// changes later; the member history resolves it to the admin's current username.
 	sub: string;
 	label: string;
 }
@@ -24,6 +24,7 @@ export interface AuditActor {
 export interface AuditEvent {
 	id: number;
 	createdAt: string;
+	actorSub: string;
 	actorLabel: string;
 	source: AuditSource;
 	action: string;
@@ -35,6 +36,7 @@ export interface AuditEvent {
 interface AuditEventRow {
 	id: number;
 	created_at: Date;
+	actor_sub: string;
 	actor_label: string;
 	source: string;
 	action: string;
@@ -83,6 +85,7 @@ function rowToEvent(r: AuditEventRow): AuditEvent {
 	return {
 		id: r.id,
 		createdAt: r.created_at.toISOString(),
+		actorSub: r.actor_sub,
 		actorLabel: r.actor_label,
 		source: r.source as AuditSource,
 		action: r.action,
@@ -95,7 +98,7 @@ function rowToEvent(r: AuditEventRow): AuditEvent {
 export async function listAuditEvents(limit = 200): Promise<AuditEvent[]> {
 	const sql = await getDb();
 	const rows = await sql<AuditEventRow[]>`
-		SELECT id, created_at, actor_label, source, action, target_pk, target_email, details
+		SELECT id, created_at, actor_sub, actor_label, source, action, target_pk, target_email, details
 		FROM audit_events ORDER BY id DESC LIMIT ${limit}
 	`;
 	return rows.map(rowToEvent);
@@ -107,7 +110,7 @@ export async function listAuditEvents(limit = 200): Promise<AuditEvent[]> {
 export async function listAuditEventsForTarget(pk: number, limit = 200): Promise<AuditEvent[]> {
 	const sql = await getDb();
 	const rows = await sql<AuditEventRow[]>`
-		SELECT id, created_at, actor_label, source, action, target_pk, target_email, details
+		SELECT id, created_at, actor_sub, actor_label, source, action, target_pk, target_email, details
 		FROM audit_events WHERE target_pk = ${pk} ORDER BY id DESC LIMIT ${limit}
 	`;
 	return rows.map(rowToEvent);

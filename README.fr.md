@@ -31,6 +31,8 @@ Passport3 vise à offrir aux membres un endroit central pour :
 - [x] Gérer ses contacts d'urgence
 - [x] Consulter ses propres permissions et groupes d'appartenance
 - [x] Consulter l'historique des actions effectuées sur son compte, par soi-même ou par un admin
+- [x] Déclarer un incident ou un accident survenu au hackerspace
+- [x] Partager la liste des tâches de l'atelier : proposer, rejoindre et suivre des tâches
 - [ ] Accéder aux informations de paiement et de comptabilité
 - [ ] Voir leurs droits d'accès physique
 - Accéder aux futurs services du hackerspace via une interface unifiée
@@ -85,9 +87,10 @@ Selon le matériel et la configuration déployés, cela peut inclure :
 
 Un panneau d'administration restreint (réservé à un groupe Authentik dédié) permet à des membres désigné·es de :
 
-- Lister et rechercher les comptes membres
+- Lister et rechercher les comptes membres, en voyant d'un coup d'œil qui a activé le MFA et renseigné un contact d'urgence
 - Modifier le profil d'un membre en son nom
-- Modifier la visibilité trombinoscope et le rôle affiché d'un membre en son nom
+- Modifier la visibilité trombinoscope et le rôle affiché (tag court et rôle étendu) d'un membre en son nom
+- Voir les méthodes MFA d'un membre
 - Gérer les contacts d'urgence d'un membre en son nom
 - Régénérer le badge RFID d'un membre en son nom
 - Créer des invitations d'inscription pour de nouveaux membres
@@ -103,6 +106,24 @@ Passport3 conserve un historique des actions effectuées via l'application, auss
 - Les actions effectuées directement dans un autre système (ex. un IBAN modifié directement dans Dolibarr) n'y apparaissent pas, seul ce qui passe par Passport3 lui-même est capturé
 - L'écriture d'une entrée se fait en best-effort : une action déjà réussie n'échoue jamais juste parce que l'écriture du log elle-même a échoué. C'est un historique informatif pour la transparence, pas un journal de conformité avec garanties de nouvelle tentative ou d'alerte
 - Les IBAN bancaires sont journalisés avec leur vraie valeur avant/après (le cas phare pour lequel cette fonctionnalité existe), consultable comme n'importe quelle autre entrée : par les admins sur `/admin/audit`, et par le membre lui-même dans son propre historique `/profile`. Il n'y a pas encore de limite de conservation ni de politique de purge
+
+### Tâches de l'atelier
+
+`/tasks` remplace les post-its sur le mur de l'atelier : une liste de tâches partagée pour le hackerspace.
+
+- **Vue tableau ou liste**, colonnes *À faire* / *En cours* / *Fait*, plus *Bloqué* (masquée par défaut, mise en avant quand elle n'est pas vide). Filtres : « Mes tâches », recherche, priorité, leader. Les tâches faites quittent le tableau après 30 jours
+- **Glisser-déposer** une carte vers une autre colonne (à la souris) : ça déclenche les mêmes actions que les boutons de la tâche, donc mêmes droits, même historique, même audit. Déposer sur *Bloqué* ouvre la tâche, car un blocage demande une note
+- **Tout membre peut ajouter une tâche** (titre, description en mini-markdown, date limite facultative, priorité de *Bas* à *Urgent*) ; son auteur en est le **propriétaire**
+- **Personnes sur une tâche** : les membres se portent volontaires (*participant*, peut se retirer à tout moment, aussi via le « + » d'une carte) ou y sont mis par un admin, le propriétaire ou le leader (*assigné*, prévenu en message privé Mattermost, ne peut pas se retirer lui-même). L'un d'eux peut être le **leader** (★)
+- **Le propriétaire et le leader gèrent la tâche** avec les admins : assigner ou retirer des personnes, la bloquer ou la débloquer, la supprimer (un leader ne peut pas supprimer une tâche créée par un admin). Les boutons réservés aux admins sont jaunes
+- **Étapes explicites** : avoir des personnes sur une tâche ne la démarre pas, c'est *Démarrer* qui la passe *En cours*. *Bloqué* demande un type (interne/externe) et une note sur ce qu'on attend
+- **Historique et commentaires propres à chaque tâche** dans sa fiche ; chaque action est aussi écrite dans le journal d'audit, visible sur `/admin/audit` et dans l'historique du membre
+- **Rappels Mattermost** (vérification toutes les heures à partir de 9 h, heure de Bruxelles) : un message « à faire pour demain » et un « date limite dépassée » par date limite, envoyés aux personnes sur la tâche (au propriétaire s'il n'y a personne) ; les tâches bloquées sont ignorées
+- **Annonces sur un canal** (Admin → Paramètres → Todolist, chacune désactivée par défaut) : nouvelles tâches, tâches terminées, tâches qui deviennent bloquées, tâches passées en urgent (une nouvelle tâche urgente n'est annoncée qu'une fois, comme urgente), et un récap hebdomadaire (jour et heure réglables, lundi 9 h par défaut) des tâches urgentes à faire dans les 7 jours, en retard et sans participant, postés sur le canal choisi
+- **Liens directs** : `/tasks?task=<id>` ouvre une tâche, et les messages Mattermost y renvoient. Passport n'a pas de réglage d'adresse publique dédié : ces liens utilisent l'origine de `AUTHENTIK_REDIRECT_URI`, qui doit donc pointer vers l'adresse publique de Passport
+- La page d'accueil liste les tâches ouvertes du membre (« Mes tâches »)
+
+Prévu ensuite : tâches récurrentes avec tour de rôle entre membres, relecture des tâches faites, vue plein écran / API pour l'écran TV de l'atelier.
 
 ## Fonctionnalités prévues
 
@@ -144,7 +165,7 @@ Publier une nouvelle version (`git tag vX.Y.Z && git push --tags`, ou `gh releas
 
 ### Stockage de données local
 
-Passport3 garde une petite base PostgreSQL pour les données qui n'ont pas leur place dans Authentik, Dolibarr ou GitHub — par exemple l'historique d'audit des actions admin et membres, la wishlist, et les réglages du planificateur d'anniversaires. `docker-compose.yml` et `docker-compose.preprod.yml` lancent chacun leur propre conteneur `postgres` (celui de `docker-compose.yml` est aussi accessible depuis l'hôte sur `127.0.0.1:5432`, pour `pnpm dev` lancé hors Docker ; celui de preprod est interne uniquement, jamais exposé sur l'hôte), sur son propre volume nommé (`passport3-postgres-data`) pour qu'il survive à la recréation du conteneur — y compris un redéploiement déclenché par Watchtower. Définissez `POSTGRES_USER`, `POSTGRES_PASSWORD` et `POSTGRES_DB` dans `.env` (voir `.env.example`) avant de le démarrer. **Ce volume contient désormais de la donnée réelle et non reconstructible, à inclure dans la routine de sauvegarde de l'hôte** — contrairement au reste du conteneur, jusqu'ici entièrement stateless et jetable.
+Passport3 garde une petite base PostgreSQL pour les données qui n'ont pas leur place dans Authentik, Dolibarr ou GitHub — par exemple l'historique d'audit des actions admin et membres, la wishlist, les tâches de l'atelier, et les réglages du planificateur d'anniversaires. `docker-compose.yml` et `docker-compose.preprod.yml` lancent chacun leur propre conteneur `postgres` (celui de `docker-compose.yml` est aussi accessible depuis l'hôte sur `127.0.0.1:5432`, pour `pnpm dev` lancé hors Docker ; celui de preprod est interne uniquement, jamais exposé sur l'hôte), sur son propre volume nommé (`passport3-postgres-data`) pour qu'il survive à la recréation du conteneur — y compris un redéploiement déclenché par Watchtower. Définissez `POSTGRES_USER`, `POSTGRES_PASSWORD` et `POSTGRES_DB` dans `.env` (voir `.env.example`) avant de le démarrer. **Ce volume contient désormais de la donnée réelle et non reconstructible, à inclure dans la routine de sauvegarde de l'hôte** — contrairement au reste du conteneur, jusqu'ici entièrement stateless et jetable.
 
 Sauvegardez-le avec `pg_dump`, par exemple :
 

@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { replaceState } from '$app/navigation';
+	import { page } from '$app/state';
+	import { onMount } from 'svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { avatarSize } from '$lib/avatar';
 	import type { ActionData, PageData } from './$types';
@@ -47,18 +50,35 @@
 	// No brand icon per network on purpose — Signal/Telegram/Discord/Matrix logos are colorful and
 	// would clash with the site's black/white brutalist look. Plain "Réseau : valeur" text instead,
 	// only for whichever the member actually filled in on /profile.
+	// Mastodon's handle ("@user@instance") links to the profile page on that instance.
+	function mastodonUrl(handle: string): string | null {
+		const match = handle.match(/^@([A-Za-z0-9_]+)@([a-z0-9.-]+)$/);
+		return match ? `https://${match[2]}/@${match[1]}` : null;
+	}
+
 	function socialLinks(member: {
 		signal: string | null;
 		telegram: string | null;
 		discord: string | null;
 		matrix: string | null;
-	}): { label: string; value: string }[] {
+		mastodon: string | null;
+	}): { label: string; value: string; href: string | null }[] {
 		return [
-			{ label: 'Signal', value: member.signal },
-			{ label: 'Telegram', value: member.telegram },
-			{ label: 'Discord', value: member.discord },
-			{ label: 'Matrix', value: member.matrix }
-		].filter((entry): entry is { label: string; value: string } => !!entry.value);
+			{ label: 'Signal', value: member.signal, href: null },
+			{ label: 'Telegram', value: member.telegram, href: member.telegram ? socialUrl('Telegram', member.telegram) : null },
+			{ label: 'Discord', value: member.discord, href: null },
+			{ label: 'Matrix', value: member.matrix, href: member.matrix ? socialUrl('Matrix', member.matrix) : null },
+			{ label: 'Mastodon', value: member.mastodon, href: member.mastodon ? mastodonUrl(member.mastodon) : null }
+		].filter((entry): entry is { label: string; value: string; href: string | null } => !!entry.value);
+	}
+
+	// Profile link for the networks where the handle alone is enough to build one (opened in a new
+	// tab from the member card). Discord has no username-based profile URL (it needs the numeric
+	// account id) and Signal's share links carry an encrypted token, so those two stay plain text.
+	function socialUrl(label: string, value: string): string | null {
+		if (label === 'Telegram') return `https://t.me/${encodeURIComponent(value)}`;
+		if (label === 'Matrix') return `https://matrix.to/#/${encodeURIComponent(value)}`;
+		return null;
 	}
 
 	type Member = PageData['members'][number];
@@ -69,10 +89,26 @@
 	let selectedMember = $state<Member | null>(null);
 	let memberDialog = $state<HTMLDialogElement | null>(null);
 
+	// Deep link: /trombinoscope?member=<username> opens that member's card (usernames in the task
+	// board and the wishlist link here), and the address follows the open card.
+	function setMemberParam(username: string | null) {
+		const url = new URL(page.url);
+		if (username === null) url.searchParams.delete('member');
+		else url.searchParams.set('member', username);
+		replaceState(url, {});
+	}
+
 	function openMember(member: Member) {
 		selectedMember = member;
 		memberDialog?.showModal();
+		setMemberParam(member.username);
 	}
+
+	onMount(() => {
+		const username = page.url.searchParams.get('member');
+		const linked = username ? data.members.find((m) => m.username === username) : undefined;
+		if (linked) openMember(linked);
+	});
 
 	function closeMember() {
 		memberDialog?.close();
@@ -546,7 +582,14 @@
 								</span>
 							{/if}
 							{#each socialLinks(member) as link (link.label)}
-								<span>{link.label} : {link.value}</span>
+								<span>
+									{link.label} :
+									{#if link.href}
+										<a href={link.href} target="_blank" rel="noopener">{link.value}</a>
+									{:else}
+										{link.value}
+									{/if}
+								</span>
 							{/each}
 						</p>
 					{/if}
@@ -561,12 +604,17 @@
 <dialog
 	bind:this={memberDialog}
 	onclick={handleDialogClick}
-	onclose={() => (selectedMember = null)}
+	onclose={() => {
+		selectedMember = null;
+		setMemberParam(null);
+	}}
 	aria-labelledby="member-card-title"
-	class="m-auto w-[calc(100%-2rem)] max-w-sm border border-black bg-white p-0 text-left backdrop:bg-black/60"
+	class="m-auto max-h-[85vh] w-[calc(100%-2rem)] max-w-sm overflow-y-auto border-4 border-black bg-white p-0 text-left backdrop:bg-black/50 md:max-w-3xl"
 >
 	{#if selectedMember}
 		{@const member = selectedMember}
+		<!-- Wide screens: photo on the left, details on the right. Stacked on phones. -->
+		<div class="md:grid md:grid-cols-2">
 		<div class="relative">
 			{#if member.avatar}
 				<img src={avatarSize(member.avatar, 512)} alt="" class="aspect-square w-full object-cover" />
@@ -583,19 +631,20 @@
 					{member.tag}
 				</span>
 			{/if}
+		</div>
+
+		<div class="relative space-y-3 p-4 text-sm">
+			<!-- Same close button as the wishlist and task modals, at the top right of the details. -->
 			<button
 				type="button"
 				onclick={closeMember}
-				class="absolute top-0 right-0 bg-black px-3 py-1 text-sm font-bold text-white"
 				aria-label="Fermer la fiche"
+				class="absolute top-3 right-2 px-2 text-lg leading-none font-bold"
 			>
-				✕
+				×
 			</button>
-		</div>
-
-		<div class="space-y-3 p-4 text-sm">
 			<div>
-				<h2 id="member-card-title" class="text-base font-bold break-all">@{member.username}</h2>
+				<h2 id="member-card-title" class="pr-8 text-base font-bold break-all">@{member.username}</h2>
 				{#if member.tagExtended}
 					<p class="font-bold">{member.tagExtended}</p>
 				{/if}
@@ -646,7 +695,13 @@
 					{#each socialLinks(member) as link (link.label)}
 						<div class="flex gap-2">
 							<dt class="w-24 shrink-0 font-bold">{link.label}</dt>
-							<dd class="min-w-0 break-all">{link.value}</dd>
+							<dd class="min-w-0 break-all">
+								{#if link.href}
+									<a href={link.href} target="_blank" rel="noopener">{link.value}</a>
+								{:else}
+									{link.value}
+								{/if}
+							</dd>
 						</div>
 					{/each}
 				</dl>
@@ -655,6 +710,7 @@
 			{#if !fullName(member) && !member.tagExtended && !member.email && !member.phone && !member.mattermostUsername && socialLinks(member).length === 0}
 				<p class="text-gray-500">Ce membre n'a partagé que son pseudo.</p>
 			{/if}
+		</div>
 		</div>
 	{/if}
 </dialog>

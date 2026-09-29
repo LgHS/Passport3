@@ -163,6 +163,218 @@ const migrations: Migration[] = [
 	},
 	{
 		version: 10,
+		name: 'create tasks',
+		up: async (sql) => {
+			// First shape of the task board (one assignee per task). Kept exactly as it first ran:
+			// migration 11 below turns it into the current shape.
+			await sql`
+				CREATE TABLE tasks (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					author_sub TEXT NOT NULL,
+					author_label TEXT NOT NULL,
+					title TEXT NOT NULL,
+					description TEXT,
+					due_date DATE,
+					status TEXT NOT NULL DEFAULT 'todo',
+					assignee_sub TEXT,
+					assignee_label TEXT,
+					assigned_by_sub TEXT,
+					done_at TIMESTAMPTZ
+				)
+			`;
+		}
+	},
+	{
+		version: 11,
+		name: 'tasks: several members, leader, blocked state',
+		up: async (sql) => {
+			// Written to work on any database that ran a draft of migration 10 (whichever shape it
+			// had), hence the IF [NOT] EXISTS everywhere.
+			// Everyone on a task: volunteers (assigned_by_sub null) and members an admin put on it
+			// (assigned_by_sub set — they can't remove themselves). At most one leader per task.
+			await sql`
+				CREATE TABLE IF NOT EXISTS task_members (
+					task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+					member_sub TEXT NOT NULL,
+					member_label TEXT NOT NULL,
+					assigned_by_sub TEXT,
+					is_leader BOOLEAN NOT NULL DEFAULT false,
+					joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					PRIMARY KEY (task_id, member_sub)
+				)
+			`;
+			await sql`
+				CREATE UNIQUE INDEX IF NOT EXISTS task_members_one_leader ON task_members(task_id) WHERE is_leader
+			`;
+
+			// The single assignee of the first shape becomes the task's first member.
+			const [{ has_assignee }] = await sql<{ has_assignee: boolean }[]>`
+				SELECT EXISTS (
+					SELECT 1 FROM information_schema.columns
+					WHERE table_name = 'tasks' AND column_name = 'assignee_sub'
+				) AS has_assignee
+			`;
+			if (has_assignee) {
+				await sql`
+					INSERT INTO task_members (task_id, member_sub, member_label, assigned_by_sub)
+					SELECT id, assignee_sub, assignee_label, assigned_by_sub FROM tasks WHERE assignee_sub IS NOT NULL
+					ON CONFLICT DO NOTHING
+				`;
+			}
+			// "à faire" vs "en cours" is now derived from whether anyone is on the task, and "fait"
+			// from done_at.
+			await sql`
+				ALTER TABLE tasks
+					DROP COLUMN IF EXISTS status,
+					DROP COLUMN IF EXISTS assignee_sub,
+					DROP COLUMN IF EXISTS assignee_label,
+					DROP COLUMN IF EXISTS assigned_by_sub,
+					-- 'internal' (waiting on us: a decision, a purchase…) or 'external' (a supplier, a
+					-- third party…), with a note saying what it's waiting on. NULL = not blocked.
+					ADD COLUMN IF NOT EXISTS blocked_kind TEXT,
+					ADD COLUMN IF NOT EXISTS blocked_note TEXT
+			`;
+		}
+	},
+	{
+		version: 12,
+		name: 'tasks: explicit start, per-task history',
+		up: async (sql) => {
+			// People on a task doesn't mean it has started: "en cours" is now an explicit step
+			// ("Démarrer"), recorded here. NULL = not started.
+			await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ`;
+			// Each task's own history, shown in its modal. Every entry is also written to
+			// audit_events (see /tasks' +page.server.ts): this one is per task and goes away with it,
+			// the audit log keeps everything.
+			await sql`
+				CREATE TABLE IF NOT EXISTS task_events (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					actor_label TEXT NOT NULL,
+					action TEXT NOT NULL,
+					details TEXT
+				)
+			`;
+			await sql`CREATE INDEX IF NOT EXISTS task_events_task_id ON task_events(task_id, id)`;
+		}
+	},
+	{
+		version: 13,
+		name: 'tasks: created_by_admin',
+		up: async (sql) => {
+			// Whether an admin created the task: its leader can delete a task, except one an admin
+			// created. Existing rows default to false.
+			await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by_admin BOOLEAN NOT NULL DEFAULT false`;
+		}
+	},
+	{
+		version: 14,
+		name: 'tasks: priority',
+		up: async (sql) => {
+			// 1 Bas, 2 Moyen, 3 Normal, 4 Élevé, 5 Urgent (see $lib/taskPriority). Existing tasks: Normal.
+			await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority SMALLINT NOT NULL DEFAULT 3`;
+		}
+	},
+	{
+		version: 15,
+		name: 'tasks: reminder tracking',
+		up: async (sql) => {
+			// Which due date each Mattermost reminder was already sent for (see taskReminders.ts):
+			// one "due tomorrow" and one "overdue" reminder per due date, sent again only if the due
+			// date is changed.
+			await sql`
+				ALTER TABLE tasks
+					ADD COLUMN IF NOT EXISTS due_soon_reminded_for DATE,
+					ADD COLUMN IF NOT EXISTS overdue_reminded_for DATE
+			`;
+		}
+	},
+	{
+		version: 16,
+		name: 'create app_settings',
+		up: async (sql) => {
+			// Small admin-editable settings that used to live in .env (e.g. which Mattermost channel
+			// gets which announcement), one row per key. See appSettings.ts.
+			await sql`
+				CREATE TABLE IF NOT EXISTS app_settings (
+					key TEXT PRIMARY KEY,
+					value TEXT NOT NULL,
+					updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+				)
+			`;
+		}
+	},
+	{
+		version: 17,
+		name: 'move birthday_settings into app_settings',
+		up: async (sql) => {
+			// Brings the birthday switch and hour next to the birthday channel, so all of a
+			// feature's settings live in app_settings. ON CONFLICT DO NOTHING keeps a value already
+			// saved there. birthday_settings itself is left in place (no longer read) so the
+			// previous release still runs against this database if it has to be rolled back; it
+			// can be dropped by a later migration.
+			await sql`
+				INSERT INTO app_settings (key, value)
+				SELECT 'mattermost.birthday_enabled', 'true' FROM birthday_settings WHERE id = 1 AND enabled
+				ON CONFLICT (key) DO NOTHING
+			`;
+			await sql`
+				INSERT INTO app_settings (key, value)
+				SELECT 'mattermost.birthday_hour', hour::text FROM birthday_settings WHERE id = 1
+				ON CONFLICT (key) DO NOTHING
+			`;
+		}
+	},
+	{
+		version: 18,
+		name: 'drop birthday_settings',
+		up: async (sql) => {
+			// Unread since migration 17 moved its values into app_settings; kept until that release
+			// was verified in production so a rollback still worked.
+			await sql`DROP TABLE IF EXISTS birthday_settings`;
+		}
+	},
+	{
+		version: 19,
+		name: 'create incidents',
+		up: async (sql) => {
+			// Member-filed declarations of what happened at the hackerspace, read by admins only.
+			// `kind` is 'incident' (damage, or a near miss that hurt nobody) or 'accident' (someone
+			// was injured) — the vocabulary lives in $lib/incidentDisplay.ts rather than in a CHECK
+			// constraint, same as the wishlist's status.
+			// `created_at` is when it was declared, `occurred_at` when it actually happened: the form
+			// pre-fills the latter but lets it be corrected, so the two genuinely differ.
+			// First-aid columns are only ever filled for an accident (the question isn't asked
+			// otherwise), the fire-device ones for both — a fire put out with nobody hurt is exactly
+			// the near-miss case `incident` is for.
+			// No extra index: this table gains a handful of rows a year, the primary key covers the
+			// single ORDER BY the list does.
+			await sql`
+				CREATE TABLE incidents (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					author_sub TEXT NOT NULL,
+					author_label TEXT NOT NULL,
+					kind TEXT NOT NULL,
+					occurred_at TIMESTAMPTZ NOT NULL,
+					people TEXT NOT NULL,
+					visitor_involved BOOLEAN NOT NULL DEFAULT false,
+					witnesses TEXT,
+					equipment TEXT,
+					description TEXT NOT NULL,
+					emergency_services_called BOOLEAN NOT NULL DEFAULT false,
+					first_aid_used BOOLEAN NOT NULL DEFAULT false,
+					first_aid_details TEXT,
+					fire_device_used BOOLEAN NOT NULL DEFAULT false,
+					fire_device_details TEXT
+				)
+			`;
+		}
+	},
+	{
+		version: 20,
 		name: 'create compta: tiers, tiers_liens, abonnements, cotisations, compta_settings',
 		up: async (sql) => {
 			// The accounting module's foundation — see docs/compta.md for the model these tables
@@ -293,7 +505,7 @@ const migrations: Migration[] = [
 		}
 	},
 	{
-		version: 11,
+		version: 21,
 		name: 'create compta: factures, facture_lignes, facture_sequences; invoice settings',
 		up: async (sql) => {
 			// Issued and received invoices in one table, told apart by `sens` — see docs/compta.md,
@@ -388,7 +600,7 @@ const migrations: Migration[] = [
 		}
 	},
 	{
-		version: 12,
+		version: 22,
 		name: 'create compta: comptes, mouvements, imports_bancaires, lettrages',
 		up: async (sql) => {
 			// Bank and cash accounts with their movements, and the matching (lettrage) of movements
@@ -467,7 +679,7 @@ const migrations: Migration[] = [
 		}
 	},
 	{
-		version: 13,
+		version: 23,
 		name: 'factures: envoi par email',
 		up: async (sql) => {
 			// When and to whom an issued invoice was last emailed (factureMail.ts) — shown on the
@@ -476,7 +688,7 @@ const migrations: Migration[] = [
 		}
 	},
 	{
-		version: 14,
+		version: 24,
 		name: 'create notes_de_frais; automatic Authentik deactivation',
 		up: async (sql) => {
 			// Expense claims: a member submits, the treasury accepts or refuses, and the refund is a

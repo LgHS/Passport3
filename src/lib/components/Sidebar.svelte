@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { fade, fly } from 'svelte/transition';
+	import { fade, fly, slide } from 'svelte/transition';
 	import {
 		displayName,
 		isAdmin,
@@ -43,13 +43,66 @@
 	}
 
 	const itemClass =
-		'no-underline-fx flex items-center gap-3 rounded px-4 py-2.5 text-sm font-bold uppercase transition-colors';
-	// Indented, smaller sibling of itemClass for the admin submenu (Paramètres/Historique) — one
-	// level under "Admin" itself, not a full nav item in its own right.
-	const subItemClass =
-		'no-underline-fx block rounded py-1.5 pl-10 pr-4 text-sm font-bold uppercase transition-colors';
-	function itemStateClass(href: string): string {
-		return isActive(href) ? 'bg-lghs-yellow text-black' : 'text-black hover:bg-gray-100';
+		'no-underline-fx flex items-center gap-3 rounded px-4 py-1.5 text-sm font-bold uppercase transition-colors';
+	// Small grey heading above a group of entries ("Mon compte", "Hackerspace", "Sécurité", "Admin", "Compta"); the
+	// foldable ones are buttons with the same look.
+	const sectionLabelClass = 'mt-3 mb-0.5 px-4 text-xs font-bold tracking-wide text-gray-500 uppercase';
+	function itemStateClass(href: string, active = isActive(href)): string {
+		return active ? 'bg-lghs-yellow text-black' : 'text-black hover:bg-gray-100';
+	}
+	// "Membres" is /admin itself and the member pages under it (/admin/users/…, /admin/invite),
+	// not every /admin/* page — Paramètres, Incidents and Audit have their own entries.
+	const membersActive = $derived(
+		page.url.pathname === '/admin' ||
+			page.url.pathname.startsWith('/admin/users') ||
+			page.url.pathname.startsWith('/admin/invite')
+	);
+
+	// "Tableau de bord" is /compta itself only; every page under it has its own entry.
+	const comptaHomeActive = $derived(page.url.pathname === '/compta');
+
+	// Foldable menu sections, open by default. Only the ones a member closed are remembered, per
+	// browser (same convenience-only storage as the collapsed sidebar below). Sécurité isn't one of
+	// them: Incidents must always be one glance away.
+	const SECTIONS_STORAGE_KEY = 'sidebar-closed-sections';
+	const SECTION_PATHS: Record<string, string[]> = {
+		account: ['/profile', '/cotisation', '/notes-de-frais', '/societes', '/badge', '/permissions', '/github'],
+		hackerspace: ['/trombinoscope', '/tasks', '/wishlist'],
+		admin: ['/admin'],
+		compta: ['/compta']
+	};
+	let closedSections = $state<Record<string, boolean>>({});
+
+	$effect(() => {
+		try {
+			closedSections = JSON.parse(localStorage.getItem(SECTIONS_STORAGE_KEY) ?? '{}');
+		} catch {
+			// Unreadable or unavailable — everything stays open.
+		}
+	});
+
+	// Landing on a page (e.g. from a link) inside a closed section opens it, so the current page is
+	// never hidden in the menu.
+	$effect(() => {
+		for (const [id, paths] of Object.entries(SECTION_PATHS)) {
+			if (closedSections[id] && paths.some(isActive)) toggleSection(id);
+		}
+	});
+
+	// A light slide when a section folds or unfolds; none for people who asked their system for
+	// reduced motion. Svelte transitions are local, so navigating between pages doesn't trigger it.
+	let foldDuration = $state(150);
+	$effect(() => {
+		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) foldDuration = 0;
+	});
+
+	function toggleSection(id: string) {
+		closedSections = { ...closedSections, [id]: !closedSections[id] };
+		try {
+			localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify(closedSections));
+		} catch {
+			// Per-viewer convenience only.
+		}
 	}
 
 	const COLLAPSED_STORAGE_KEY = 'sidebar-collapsed';
@@ -104,6 +157,28 @@
 	});
 </script>
 
+<!-- Heading of a foldable menu section: the label and a chevron, pointing right once folded. -->
+{#snippet foldHeader(id: string, label: string)}
+	<button
+		type="button"
+		onclick={() => toggleSection(id)}
+		aria-expanded={!closedSections[id]}
+		class="{sectionLabelClass} flex w-full cursor-pointer items-center justify-between hover:text-black"
+	>
+		{label}
+		<svg
+			viewBox="0 0 20 20"
+			class="h-3 w-3 transition-transform {closedSections[id] ? '-rotate-90' : ''}"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			aria-hidden="true"
+		>
+			<path d="M5 7.5 L10 12.5 L15 7.5" stroke-linecap="round" stroke-linejoin="round" />
+		</svg>
+	</button>
+{/snippet}
+
 <svelte:window onkeydown={handleKeydown} />
 
 <!-- The identity block + nav list + logout are identical between the permanent desktop sidebar
@@ -148,152 +223,175 @@
 				</svg>
 				Accueil
 			</a>
-			<a href="/profile" onclick={closeOverlay} class="{itemClass} {itemStateClass('/profile')}">
+			{@render foldHeader('account', 'Mon compte')}
+			{#if !closedSections.account}
+				<div class="flex flex-col gap-0.5" transition:slide={{ duration: foldDuration }}>
+					<a href="/profile" onclick={closeOverlay} class="{itemClass} {itemStateClass('/profile')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<circle cx="10" cy="6.5" r="3" />
+							<path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round" />
+						</svg>
+						Mon profil
+					</a>
+					<a href="/cotisation" onclick={closeOverlay} class="{itemClass} {itemStateClass('/cotisation')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<rect x="2.5" y="5" width="15" height="10" rx="1.2" />
+							<path d="M2.5 8.5 H17.5" />
+						</svg>
+						Cotisation
+					</a>
+					<a href="/notes-de-frais" onclick={closeOverlay} class="{itemClass} {itemStateClass('/notes-de-frais')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path d="M5 3.5h7l3 3v10H5z" stroke-linejoin="round" />
+							<path d="M12 3.5v3h3 M7.5 10h5 M7.5 13h5" stroke-linecap="round" />
+						</svg>
+						Notes de frais
+					</a>
+					<a href="/badge" onclick={closeOverlay} class="{itemClass} {itemStateClass('/badge')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<rect x="5" y="2" width="10" height="16" rx="2" />
+							<circle cx="10" cy="7.5" r="2" />
+							<path d="M7.5 13 H12.5 M7.5 15 H12.5" stroke-linecap="round" />
+						</svg>
+						Badge RFID
+					</a>
+					<a href="/permissions" onclick={closeOverlay} class="{itemClass} {itemStateClass('/permissions')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path
+								d="M10 2.5 L16.5 5 V10 C16.5 13.8 13.8 16.7 10 17.5 C6.2 16.7 3.5 13.8 3.5 10 V5 Z"
+								stroke-linejoin="round"
+							/>
+						</svg>
+						Permissions
+					</a>
+					<a href="/github" onclick={closeOverlay} class="{itemClass} {itemStateClass('/github')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<circle cx="6" cy="14.5" r="2" />
+							<circle cx="14" cy="5.5" r="2" />
+							<circle cx="6" cy="5.5" r="2" />
+							<path d="M6 7.5 V12.5" />
+							<path d="M8 14.5 H10 C12.2 14.5 14 12.7 14 10.5 V7.5" stroke-linecap="round" />
+						</svg>
+						GitHub
+					</a>
+				</div>
+			{/if}
+			{@render foldHeader('hackerspace', 'Hackerspace')}
+			{#if !closedSections.hackerspace}
+				<div class="flex flex-col gap-0.5" transition:slide={{ duration: foldDuration }}>
+					<a href="/trombinoscope" onclick={closeOverlay} class="{itemClass} {itemStateClass('/trombinoscope')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<circle cx="7" cy="7" r="2.5" />
+							<path d="M2.5 16c0-2.8 2-4.5 4.5-4.5s4.5 1.7 4.5 4.5" stroke-linecap="round" />
+							<circle cx="14" cy="7.5" r="2" />
+							<path d="M11.5 12c1-.7 2-1 2.5-1 2 0 3.5 1.5 3.5 4" stroke-linecap="round" />
+						</svg>
+						Trombinoscope
+					</a>
+					<a href="/tasks" onclick={closeOverlay} class="{itemClass} {itemStateClass('/tasks')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<rect x="3.5" y="3.5" width="13" height="13" rx="1" />
+							<path d="M6.5 10l2.5 2.5 4.5-5" stroke-linecap="round" stroke-linejoin="round" />
+						</svg>
+						Tâches
+					</a>
+					<a href="/wishlist" onclick={closeOverlay} class="{itemClass} {itemStateClass('/wishlist')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<rect x="3" y="8.5" width="14" height="8" rx="1" />
+							<path d="M3 8.5 L17 8.5" />
+							<path d="M10 8.5 V17" />
+							<path
+								d="M10 8.5C10 8.5 7 8.5 6.3 6.8C5.8 5.6 6.6 4.5 7.7 4.5C9 4.5 10 6 10 8.5Z"
+								stroke-linejoin="round"
+							/>
+							<path
+								d="M10 8.5C10 8.5 13 8.5 13.7 6.8C14.2 5.6 13.4 4.5 12.3 4.5C11 4.5 10 6 10 8.5Z"
+								stroke-linejoin="round"
+							/>
+						</svg>
+						Wishlist
+					</a>
+				</div>
+			{/if}
+			<p class="{sectionLabelClass}">Sécurité</p>
+			<a href="/incidents" onclick={closeOverlay} class="{itemClass} {itemStateClass('/incidents')}">
 				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-					<circle cx="10" cy="6.5" r="3" />
-					<path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round" />
+					<path d="M10 3.5 L18 16.5 H2 Z" stroke-linejoin="round" />
+					<path d="M10 8 V11.5" stroke-linecap="round" />
+					<path d="M10 14 V14.01" stroke-linecap="round" />
 				</svg>
-				Mon profil
-			</a>
-			<a href="/cotisation" onclick={closeOverlay} class="{itemClass} {itemStateClass('/cotisation')}">
-				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-					<rect x="2.5" y="5" width="15" height="10" rx="1.2" />
-					<path d="M2.5 8.5 H17.5" />
-				</svg>
-				Cotisation
-			</a>
-			<a href="/permissions" onclick={closeOverlay} class="{itemClass} {itemStateClass('/permissions')}">
-				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path
-						d="M10 2.5 L16.5 5 V10 C16.5 13.8 13.8 16.7 10 17.5 C6.2 16.7 3.5 13.8 3.5 10 V5 Z"
-						stroke-linejoin="round"
-					/>
-				</svg>
-				Permissions
-			</a>
-			<a href="/badge" onclick={closeOverlay} class="{itemClass} {itemStateClass('/badge')}">
-				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-					<rect x="5" y="2" width="10" height="16" rx="2" />
-					<circle cx="10" cy="7.5" r="2" />
-					<path d="M7.5 13 H12.5 M7.5 15 H12.5" stroke-linecap="round" />
-				</svg>
-				Badge RFID
-			</a>
-			<a href="/github" onclick={closeOverlay} class="{itemClass} {itemStateClass('/github')}">
-				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-					<circle cx="6" cy="14.5" r="2" />
-					<circle cx="14" cy="5.5" r="2" />
-					<circle cx="6" cy="5.5" r="2" />
-					<path d="M6 7.5 V12.5" />
-					<path d="M8 14.5 H10 C12.2 14.5 14 12.7 14 10.5 V7.5" stroke-linecap="round" />
-				</svg>
-				GitHub
-			</a>
-			<a href="/trombinoscope" onclick={closeOverlay} class="{itemClass} {itemStateClass('/trombinoscope')} mt-4">
-				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-					<circle cx="7" cy="7" r="2.5" />
-					<path d="M2.5 16c0-2.8 2-4.5 4.5-4.5s4.5 1.7 4.5 4.5" stroke-linecap="round" />
-					<circle cx="14" cy="7.5" r="2" />
-					<path d="M11.5 12c1-.7 2-1 2.5-1 2 0 3.5 1.5 3.5 4" stroke-linecap="round" />
-				</svg>
-				Trombinoscope
-			</a>
-			<a href="/notes-de-frais" onclick={closeOverlay} class="{itemClass} {itemStateClass('/notes-de-frais')}">
-				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path d="M5 3.5h7l3 3v10H5z" stroke-linejoin="round" />
-					<path d="M12 3.5v3h3 M7.5 10h5 M7.5 13h5" stroke-linecap="round" />
-				</svg>
-				Notes de frais
-			</a>
-			<a href="/wishlist" onclick={closeOverlay} class="{itemClass} {itemStateClass('/wishlist')}">
-				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-					<rect x="3" y="8.5" width="14" height="8" rx="1" />
-					<path d="M3 8.5 L17 8.5" />
-					<path d="M10 8.5 V17" />
-					<path
-						d="M10 8.5C10 8.5 7 8.5 6.3 6.8C5.8 5.6 6.6 4.5 7.7 4.5C9 4.5 10 6 10 8.5Z"
-						stroke-linejoin="round"
-					/>
-					<path
-						d="M10 8.5C10 8.5 13 8.5 13.7 6.8C14.2 5.6 13.4 4.5 12.3 4.5C11 4.5 10 6 10 8.5Z"
-						stroke-linejoin="round"
-					/>
-				</svg>
-				Wishlist
+				Incidents
 			</a>
 
 			{#if isAdmin(user)}
-				<a href="/admin" onclick={closeOverlay} class="{itemClass} {itemStateClass('/admin')} mt-4">
-					<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-						<circle cx="10" cy="10" r="2.5" />
-						<path
-							d="M10 3.5 V5.5 M10 14.5 V16.5 M3.5 10 H5.5 M14.5 10 H16.5 M5.6 5.6 L7 7 M13 13 L14.4 14.4 M5.6 14.4 L7 13 M13 7 L14.4 5.6"
-							stroke-linecap="round"
-						/>
-					</svg>
-					Admin
-				</a>
-				{#if isActive('/admin')}
-					<a
-						href="/admin/settings"
-						onclick={closeOverlay}
-						class="{subItemClass} {itemStateClass('/admin/settings')}"
-					>
-						Paramètres
-					</a>
-					<a href="/admin/audit" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/admin/audit')}">
-						Audit logs
-					</a>
+				{@render foldHeader('admin', 'Admin')}
+				{#if !closedSections.admin}
+					<div class="flex flex-col gap-0.5" transition:slide={{ duration: foldDuration }}>
+						<a href="/admin" onclick={closeOverlay} class="{itemClass} {itemStateClass('/admin', membersActive)}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="7" r="2.5" /><path d="M3.5 16c0-2.6 2-4.5 4.5-4.5s4.5 1.9 4.5 4.5" stroke-linecap="round" /><path d="M13 5.5 H17 M13 8.5 H17 M14.5 11.5 H17" stroke-linecap="round" /></svg>
+							Membres
+						</a>
+						<a href="/admin/settings" onclick={closeOverlay} class="{itemClass} {itemStateClass('/admin/settings')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="2.5" /><path d="M10 3.5 V5.5 M10 14.5 V16.5 M3.5 10 H5.5 M14.5 10 H16.5 M5.6 5.6 L7 7 M13 13 L14.4 14.4 M5.6 14.4 L7 13 M13 7 L14.4 5.6" stroke-linecap="round" /></svg>
+							Paramètres
+						</a>
+						<a href="/admin/incidents" onclick={closeOverlay} class="{itemClass} {itemStateClass('/admin/incidents')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4.5" y="3.5" width="11" height="13" rx="1" /><path d="M7.5 7.5 H12.5 M7.5 10.5 H12.5 M7.5 13.5 H10.5" stroke-linecap="round" /></svg>
+							Incidents
+						</a>
+						<a href="/admin/audit" onclick={closeOverlay} class="{itemClass} {itemStateClass('/admin/audit')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="6.5" /><path d="M10 6.5 V10 L12.5 11.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
+							Audit
+						</a>
+					</div>
 				{/if}
 			{/if}
 
 			{#if isTresorier(user)}
-				<a
-					href="/compta"
-					onclick={closeOverlay}
-					class="{itemClass} {itemStateClass('/compta')} {isAdmin(user) ? '' : 'mt-4'}"
-				>
-					<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-						<rect x="3.5" y="3.5" width="13" height="13" rx="1" />
-						<path d="M6.5 7.5 H13.5 M6.5 10.5 H10 M6.5 13.5 H9" stroke-linecap="round" />
-						<path d="M12 11.5 L13.5 13 L16 10.5" stroke-linecap="round" stroke-linejoin="round" />
-					</svg>
-					Compta
-				</a>
-				{#if isActive('/compta')}
-					<a href="/compta/tiers" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/compta/tiers')}">
-						Tiers
-					</a>
-					<a
-						href="/compta/factures"
-						onclick={closeOverlay}
-						class="{subItemClass} {itemStateClass('/compta/factures')}"
-					>
-						Factures
-					</a>
-					<a href="/compta/banque" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/compta/banque')}">
-						Banque &amp; caisse
-					</a>
-					<a
-						href="/compta/notes-de-frais"
-						onclick={closeOverlay}
-						class="{subItemClass} {itemStateClass('/compta/notes-de-frais')}"
-					>
-						Notes de frais
-					</a>
-					<a href="/compta/journal" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/compta/journal')}">
-						Journal &amp; comptes
-					</a>
-					<a
-						href="/compta/parametres"
-						onclick={closeOverlay}
-						class="{subItemClass} {itemStateClass('/compta/parametres')}"
-					>
-						Paramètres
-					</a>
-					<a href="/compta/import" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/compta/import')}">
-						Import Dolibarr
-					</a>
+				{@render foldHeader('compta', 'Compta')}
+				{#if !closedSections.compta}
+					<div class="flex flex-col gap-0.5" transition:slide={{ duration: foldDuration }}>
+						<a href="/compta" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta', comptaHomeActive)}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3.5" y="3.5" width="13" height="13" rx="1" /><path d="M6.5 13.5 V10.5 M10 13.5 V6.5 M13.5 13.5 V9" stroke-linecap="round" /></svg>
+							Tableau de bord
+						</a>
+						<a href="/compta/tiers" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/tiers')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="7" r="3" /><path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round" /></svg>
+							Tiers
+						</a>
+						<a href="/compta/factures" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/factures')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 3.5h7l3 3v10H5z" stroke-linejoin="round" /><path d="M12 3.5v3h3 M7.5 10h5 M7.5 13h5" stroke-linecap="round" /></svg>
+							Factures
+						</a>
+						<a href="/compta/reception" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/reception')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3.5 11.5 L5.5 4.5 H14.5 L16.5 11.5 V15.5 H3.5 Z" stroke-linejoin="round" /><path d="M3.5 11.5 H7.5 L8.5 13.5 H11.5 L12.5 11.5 H16.5" stroke-linejoin="round" /></svg>
+							Réception Doccle
+						</a>
+						<a href="/compta/rappels" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/rappels')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5.5 14.5 V9.5 C5.5 6.8 7.5 4.5 10 4.5 S14.5 6.8 14.5 9.5 V14.5 Z" stroke-linejoin="round" /><path d="M4 14.5 H16 M9 17 H11" stroke-linecap="round" /></svg>
+							Rappels
+						</a>
+						<a href="/compta/banque" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/banque')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8 L10 3.5 L17 8 Z" stroke-linejoin="round" /><path d="M5 8 V14.5 M10 8 V14.5 M15 8 V14.5 M3 16.5 H17" stroke-linecap="round" /></svg>
+							Banque &amp; caisse
+						</a>
+						<a href="/compta/notes-de-frais" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/notes-de-frais')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5.5 3.5 H14.5 V16.5 L12.5 15 L10 16.5 L7.5 15 L5.5 16.5 Z" stroke-linejoin="round" /><path d="M8 7.5 H12 M8 10.5 H12" stroke-linecap="round" /></svg>
+							Notes de frais
+						</a>
+						<a href="/compta/journal" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/journal')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4.5 3.5 H15.5 V16.5 H4.5 Z" stroke-linejoin="round" /><path d="M7.5 3.5 V16.5 M10 7.5 H13 M10 10.5 H13" stroke-linecap="round" /></svg>
+							Journal &amp; comptes
+						</a>
+						<a href="/compta/parametres" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/parametres')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="2.5" /><path d="M10 3.5 V5.5 M10 14.5 V16.5 M3.5 10 H5.5 M14.5 10 H16.5 M5.6 5.6 L7 7 M13 13 L14.4 14.4 M5.6 14.4 L7 13 M13 7 L14.4 5.6" stroke-linecap="round" /></svg>
+							Paramètres
+						</a>
+						<a href="/compta/import" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/import')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3.5 V12 M6.5 8.5 L10 12 L13.5 8.5" stroke-linecap="round" stroke-linejoin="round" /><path d="M4 14 V16.5 H16 V14" stroke-linecap="round" stroke-linejoin="round" /></svg>
+							Import Dolibarr
+						</a>
+					</div>
 				{/if}
 			{/if}
 		</nav>

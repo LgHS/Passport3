@@ -31,7 +31,8 @@ export const PROFILE_ATTRIBUTE_FIELDS: ProfileAttributeField[] = [
 	{ key: 'signal', label: 'Signal', required: false },
 	{ key: 'telegram', label: 'Telegram', required: false },
 	{ key: 'discord', label: 'Discord', required: false },
-	{ key: 'matrix', label: 'Matrix', required: false }
+	{ key: 'matrix', label: 'Matrix', required: false },
+	{ key: 'mastodon', label: 'Mastodon', required: false }
 ];
 
 interface AuthentikUserRecord {
@@ -868,6 +869,19 @@ export async function listUsers(): Promise<AdminUserSummary[]> {
 		}));
 }
 
+// Usernames of the members shown on the trombinoscope (active, opted in), so other pages can turn
+// a username into a link to that member's card — and only for those who chose to be listed there.
+// Cached 5 minutes: it's read on every /tasks and /wishlist load.
+const VISIBLE_USERNAMES_TTL_MS = 5 * 60 * 1000;
+let visibleUsernames: { list: string[]; expiresAt: number } | null = null;
+
+export async function listTrombinoscopeUsernames(): Promise<string[]> {
+	if (visibleUsernames && visibleUsernames.expiresAt > Date.now()) return visibleUsernames.list;
+	const list = (await listUsers()).filter((u) => u.is_active && u.trombinoscopeVisible).map((u) => u.username);
+	visibleUsernames = { list, expiresAt: Date.now() + VISIBLE_USERNAMES_TTL_MS };
+	return list;
+}
+
 export interface BirthdayAnnounceMember {
 	pk: number;
 	email: string;
@@ -919,6 +933,8 @@ export interface DirectoryMember {
 	telegram: string | null;
 	discord: string | null;
 	matrix: string | null;
+	// "@user@instance", validated on /profile.
+	mastodon: string | null;
 	// Gated by TrombinoscopeOptin.showChat (unlike signal/telegram/discord/matrix above) — this
 	// isn't member-entered, it's looked up from Mattermost by email, so presence alone can't be the
 	// consent signal the way it is for those. null if showChat is off, or no active Mattermost
@@ -1004,6 +1020,7 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 					telegram: stringAttr(u.attributes, 'telegram'),
 					discord: stringAttr(u.attributes, 'discord'),
 					matrix: stringAttr(u.attributes, 'matrix'),
+					mastodon: stringAttr(u.attributes, 'mastodon'),
 					mattermostUsername,
 					mattermostDmUrl: mattermostUsername ? buildMattermostDmUrl(mattermostUsername) : null
 				};
