@@ -338,6 +338,9 @@
 					>
 						Paramètres
 					</a>
+					<a href="/admin/incidents" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/admin/incidents')}">
+						Incidents
+					</a>
 					<a href="/admin/audit" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/admin/audit')}">
 						Audit logs
 					</a>
