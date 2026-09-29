@@ -1,9 +1,9 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { createIncident, listIncidents } from '$lib/server/incidents';
+import { createIncident } from '$lib/server/incidents';
 import { validateIncidentSubmission } from '$lib/server/incidentValidation';
 import { logAuditEvent } from '$lib/server/auditLog';
-import { displayName, isAdmin, type AppUser } from '$lib/types';
+import { displayName, type AppUser } from '$lib/types';
 
 function requireUser(locals: App.Locals): AppUser {
 	if (!locals.user) {
@@ -26,18 +26,9 @@ function targetFromSub(sub: string): { pk: number } | Record<string, never> {
 	return Number.isInteger(pk) && pk > 0 ? { pk } : {};
 }
 
+// The declarations themselves are listed on /admin/incidents; this page only takes new ones.
 export const load: PageServerLoad = async ({ locals }) => {
-	const user = requireUser(locals);
-	const admin = isAdmin(user);
-
-	// `null` rather than an empty array for a non-admin: "you don't get to see these" and "there are
-	// none yet" are different things, and the page says something different for each. Nothing is
-	// fetched at all in that case — a declaration must never reach a non-admin's browser, not merely
-	// be hidden once it's there.
-	return {
-		incidents: admin ? await listIncidents() : null,
-		isAdmin: admin
-	};
+	requireUser(locals);
 };
 
 export const actions: Actions = {
