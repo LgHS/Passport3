@@ -7,6 +7,7 @@ import { startTaskReminderScheduler } from '$lib/server/taskReminders';
 import { startFactureScheduler } from '$lib/server/compta/factureScheduler';
 import { startAdhesionSync } from '$lib/server/compta/adhesionSync';
 import { startReceptionScheduler } from '$lib/server/compta/reception';
+import { startRappelDigest } from '$lib/server/compta/rappels';
 import { DATABASE_UNAVAILABLE_MESSAGE, isDatabaseUnavailable } from '$lib/server/db';
 import { requireAdmin } from '$lib/server/auth';
 
@@ -17,6 +18,7 @@ startTaskReminderScheduler();
 startFactureScheduler();
 startAdhesionSync();
 startReceptionScheduler();
+startRappelDigest();
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const sessionCookie = event.cookies.get(SESSION_COOKIE);
