@@ -1,35 +1,24 @@
 import { getDb } from '$lib/server/db';
 import { brusselsToday, parseIsoDate, parseMoney } from './dates';
+import {
+	estDepense,
+	estRecette,
+	RUBRIQUE_LABEL,
+	rubriqueParDefaut,
+	RUBRIQUES_DEPENSES,
+	RUBRIQUES_RECETTES,
+	type Rubrique
+} from '$lib/rubriques';
 
 // The small-ASBL simplified books — docs/compta.md, "Sorties comptables": for one calendar year,
 // the journal of receipts and expenses (every movement of every account, internal transfers left
 // out), the receipts/expenses statement by heading, and the statement of assets and liabilities
-// at year end. Headings come from what each movement was matched against (lettrages); what isn't
-// matched yet is shown apart so the treasury knows what's left to qualify before closing.
+// at year end. Headings are the official model's ($lib/rubriques.ts); each allocation takes the
+// one chosen on its document, or that kind of document's default. What isn't matched yet is shown
+// apart so the treasury knows what's left to qualify before closing.
 
-export type Rubrique =
-	| 'cotisations'
-	| 'dons_sponsoring'
-	| 'ventes_prestations'
-	| 'autres_recettes'
-	| 'achats_services'
-	| 'remboursements_frais'
-	| 'autres_depenses'
-	| 'non_lettre';
-
-export const RUBRIQUE_LABEL: Record<Rubrique, string> = {
-	cotisations: 'Cotisations',
-	dons_sponsoring: 'Dons et sponsoring',
-	ventes_prestations: 'Ventes et prestations',
-	autres_recettes: 'Autres recettes',
-	achats_services: 'Achats et services',
-	remboursements_frais: 'Remboursements de frais',
-	autres_depenses: 'Autres dépenses',
-	non_lettre: 'Non lettré'
-};
-
-export const RECETTES: Rubrique[] = ['cotisations', 'dons_sponsoring', 'ventes_prestations', 'autres_recettes'];
-export const DEPENSES: Rubrique[] = ['achats_services', 'remboursements_frais', 'autres_depenses'];
+export { RUBRIQUE_LABEL, RUBRIQUES_DEPENSES as DEPENSES, RUBRIQUES_RECETTES as RECETTES };
+export type { Rubrique };
 
 export interface JournalLigne {
 	id: number;
@@ -79,20 +68,24 @@ interface LigneRow {
 	facture_cotisation_type: string | null;
 	cotisation_type: string | null;
 	note_libelle: string | null;
+	facture_rubrique: string | null;
+	cotisation_rubrique: string | null;
+	note_rubrique: string | null;
+	lettrage_rubrique: string | null;
 }
 
+// The heading an allocation falls under: the one chosen on the document (or on the allocation
+// itself, for "autre"), when it's a heading of the right kind; the default otherwise.
 function rubriqueDe(r: LigneRow, montant: number): Rubrique {
 	if (r.cible_type === null) return 'non_lettre';
-	if (r.cible_type === 'cotisation') return r.cotisation_type === 'sponsoring' ? 'dons_sponsoring' : 'cotisations';
-	if (r.cible_type === 'note_de_frais') return 'remboursements_frais';
-	if (r.cible_type === 'facture') {
-		if (r.facture_sens === 'recue') return 'achats_services';
-		if (r.facture_cotisation_type === 'sponsoring') return 'dons_sponsoring';
-		if (r.facture_cotisation_type === 'facturee') return 'cotisations';
-		// A credit note refund is money out on an issued document: still "ventes", negative.
-		return 'ventes_prestations';
-	}
-	return montant >= 0 ? 'autres_recettes' : 'autres_depenses';
+	const choisie = r.facture_rubrique ?? r.cotisation_rubrique ?? r.note_rubrique ?? r.lettrage_rubrique;
+	if (choisie && (estRecette(choisie) || estDepense(choisie))) return choisie;
+	return rubriqueParDefaut({
+		type: r.cible_type as 'facture' | 'cotisation' | 'note_de_frais' | 'autre',
+		sens: r.facture_sens,
+		cotisationType: r.cible_type === 'cotisation' ? r.cotisation_type : r.facture_cotisation_type,
+		montant
+	});
 }
 
 function detailDe(r: LigneRow): string | null {
@@ -113,7 +106,9 @@ export async function getJournal(annee: number): Promise<Journal> {
 		SELECT m.id, m.date_valeur::text AS date_valeur, c.nom AS compte, m.libelle, m.contrepartie_nom, m.contrepartie_iban, m.montant,
 		       l.montant AS lettre_montant, l.cible_type, l.libelle AS cible_libelle,
 		       f.sens AS facture_sens, f.type AS facture_type, f.numero AS facture_numero, f.cotisation_type AS facture_cotisation_type,
-		       co.type AS cotisation_type, n.libelle AS note_libelle
+		       co.type AS cotisation_type, n.libelle AS note_libelle,
+		       f.rubrique AS facture_rubrique, co.rubrique AS cotisation_rubrique, n.rubrique AS note_rubrique,
+		       l.rubrique AS lettrage_rubrique
 		FROM mouvements m
 		JOIN comptes c ON c.id = m.compte_id
 		LEFT JOIN lettrages l ON l.mouvement_id = m.id
@@ -149,7 +144,9 @@ export async function getJournal(annee: number): Promise<Journal> {
 			rubrique,
 			detail: detailDe(r)
 		});
-		if (part >= 0) recettes[rubrique] += part;
+		// The heading decides the side, not the sign: a refund to a customer lowers the receipts
+		// of its heading, a supplier's refund lowers the expenses of its own.
+		if (estRecette(rubrique)) recettes[rubrique] += part;
 		else depenses[rubrique] += -part;
 	}
 	for (const { row, reste } of restes.values()) {
