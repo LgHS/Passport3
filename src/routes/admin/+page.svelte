@@ -44,7 +44,7 @@
 </script>
 
 <svelte:head>
-	<title>Administration — Passport</title>
+	<title>Membres — Administration — Passport</title>
 </svelte:head>
 
 <section>

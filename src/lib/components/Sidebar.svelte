@@ -43,16 +43,19 @@
 
 	const itemClass =
 		'no-underline-fx flex items-center gap-3 rounded px-4 py-1.5 text-sm font-bold uppercase transition-colors';
-	// Small grey heading above a group of entries ("Mon compte", "Hackerspace", "Sécurité"); the
+	// Small grey heading above a group of entries ("Mon compte", "Hackerspace", "Sécurité", "Admin"); the
 	// foldable ones are buttons with the same look.
 	const sectionLabelClass = 'mt-3 mb-0.5 px-4 text-xs font-bold tracking-wide text-gray-500 uppercase';
-	// Indented, smaller sibling of itemClass for the admin submenu (Paramètres/Historique) — one
-	// level under "Admin" itself, not a full nav item in its own right.
-	const subItemClass =
-		'no-underline-fx block rounded py-1.5 pl-10 pr-4 text-sm font-bold uppercase transition-colors';
-	function itemStateClass(href: string): string {
-		return isActive(href) ? 'bg-lghs-yellow text-black' : 'text-black hover:bg-gray-100';
+	function itemStateClass(href: string, active = isActive(href)): string {
+		return active ? 'bg-lghs-yellow text-black' : 'text-black hover:bg-gray-100';
 	}
+	// "Membres" is /admin itself and the member pages under it (/admin/users/…, /admin/invite),
+	// not every /admin/* page — Paramètres, Incidents and Audit have their own entries.
+	const membersActive = $derived(
+		page.url.pathname === '/admin' ||
+			page.url.pathname.startsWith('/admin/users') ||
+			page.url.pathname.startsWith('/admin/invite')
+	);
 
 	// Foldable menu sections, open by default. Only the ones a member closed are remembered, per
 	// browser (same convenience-only storage as the collapsed sidebar below). Sécurité isn't one of
@@ -60,7 +63,8 @@
 	const SECTIONS_STORAGE_KEY = 'sidebar-closed-sections';
 	const SECTION_PATHS: Record<string, string[]> = {
 		account: ['/profile', '/cotisation', '/badge', '/permissions', '/github'],
-		hackerspace: ['/trombinoscope', '/tasks', '/wishlist']
+		hackerspace: ['/trombinoscope', '/tasks', '/wishlist'],
+		admin: ['/admin']
 	};
 	let closedSections = $state<Record<string, boolean>>({});
 
@@ -148,6 +152,28 @@
 	});
 </script>
 
+<!-- Heading of a foldable menu section: the label and a chevron, pointing right once folded. -->
+{#snippet foldHeader(id: string, label: string)}
+	<button
+		type="button"
+		onclick={() => toggleSection(id)}
+		aria-expanded={!closedSections[id]}
+		class="{sectionLabelClass} flex w-full cursor-pointer items-center justify-between hover:text-black"
+	>
+		{label}
+		<svg
+			viewBox="0 0 20 20"
+			class="h-3 w-3 transition-transform {closedSections[id] ? '-rotate-90' : ''}"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			aria-hidden="true"
+		>
+			<path d="M5 7.5 L10 12.5 L15 7.5" stroke-linecap="round" stroke-linejoin="round" />
+		</svg>
+	</button>
+{/snippet}
+
 <svelte:window onkeydown={handleKeydown} />
 
 <!-- The identity block + nav list + logout are identical between the permanent desktop sidebar
@@ -192,24 +218,7 @@
 				</svg>
 				Accueil
 			</a>
-			<button
-				type="button"
-				onclick={() => toggleSection('account')}
-				aria-expanded={!closedSections.account}
-				class="{sectionLabelClass} flex w-full cursor-pointer items-center justify-between hover:text-black"
-			>
-				Mon compte
-				<svg
-					viewBox="0 0 20 20"
-					class="h-3 w-3 transition-transform {closedSections.account ? '-rotate-90' : ''}"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					aria-hidden="true"
-				>
-					<path d="M5 7.5 L10 12.5 L15 7.5" stroke-linecap="round" stroke-linejoin="round" />
-				</svg>
-			</button>
+			{@render foldHeader('account', 'Mon compte')}
 			{#if !closedSections.account}
 				<div class="flex flex-col gap-0.5" transition:slide={{ duration: foldDuration }}>
 					<a href="/profile" onclick={closeOverlay} class="{itemClass} {itemStateClass('/profile')}">
@@ -255,24 +264,7 @@
 					</a>
 				</div>
 			{/if}
-			<button
-				type="button"
-				onclick={() => toggleSection('hackerspace')}
-				aria-expanded={!closedSections.hackerspace}
-				class="{sectionLabelClass} flex w-full cursor-pointer items-center justify-between hover:text-black"
-			>
-				Hackerspace
-				<svg
-					viewBox="0 0 20 20"
-					class="h-3 w-3 transition-transform {closedSections.hackerspace ? '-rotate-90' : ''}"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					aria-hidden="true"
-				>
-					<path d="M5 7.5 L10 12.5 L15 7.5" stroke-linecap="round" stroke-linejoin="round" />
-				</svg>
-			</button>
+			{@render foldHeader('hackerspace', 'Hackerspace')}
 			{#if !closedSections.hackerspace}
 				<div class="flex flex-col gap-0.5" transition:slide={{ duration: foldDuration }}>
 					<a href="/trombinoscope" onclick={closeOverlay} class="{itemClass} {itemStateClass('/trombinoscope')}">
@@ -320,30 +312,26 @@
 			</a>
 
 			{#if isAdmin(user)}
-				<a href="/admin" onclick={closeOverlay} class="{itemClass} {itemStateClass('/admin')} mt-4">
-					<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
-						<circle cx="10" cy="10" r="2.5" />
-						<path
-							d="M10 3.5 V5.5 M10 14.5 V16.5 M3.5 10 H5.5 M14.5 10 H16.5 M5.6 5.6 L7 7 M13 13 L14.4 14.4 M5.6 14.4 L7 13 M13 7 L14.4 5.6"
-							stroke-linecap="round"
-						/>
-					</svg>
-					Admin
-				</a>
-				{#if isActive('/admin')}
-					<a
-						href="/admin/settings"
-						onclick={closeOverlay}
-						class="{subItemClass} {itemStateClass('/admin/settings')}"
-					>
-						Paramètres
-					</a>
-					<a href="/admin/incidents" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/admin/incidents')}">
-						Incidents
-					</a>
-					<a href="/admin/audit" onclick={closeOverlay} class="{subItemClass} {itemStateClass('/admin/audit')}">
-						Audit logs
-					</a>
+				{@render foldHeader('admin', 'Admin')}
+				{#if !closedSections.admin}
+					<div class="flex flex-col gap-0.5" transition:slide={{ duration: foldDuration }}>
+						<a href="/admin" onclick={closeOverlay} class="{itemClass} {itemStateClass('/admin', membersActive)}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="7" r="2.5" /><path d="M3.5 16c0-2.6 2-4.5 4.5-4.5s4.5 1.9 4.5 4.5" stroke-linecap="round" /><path d="M13 5.5 H17 M13 8.5 H17 M14.5 11.5 H17" stroke-linecap="round" /></svg>
+							Membres
+						</a>
+						<a href="/admin/settings" onclick={closeOverlay} class="{itemClass} {itemStateClass('/admin/settings')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="2.5" /><path d="M10 3.5 V5.5 M10 14.5 V16.5 M3.5 10 H5.5 M14.5 10 H16.5 M5.6 5.6 L7 7 M13 13 L14.4 14.4 M5.6 14.4 L7 13 M13 7 L14.4 5.6" stroke-linecap="round" /></svg>
+							Paramètres
+						</a>
+						<a href="/admin/incidents" onclick={closeOverlay} class="{itemClass} {itemStateClass('/admin/incidents')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4.5" y="3.5" width="11" height="13" rx="1" /><path d="M7.5 7.5 H12.5 M7.5 10.5 H12.5 M7.5 13.5 H10.5" stroke-linecap="round" /></svg>
+							Incidents
+						</a>
+						<a href="/admin/audit" onclick={closeOverlay} class="{itemClass} {itemStateClass('/admin/audit')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="6.5" /><path d="M10 6.5 V10 L12.5 11.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
+							Audit
+						</a>
+					</div>
 				{/if}
 			{/if}
 		</nav>
