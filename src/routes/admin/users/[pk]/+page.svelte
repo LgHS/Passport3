@@ -5,6 +5,7 @@
 	import type { ActionData, PageData } from './$types';
 	import ProfileForm from '$lib/components/ProfileForm.svelte';
 	import EmergencyContactsForm from '$lib/components/EmergencyContactsForm.svelte';
+	import MemberName from '$lib/components/MemberName.svelte';
 	import { TAG_COLOR_PRESETS } from '$lib/tagColors';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -170,7 +171,15 @@
 			</div>
 		{/if}
 		<div class="text-sm">
-			<p><span class="font-bold uppercase">Identifiant :</span> {data.profile.username}</p>
+			<p>
+				<span class="font-bold uppercase">Identifiant :</span>
+				<!-- A link to their trombinoscope card once they're listed there (saved visibility, not
+				     the unsaved toggle below); plain text otherwise, like everywhere else. -->
+				<MemberName
+					username={data.profile.username}
+					visibleUsernames={(form?.optin?.visible ?? data.optin.visible) ? [data.profile.username] : []}
+				/>
+			</p>
 			<p><span class="font-bold uppercase">Email :</span> {data.profile.email}</p>
 			<p>
 				<span class="font-bold uppercase">Chat :</span>
