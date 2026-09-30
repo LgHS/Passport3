@@ -132,7 +132,7 @@
 			visibleUsernames={data.visibleUsernames}
 		/>
 	{:else}
-		Toi
+		Toi-même
 	{/if}
 {/snippet}
 
