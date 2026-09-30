@@ -147,7 +147,7 @@
 			</div>
 		</div>
 
-		{#snippet lignes(titre: string, rows: typeof p.avoirs, total: number | null)}
+		{#snippet tableauPatrimoine(titre: string, rows: typeof p.avoirs, total: number | null)}
 			<table class="table-cards mb-6 w-full border-collapse text-sm">
 				<thead>
 					<tr class="bg-black text-white uppercase">
@@ -185,12 +185,12 @@
 		{/snippet}
 
 		<p class="mb-2 text-xs font-bold uppercase">4. État du patrimoine au 31 décembre {j.annee}</p>
-		{@render lignes('Avoirs', p.avoirs, p.totalAvoirs)}
-		{@render lignes('Dettes', p.dettes, p.totalDettes)}
+		{@render tableauPatrimoine('Avoirs', p.avoirs, p.totalAvoirs)}
+		{@render tableauPatrimoine('Dettes', p.dettes, p.totalDettes)}
 
 		<p class="mb-2 text-xs font-bold uppercase">5. Droits et engagements</p>
-		{@render lignes('Droits', p.droits, null)}
-		{@render lignes('Engagements', p.engagements, null)}
+		{@render tableauPatrimoine('Droits', p.droits, null)}
+		{@render tableauPatrimoine('Engagements', p.engagements, null)}
 		<label class={labelClass} for="droitsEngagementsTexte">Droits et engagements importants qui ne sont pas susceptibles d'être quantifiés</label>
 		<textarea id="droitsEngagementsTexte" name="droitsEngagementsTexte" rows="3" class="{inputClass} mb-6">{c.droitsEngagementsTexte}</textarea>
 
