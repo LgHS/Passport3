@@ -61,6 +61,10 @@ export interface Facture {
 	envoyeeA: string | null;
 	cotisation: FactureCotisation | null;
 	cotisationId: number | null;
+	// Heading of the official statement chosen for this invoice; null = the default for its kind.
+	rubrique: string | null;
+	// What bank movements already cover of it (lettrages).
+	lettre: number;
 	lignes: FactureLigne[];
 }
 
@@ -113,6 +117,8 @@ interface FactureRow {
 	cotisation_fin: string | null;
 	cotisation_sieges: number | null;
 	cotisation_id: number | null;
+	rubrique: string | null;
+	lettre: string;
 }
 
 interface LigneRow {
@@ -135,7 +141,9 @@ const FACTURE_SELECT = `
 	       (f.pdf IS NOT NULL) AS has_pdf, (f.ubl IS NOT NULL) AS has_ubl,
 	       f.payee_le::text AS payee_le, f.envoyee_le, f.envoyee_a, f.cotisation_type, f.cotisation_debut::text AS cotisation_debut,
 	       f.cotisation_fin::text AS cotisation_fin, f.cotisation_sieges,
-	       (SELECT c.id FROM cotisations c WHERE c.facture_id = f.id ORDER BY c.id LIMIT 1) AS cotisation_id
+	       (SELECT c.id FROM cotisations c WHERE c.facture_id = f.id ORDER BY c.id LIMIT 1) AS cotisation_id,
+	       f.rubrique,
+	       COALESCE((SELECT sum(l.montant) FROM lettrages l WHERE l.cible_type = 'facture' AND l.cible_id = f.id), 0) AS lettre
 	FROM factures f
 	JOIN tiers t ON t.id = f.tiers_id
 	LEFT JOIN factures o ON o.id = f.facture_origine_id
@@ -179,6 +187,8 @@ function rowToFacture(r: FactureRow, lignes: LigneRow[]): Facture {
 					}
 				: null,
 		cotisationId: r.cotisation_id,
+		rubrique: r.rubrique,
+		lettre: parseMoney(r.lettre),
 		lignes: lignes
 			.filter((l) => l.facture_id === r.id)
 			.sort((a, b) => a.ordre - b.ordre)
@@ -450,6 +460,74 @@ export async function marquerPayee(id: number, payeeLe: Date = brusselsToday()):
 		`;
 	});
 	return (await getFacture(id)) as Facture;
+}
+
+// Undoes "marquer payée" — the invoice is owed again, and the dues it carried wait for payment
+// again. Not for an invoice paid by bank movements: there the status follows the allocations,
+// which are what has to be undone.
+export async function annulerPaiement(id: number): Promise<Facture> {
+	const sql = await getDb();
+	await sql.begin(async (tx) => {
+		const [current] = await tx<{ statut: FactureStatut }[]>`SELECT statut FROM factures WHERE id = ${id} FOR UPDATE`;
+		if (!current) throw new FactureError('Facture introuvable.');
+		if (current.statut !== 'payee') throw new FactureError('Cette facture n’est pas marquée payée.');
+		const [lettre] = await tx`SELECT 1 FROM lettrages WHERE cible_type = 'facture' AND cible_id = ${id} LIMIT 1`;
+		if (lettre) throw new FactureError('Cette facture est payée par un mouvement bancaire : retirez le lettrage sur le mouvement.');
+		await tx`UPDATE factures SET statut = 'validee', payee_le = NULL, updated_at = now() WHERE id = ${id}`;
+		await tx`UPDATE cotisations SET statut = 'attendue', paye_le = NULL WHERE facture_id = ${id} AND statut = 'active'`;
+	});
+	return (await getFacture(id)) as Facture;
+}
+
+// Corrects a received invoice after it was registered: it's the supplier's document, what we
+// hold is our transcription of it, and a transcription can be wrong. (An issued invoice, once
+// numbered, is ours and was sent: that one is corrected by a note de crédit.)
+export async function corrigerFactureRecue(id: number, input: FactureInput): Promise<Facture> {
+	if (input.lignes.length === 0) throw new FactureError('Une facture doit avoir au moins une ligne.');
+	if (!input.numero?.trim()) throw new FactureError('Le numéro de la facture du fournisseur est obligatoire.');
+	if (!input.dateEmission) throw new FactureError('La date de la facture est obligatoire.');
+	const total = sumTotals(input.lignes);
+	const sql = await getDb();
+	await sql.begin(async (tx) => {
+		const [current] = await tx<{ sens: FactureSens; statut: FactureStatut }[]>`SELECT sens, statut FROM factures WHERE id = ${id} FOR UPDATE`;
+		if (!current || current.sens !== 'recue') throw new FactureError('Facture reçue introuvable.');
+		const [{ lettre }] = await tx<{ lettre: string }[]>`
+			SELECT COALESCE(sum(montant), 0) AS lettre FROM lettrages WHERE cible_type = 'facture' AND cible_id = ${id}
+		`;
+		const deja = parseMoney(lettre);
+		if (Math.abs(total) < deja - 0.005) {
+			throw new FactureError(`${deja.toFixed(2)} € sont déjà payés sur cette facture : son total ne peut pas être inférieur.`);
+		}
+		// Paid in full by movements stays paid; a total raised above what was paid is owed again.
+		const statut: FactureStatut =
+			current.statut === 'payee' && deja > 0 && Math.abs(total) > deja + 0.005 ? 'validee' : current.statut === 'annulee' ? 'annulee' : current.statut;
+		await tx`
+			UPDATE factures SET
+				tiers_id = ${input.tiersId}, numero = ${input.numero!.trim()},
+				date_emission = ${toIsoDate(input.dateEmission!)},
+				date_echeance = ${input.dateEcheance ? toIsoDate(input.dateEcheance) : null},
+				total = ${total}, objet = ${input.objet}, note = ${input.note}, statut = ${statut},
+				payee_le = ${statut === 'validee' ? null : sql`payee_le`}, updated_at = now()
+			WHERE id = ${id}
+		`;
+		await writeLignes(tx, id, input.lignes);
+		await tx`UPDATE tiers SET est_fournisseur = true, updated_at = now() WHERE id = ${input.tiersId}`;
+	});
+	return (await getFacture(id)) as Facture;
+}
+
+// Removes a received invoice registered by mistake (a duplicate, the wrong document). If it came
+// from the mailbox, its document goes back to the ones waiting for a decision.
+export async function supprimerFactureRecue(id: number): Promise<void> {
+	const sql = await getDb();
+	await sql.begin(async (tx) => {
+		const [current] = await tx<{ sens: FactureSens }[]>`SELECT sens FROM factures WHERE id = ${id} FOR UPDATE`;
+		if (!current || current.sens !== 'recue') throw new FactureError('Facture reçue introuvable.');
+		const [lettre] = await tx`SELECT 1 FROM lettrages WHERE cible_type = 'facture' AND cible_id = ${id} LIMIT 1`;
+		if (lettre) throw new FactureError('Un paiement est lettré sur cette facture : retirez d’abord le lettrage.');
+		await tx`UPDATE documents_recus SET statut = 'a_traiter', traite_le = NULL, traite_par = NULL WHERE facture_id = ${id}`;
+		await tx`DELETE FROM factures WHERE id = ${id}`;
+	});
 }
 
 // Only a draft can simply be cancelled; a validated invoice needs a note de crédit.

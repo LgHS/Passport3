@@ -3,11 +3,14 @@ import type { Actions, PageServerLoad } from './$types';
 import { requireTresorierUser } from '$lib/server/auth';
 import {
 	annulerBrouillon,
+	annulerPaiement,
 	attachPdf,
+	corrigerFactureRecue,
 	creerNoteDeCredit,
 	FactureError,
 	getFacture,
 	marquerPayee,
+	supprimerFactureRecue,
 	updateFacture,
 	validerFacture
 } from '$lib/server/compta/factures';
@@ -16,6 +19,9 @@ import { destinatairesDe, envoyerFacture } from '$lib/server/compta/factureMail'
 import { isMailConfigured, MailError } from '$lib/server/compta/mailer';
 import { listTiers, tiersDisplayName } from '$lib/server/compta/tiers';
 import { parseFormDate } from '$lib/server/compta/dates';
+import { listRappels } from '$lib/server/compta/rappels';
+import { definirRubrique } from '$lib/server/compta/rubriquesDb';
+import { parseRubrique, rubriqueParDefaut } from '$lib/rubriques';
 import { logAuditEvent } from '$lib/server/auditLog';
 import { displayName, type AppUser } from '$lib/types';
 
@@ -31,10 +37,12 @@ async function loadFacture(params: { id: string }) {
 
 export const load: PageServerLoad = async ({ params }) => {
 	const facture = await loadFacture(params);
-	// The tiers list is only needed while the draft is still editable.
-	const tiers = facture.statut === 'brouillon' ? await listTiers({ actifOnly: true }) : [];
+	// The tiers list is only needed where the invoice can be edited: a draft, or a received one.
+	const tiers = facture.statut === 'brouillon' || facture.sens === 'recue' ? await listTiers({ actifOnly: true }) : [];
 	return {
 		facture,
+		rubriqueParDefaut: rubriqueParDefaut({ type: 'facture', sens: facture.sens, cotisationType: facture.cotisation?.type ?? null }),
+		rappels: facture.sens === 'emise' ? await listRappels(facture.id) : [],
 		tiers: tiers.map((t) => ({ id: t.id, nom: tiersDisplayName(t), nature: t.nature })),
 		mailConfigured: await isMailConfigured(),
 		destinataires: facture.sens === 'emise' ? await destinatairesDe(facture) : []
@@ -81,6 +89,66 @@ export const actions: Actions = {
 			},
 			(message) => fail(400, { error: message, ...echo(formData) })
 		);
+	},
+
+	// A received invoice stays correctable after it was registered (see corrigerFactureRecue).
+	corriger: async ({ request, params, locals }) => {
+		const tresorier = requireTresorierUser(locals);
+		const facture = await loadFacture(params);
+		const formData = await request.formData();
+		formData.set('sens', 'recue');
+		const parsed = factureInputFromForm(formData);
+		if (!parsed.ok) return fail(400, { error: parsed.error, ...echo(formData) });
+		return run(
+			async () => {
+				const corrigee = await corrigerFactureRecue(facture.id, parsed.input);
+				await audit(tresorier, 'compta.facture.corriger', facture.id, {
+					avant: { tiersId: facture.tiersId, numero: facture.numero, total: facture.total },
+					apres: { tiersId: corrigee.tiersId, numero: corrigee.numero, total: corrigee.total }
+				});
+				return { success: 'Facture corrigée.' };
+			},
+			(message) => fail(400, { error: message, ...echo(formData) })
+		);
+	},
+
+	supprimer: async ({ params, locals }) => {
+		const tresorier = requireTresorierUser(locals);
+		const facture = await loadFacture(params);
+		const result = await run(
+			async () => {
+				await supprimerFactureRecue(facture.id);
+				await audit(tresorier, 'compta.facture.supprimer', facture.id, { tiersId: facture.tiersId, numero: facture.numero, total: facture.total });
+				return null;
+			},
+			(message) => fail(400, { error: message })
+		);
+		if (result) return result;
+		redirect(303, '/compta/factures?sens=recue');
+	},
+
+	annulerPaiement: async ({ params, locals }) => {
+		const tresorier = requireTresorierUser(locals);
+		const facture = await loadFacture(params);
+		return run(
+			async () => {
+				await annulerPaiement(facture.id);
+				await audit(tresorier, 'compta.facture.annulerPaiement', facture.id, { numero: facture.numero });
+				return { success: 'Paiement annulé : la facture est à nouveau à payer.' };
+			},
+			(message) => fail(400, { error: message })
+		);
+	},
+
+	rubrique: async ({ request, params, locals }) => {
+		const tresorier = requireTresorierUser(locals);
+		const facture = await loadFacture(params);
+		const raw = String((await request.formData()).get('rubrique') ?? '');
+		const rubrique = raw ? parseRubrique(raw, facture.sens === 'emise' ? 'recette' : 'depense') : null;
+		if (raw && !rubrique) return fail(400, { error: 'Rubrique invalide pour cette facture.' });
+		await definirRubrique('facture', facture.id, rubrique);
+		await audit(tresorier, 'compta.rubrique.update', facture.id, { rubrique });
+		return { success: 'Rubrique enregistrée.' };
 	},
 
 	valider: async ({ params, locals }) => {

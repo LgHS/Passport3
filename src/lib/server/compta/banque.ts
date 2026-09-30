@@ -1,3 +1,4 @@
+import { estDepense, estRecette, rubriqueParDefaut, type RubriqueOfficielle } from '$lib/rubriques';
 import type postgres from 'postgres';
 import { getDb } from '$lib/server/db';
 import { normalizeIban } from '$lib/server/bankValidation';
@@ -232,6 +233,62 @@ export async function createMouvement(input: MouvementInput): Promise<Mouvement>
 	return (await getMouvement(row.id)) as Mouvement;
 }
 
+// Whether a movement came from a bank statement (or from the Dolibarr import) rather than being
+// typed in: its date and amount are then the bank's, not ours to change.
+export function estImporte(m: Pick<Mouvement, 'importId' | 'externalId'>): boolean {
+	return m.importId !== null || m.externalId !== null;
+}
+
+// Corrects a movement. A typed-in one can change entirely; an imported one keeps the bank's date
+// and amount (what describes it can be completed). Both legs of an internal transfer follow each
+// other. The amount can't drop under what's already allocated, nor change sign while something is.
+export async function updateMouvement(id: number, input: Omit<MouvementInput, 'compteId'>): Promise<Mouvement> {
+	const mouvement = await getMouvement(id);
+	if (!mouvement) throw new BanqueError('Mouvement introuvable.');
+	const importe = estImporte(mouvement);
+	const transfert = mouvement.transfertId !== null;
+	const montant = importe ? mouvement.montant : transfert ? Math.sign(mouvement.montant) * Math.abs(input.montant) : input.montant;
+	const dateValeur = importe ? mouvement.dateValeur : input.dateValeur;
+	if (montant === 0) throw new BanqueError('Le montant ne peut pas être nul.');
+	if (mouvement.lettre > 0) {
+		if (Math.sign(montant) !== Math.sign(mouvement.montant)) {
+			throw new BanqueError('Ce mouvement est lettré : délettrez-le avant d’en changer le sens.');
+		}
+		if (Math.abs(montant) < mouvement.lettre - 0.005) {
+			throw new BanqueError(`${mouvement.lettre.toFixed(2)} € sont déjà lettrés sur ce mouvement : le montant ne peut pas être inférieur.`);
+		}
+	}
+	const sql = await getDb();
+	await sql.begin(async (tx) => {
+		await tx`
+			UPDATE mouvements SET
+				date_valeur = ${toIsoDate(dateValeur)}, montant = ${montant}, libelle = ${input.libelle.trim()},
+				contrepartie_nom = ${input.contrepartieNom},
+				contrepartie_iban = ${input.contrepartieIban ? normalizeIban(input.contrepartieIban) || null : null},
+				communication = ${input.communication}
+			WHERE id = ${id}
+		`;
+		if (transfert) {
+			await tx`
+				UPDATE mouvements SET date_valeur = ${toIsoDate(dateValeur)}, montant = ${-montant}, libelle = ${input.libelle.trim()}
+				WHERE transfert_id = ${mouvement.transfertId} AND id <> ${id}
+			`;
+		}
+	});
+	return (await getMouvement(id)) as Mouvement;
+}
+
+// Removes a movement entered by mistake (both legs, for an internal transfer). What's allocated
+// on it has to be unallocated first: the invoice or dues it paid must go back to unpaid knowingly.
+export async function deleteMouvement(id: number): Promise<void> {
+	const mouvement = await getMouvement(id);
+	if (!mouvement) throw new BanqueError('Mouvement introuvable.');
+	if (mouvement.lettre > 0) throw new BanqueError('Ce mouvement est lettré : délettrez-le avant de le supprimer.');
+	const sql = await getDb();
+	if (mouvement.transfertId !== null) await sql`DELETE FROM mouvements WHERE transfert_id = ${mouvement.transfertId}`;
+	else await sql`DELETE FROM mouvements WHERE id = ${id}`;
+}
+
 // Two opposite legs created atomically and tied together, so neither ever shows up as something
 // to allocate. Cash deposited at the bank, bank withdrawal into the caisse — same thing.
 export async function virementInterne(input: { deId: number; versId: number; montant: number; dateValeur: Date; libelle: string }): Promise<number> {
@@ -304,6 +361,11 @@ export interface Lettrage {
 	// Human label and link for the target, resolved on read.
 	cibleLabel: string;
 	cibleHref: string | null;
+	// Heading of the official statement: the one in force, whether it was chosen or is the
+	// default, and which side it has to be picked from.
+	rubrique: RubriqueOfficielle;
+	rubriqueChoisie: boolean;
+	rubriqueSens: 'recette' | 'depense';
 }
 
 interface LettrageRow {
@@ -322,6 +384,11 @@ interface LettrageRow {
 	tiers_nom: string | null;
 	tiers_prenom: string | null;
 	tiers_nature: 'personne_physique' | 'personne_morale' | null;
+	rubrique: string | null;
+	facture_sens: string | null;
+	facture_cotisation_type: string | null;
+	cotisation_type: string | null;
+	mouvement_montant: string;
 }
 
 function rowToLettrage(r: LettrageRow): Lettrage {
@@ -338,7 +405,18 @@ function rowToLettrage(r: LettrageRow): Lettrage {
 		cibleLabel = `Note de frais${tiers ? ` ${tiers}` : ''}${r.note_libelle ? ` — ${r.note_libelle}` : ''}`;
 		cibleHref = `/compta/notes-de-frais`;
 	}
+	const parDefaut = rubriqueParDefaut({
+		type: r.cible_type,
+		sens: r.facture_sens,
+		cotisationType: r.cible_type === 'cotisation' ? r.cotisation_type : r.facture_cotisation_type,
+		montant: parseMoney(r.mouvement_montant)
+	});
+	const choisie = r.rubrique && (estRecette(r.rubrique) || estDepense(r.rubrique)) ? r.rubrique : null;
 	return {
+		rubrique: choisie ?? parDefaut,
+		rubriqueChoisie: choisie !== null,
+		// The side is the document's, not the movement's: a refund stays on its document's side.
+		rubriqueSens: estRecette(parDefaut) ? 'recette' : 'depense',
 		id: r.id,
 		mouvementId: r.mouvement_id,
 		cibleType: r.cible_type,
@@ -355,8 +433,12 @@ const LETTRAGE_SELECT = `
 	       f.numero AS facture_numero, f.tiers_id AS facture_tiers_id,
 	       co.tiers_id AS cotisation_tiers_id, co.debut::text AS cotisation_debut,
 	       n.tiers_id AS note_tiers_id, n.libelle AS note_libelle,
-	       t.nom AS tiers_nom, t.prenom AS tiers_prenom, t.nature AS tiers_nature
+	       t.nom AS tiers_nom, t.prenom AS tiers_prenom, t.nature AS tiers_nature,
+	       COALESCE(f.rubrique, co.rubrique, n.rubrique, l.rubrique) AS rubrique,
+	       f.sens AS facture_sens, f.cotisation_type AS facture_cotisation_type, co.type AS cotisation_type,
+	       m.montant AS mouvement_montant
 	FROM lettrages l
+	JOIN mouvements m ON m.id = l.mouvement_id
 	LEFT JOIN factures f ON l.cible_type = 'facture' AND f.id = l.cible_id
 	LEFT JOIN cotisations co ON l.cible_type = 'cotisation' AND co.id = l.cible_id
 	LEFT JOIN notes_de_frais n ON l.cible_type = 'note_de_frais' AND n.id = l.cible_id

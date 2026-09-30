@@ -3,6 +3,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import FactureForm from '$lib/components/compta/FactureForm.svelte';
 	import { FACTURE_STATUT_CLASS, factureStatutLabel } from '$lib/compta';
+	import { RUBRIQUE_LABEL, RUBRIQUES_DEPENSES, RUBRIQUES_RECETTES, type Rubrique } from '$lib/rubriques';
 	import type { PageData } from './$types';
 
 	// Typed by hand rather than through ActionData: the server funnels every action through a
@@ -26,10 +27,16 @@
 	// midnight and 2am in Brussels.
 	const today = new Date().toLocaleDateString('en-CA');
 
+	// Correcting a received invoice after it was registered.
+	let correcting = $state(false);
 	$effect(() => {
-		if (form?.success) showToast('success', form.success);
-		else if (form?.error) showToast('error', form.error);
+		if (form?.success) {
+			showToast('success', form.success);
+			correcting = false;
+		} else if (form?.error) showToast('error', form.error);
 	});
+	const rubriques = $derived(f.sens === 'emise' ? RUBRIQUES_RECETTES : RUBRIQUES_DEPENSES);
+	const dateTimeFormat = new Intl.DateTimeFormat('fr-BE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Brussels' });
 
 	// Draft edit form: a failed submission's echo wins over the stored draft.
 	const values = $derived(
@@ -78,7 +85,26 @@
 			<dd><a href="/compta/tiers/{f.tiersId}">{f.tiers.nom}</a></dd>
 			<dt class="font-bold uppercase">Date</dt><dd>{fmt(f.dateEmission)}</dd>
 			<dt class="font-bold uppercase">Échéance</dt><dd>{fmt(f.dateEcheance)}</dd>
-			<dt class="font-bold uppercase">Total</dt><dd class="font-bold">{amountFormat.format(f.total)}</dd>
+			<dt class="font-bold uppercase">Total</dt>
+			<dd class="font-bold">
+				{amountFormat.format(f.total)}
+				{#if f.lettre > 0 && f.statut !== 'payee'}
+					<span class="block text-xs font-normal text-gray-600">dont {amountFormat.format(f.lettre)} déjà reçus par mouvement bancaire</span>
+				{/if}
+			</dd>
+			{#if f.statut !== 'brouillon' && f.statut !== 'annulee'}
+				<dt class="font-bold uppercase">Rubrique</dt>
+				<dd>
+					<form method="POST" action="?/rubrique" use:enhance>
+						<select name="rubrique" aria-label="Rubrique des comptes annuels" onchange={(e) => e.currentTarget.form?.requestSubmit()} class="border border-black px-2 py-1 text-sm">
+							<option value="" selected={!f.rubrique}>{RUBRIQUE_LABEL[data.rubriqueParDefaut]} (par défaut)</option>
+							{#each rubriques as r (r)}
+								<option value={r} selected={f.rubrique === r}>{RUBRIQUE_LABEL[r as Rubrique]}</option>
+							{/each}
+						</select>
+					</form>
+				</dd>
+			{/if}
 			{#if f.communicationStructuree}
 				<dt class="font-bold uppercase">Communication</dt><dd class="font-mono">{f.communicationStructuree}</dd>
 			{/if}
@@ -149,6 +175,26 @@
 					<button type="submit" class="{btn} flex-1">{f.type === 'note_de_credit' ? 'Marquer remboursée' : 'Marquer payée'}</button>
 				</form>
 			{/if}
+			{#if f.statut === 'payee'}
+				<form method="POST" action="?/annulerPaiement" use:enhance>
+					<button type="submit" disabled={f.lettre > 0} title={f.lettre > 0 ? 'Payée par un mouvement bancaire : retirez le lettrage sur le mouvement' : ''} class="{btn} w-full">
+						Annuler le paiement
+					</button>
+				</form>
+			{/if}
+			{#if f.sens === 'recue' && f.statut !== 'brouillon'}
+				<button type="button" onclick={() => (correcting = !correcting)} class="{btn} w-full">{correcting ? 'Fermer la correction' : 'Corriger la facture'}</button>
+				<form
+					method="POST"
+					action="?/supprimer"
+					use:enhance={({ cancel }) => {
+						if (!confirm('Supprimer cette facture reçue ? À réserver à un doublon ou à une erreur.')) cancel();
+						return async ({ update }) => update();
+					}}
+				>
+					<button type="submit" disabled={f.lettre > 0} title={f.lettre > 0 ? 'Un paiement est lettré sur cette facture' : ''} class="{btn} w-full">Supprimer</button>
+				</form>
+			{/if}
 			{#if f.sens === 'emise' && f.type === 'facture' && (f.statut === 'validee' || f.statut === 'payee')}
 				<form method="POST" action="?/noteDeCredit" use:enhance>
 					<button type="submit" class="{btn} w-full">Créer une note de crédit</button>
@@ -160,10 +206,13 @@
 	{#if f.statut === 'brouillon'}
 		<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Modifier le brouillon</h2>
 		<FactureForm action="?/update" tiers={data.tiers} {values} lignes={lignesValues} sensLocked={f.sens} />
+	{:else if correcting && f.sens === 'recue'}
+		<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Corriger la facture reçue</h2>
+		<FactureForm action="?/corriger" tiers={data.tiers} {values} lignes={lignesValues} sensLocked="recue" submitLabel="Enregistrer la correction" />
 	{:else}
 		<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Lignes</h2>
-		<div class="overflow-x-auto">
-			<table class="w-full border-collapse text-sm">
+		<div>
+			<table class="table-cards w-full border-collapse text-sm">
 				<thead>
 					<tr class="bg-black text-white uppercase">
 						<th class="border border-black px-3 py-2 text-left">Description</th>
@@ -176,9 +225,9 @@
 					{#each f.lignes as l (l.id)}
 						<tr>
 							<td class="border border-black px-3 py-2">{l.libelle}</td>
-							<td class="border border-black px-3 py-2 text-right">{quantityFormat.format(l.quantite)}</td>
-							<td class="border border-black px-3 py-2 text-right">{amountFormat.format(l.prixUnitaire)}</td>
-							<td class="border border-black px-3 py-2 text-right">{amountFormat.format(l.total)}</td>
+							<td class="border border-black px-3 py-2 sm:text-right" data-label="Quantité">{quantityFormat.format(l.quantite)}</td>
+							<td class="border border-black px-3 py-2 sm:text-right" data-label="Prix unitaire">{amountFormat.format(l.prixUnitaire)}</td>
+							<td class="border border-black px-3 py-2 sm:text-right" data-label="Total">{amountFormat.format(l.total)}</td>
 						</tr>
 					{/each}
 				</tbody>
@@ -186,5 +235,22 @@
 		</div>
 		{#if f.objet}<p class="mt-3 text-sm"><span class="font-bold uppercase">Objet :</span> {f.objet}</p>{/if}
 		{#if f.note}<p class="mt-1 text-sm text-gray-600">{f.note}</p>{/if}
+		{#if f.sens === 'emise' && f.statut !== 'annulee'}
+			<p class="mt-4 text-xs text-gray-600">
+				Une facture émise et numérotée ne se modifie pas : elle se corrige par une note de crédit, puis une nouvelle facture.
+			</p>
+		{/if}
+	{/if}
+
+	{#if data.rappels.length > 0}
+		<h2 class="mt-8 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Rappels envoyés</h2>
+		<ul class="border border-black p-4 text-sm">
+			{#each data.rappels as r (r.id)}
+				<li>
+					{dateTimeFormat.format(r.envoyeLe)} — rappel n° {r.niveau} à <span class="font-mono text-xs">{r.envoyeA}</span>, par {r.envoyePar}
+					(restait {amountFormat.format(r.reste)})
+				</li>
+			{/each}
+		</ul>
 	{/if}
 </section>

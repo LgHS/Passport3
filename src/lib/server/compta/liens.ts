@@ -210,3 +210,10 @@ export async function updateLien(id: number, input: LienInput): Promise<Lien | n
 	`;
 	return row ? getLien(row.id) : null;
 }
+
+// For a link entered by mistake. A link that did exist is closed instead (jusqua), so the
+// person's past coverage through the organisation stays explained.
+export async function deleteLien(id: number): Promise<void> {
+	const sql = await getDb();
+	await sql`DELETE FROM tiers_liens WHERE id = ${id}`;
+}

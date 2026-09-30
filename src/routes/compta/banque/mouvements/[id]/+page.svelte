@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { RUBRIQUE_LABEL, RUBRIQUES_DEPENSES, RUBRIQUES_RECETTES } from '$lib/rubriques';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -14,6 +15,13 @@
 		if (form?.success) showToast('success', form.success);
 		else if (form?.error) showToast('error', form.error);
 	});
+
+	let editing = $state(false);
+	$effect(() => {
+		if (form?.success) editing = false;
+	});
+	const isoDate = (d: Date) => d.toISOString().slice(0, 10);
+	const smallBtn = 'border border-black px-2 py-1 text-xs font-bold uppercase hover:bg-black hover:text-white';
 
 	// Which allocation form is open: an invoice, a free-amount dues payment, or "something else".
 	let mode = $state<'facture' | 'cotisation' | 'note_de_frais' | 'autre'>('facture');
@@ -43,6 +51,73 @@
 		<a href="/compta/banque/{m.compteId}" class="text-sm">← {m.compteNom}</a>
 	</div>
 
+	{#if editing}
+		<form method="POST" action="?/modifier" class="mb-6 grid gap-3 border border-black p-4 sm:grid-cols-3" use:enhance>
+			{#if data.importe}
+				<p class="text-sm text-gray-600 sm:col-span-3">
+					Ce mouvement vient d'un extrait : sa date et son montant sont ceux de la banque et ne se modifient pas.
+				</p>
+			{:else}
+				<div>
+					<label class={labelClass} for="dateValeur">Date</label>
+					<input id="dateValeur" name="dateValeur" type="date" required value={isoDate(m.dateValeur)} class={inputClass} />
+				</div>
+				{#if m.transfertId === null}
+					<div>
+						<label class={labelClass} for="sens">Sens</label>
+						<select id="sens" name="sens" class={inputClass}>
+							<option value="entree" selected={m.montant > 0}>Entrée</option>
+							<option value="sortie" selected={m.montant < 0}>Sortie</option>
+						</select>
+					</div>
+				{/if}
+				<div>
+					<label class={labelClass} for="montant-edit">Montant (€)</label>
+					<input id="montant-edit" name="montant" type="text" inputmode="decimal" required value={Math.abs(m.montant).toFixed(2)} class={inputClass} />
+				</div>
+			{/if}
+			<div class="sm:col-span-3">
+				<label class={labelClass} for="libelle-edit">Libellé</label>
+				<input id="libelle-edit" name="libelle" type="text" required value={m.libelle} class={inputClass} />
+			</div>
+			{#if m.transfertId === null}
+				<div>
+					<label class={labelClass} for="contrepartieNom">Contrepartie</label>
+					<input id="contrepartieNom" name="contrepartieNom" type="text" value={m.contrepartieNom ?? ''} class={inputClass} />
+				</div>
+				<div>
+					<label class={labelClass} for="contrepartieIban">IBAN de la contrepartie</label>
+					<input id="contrepartieIban" name="contrepartieIban" type="text" value={m.contrepartieIban ?? ''} class="{inputClass} font-mono uppercase" />
+				</div>
+				<div>
+					<label class={labelClass} for="communication">Communication</label>
+					<input id="communication" name="communication" type="text" value={m.communication ?? ''} class={inputClass} />
+				</div>
+			{:else}
+				<p class="text-sm text-gray-600 sm:col-span-3">Virement interne : l'autre compte est corrigé en même temps.</p>
+			{/if}
+			<div class="flex gap-3 sm:col-span-3">
+				<button type="submit" class="btn-primary px-4 py-2">Enregistrer</button>
+				<button type="button" onclick={() => (editing = false)} class="border border-black px-4 py-2 font-bold uppercase hover:bg-gray-100">Annuler</button>
+			</div>
+		</form>
+	{:else}
+		<div class="mb-3 flex flex-wrap gap-2">
+			<button type="button" onclick={() => (editing = true)} class={smallBtn}>Corriger</button>
+			<form
+				method="POST"
+				action="?/supprimer"
+				use:enhance={({ cancel }) => {
+					const quoi = m.transfertId !== null ? 'ce virement interne (ses deux écritures)' : 'ce mouvement';
+					if (!confirm(`Supprimer ${quoi} ?${data.importe ? ' Il vient d’un extrait : le solde ne correspondra plus à celui de la banque.' : ''}`)) cancel();
+					return async ({ update }) => update();
+				}}
+			>
+				<button type="submit" disabled={m.lettre > 0} title={m.lettre > 0 ? 'Délettrez d’abord ce mouvement' : ''} class="{smallBtn} disabled:opacity-40">Supprimer</button>
+			</form>
+		</div>
+	{/if}
+
 	<dl class="mb-6 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 border border-black p-4 text-sm">
 		<dt class="font-bold uppercase">Montant</dt>
 		<dd class="text-lg font-bold {m.montant < 0 ? 'text-red-700' : 'text-green-700'}">{amountFormat.format(m.montant)}</dd>
@@ -61,18 +136,38 @@
 
 	<h2 class={h2Class}>Lettrages</h2>
 	{#if data.lettrages.length > 0}
-		<table class="mb-6 w-full border-collapse text-sm">
+		<table class="table-cards mb-6 w-full border-collapse text-sm">
+			<thead>
+				<tr class="bg-black text-white uppercase">
+					<th class="border border-black px-3 py-2 text-left">Lettré sur</th>
+					<th class="border border-black px-3 py-2 text-left">Rubrique des comptes annuels</th>
+					<th class="border border-black px-3 py-2 text-right">Montant</th>
+					<th class="border border-black px-3 py-2"></th>
+				</tr>
+			</thead>
 			<tbody>
 				{#each data.lettrages as l (l.id)}
 					<tr>
 						<td class="border border-black px-3 py-2">
 							{#if l.cibleHref}<a href={l.cibleHref}>{l.cibleLabel}</a>{:else}{l.cibleLabel}{/if}
 						</td>
-						<td class="border border-black px-3 py-2 text-right">{amountFormat.format(l.montant)}</td>
-						<td class="border border-black px-2 py-1 text-right">
+						<td class="border border-black px-3 py-1" data-label="Rubrique">
+							<form method="POST" action="?/rubrique" use:enhance>
+								<input type="hidden" name="lettrageId" value={l.id} />
+								<select name="rubrique" aria-label="Rubrique" onchange={(e) => e.currentTarget.form?.requestSubmit()} class="border border-black px-2 py-1 text-sm">
+									{#if !l.rubriqueChoisie}<option value="" selected>{RUBRIQUE_LABEL[l.rubrique]} (par défaut)</option>{/if}
+									{#each l.rubriqueSens === 'recette' ? RUBRIQUES_RECETTES : RUBRIQUES_DEPENSES as r (r)}
+										<option value={r} selected={l.rubriqueChoisie && l.rubrique === r}>{RUBRIQUE_LABEL[r]}</option>
+									{/each}
+									{#if l.rubriqueChoisie}<option value="">Revenir à la rubrique par défaut</option>{/if}
+								</select>
+							</form>
+						</td>
+						<td class="border border-black px-3 py-2 sm:text-right" data-label="Montant">{amountFormat.format(l.montant)}</td>
+						<td class="border border-black px-2 py-1 sm:text-right">
 							<form method="POST" action="?/delettrer" use:enhance>
 								<input type="hidden" name="lettrageId" value={l.id} />
-								<button type="submit" class="border border-black px-2 py-1 text-xs font-bold uppercase hover:bg-black hover:text-white">Retirer</button>
+								<button type="submit" class={smallBtn}>Retirer</button>
 							</form>
 						</td>
 					</tr>

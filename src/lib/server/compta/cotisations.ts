@@ -507,3 +507,34 @@ export async function listSituations(today: Date = brusselsToday()): Promise<Tie
 		return { tiers: t, situation: computeSituation(t, sortHistorique([...own, ...inherited]), delaiGraceJours, today) };
 	});
 }
+
+// ---------------------------------------------------------------------------------------------
+// Removal — for what was entered by mistake. What has left a trace elsewhere is cancelled
+// instead (statut annulee), so the books keep telling what happened.
+
+export class SuppressionRefuseeError extends Error {}
+
+export async function deleteCotisation(id: number): Promise<void> {
+	const sql = await getDb();
+	await sql.begin(async (tx) => {
+		const [c] = await tx<{ facture_id: number | null }[]>`SELECT facture_id FROM cotisations WHERE id = ${id} FOR UPDATE`;
+		if (!c) throw new SuppressionRefuseeError('Cotisation introuvable.');
+		if (c.facture_id !== null) {
+			throw new SuppressionRefuseeError('Cette cotisation vient d’une facture : annulez-la, ou passez par une note de crédit.');
+		}
+		const [lettre] = await tx`SELECT 1 FROM lettrages WHERE cible_type = 'cotisation' AND cible_id = ${id} LIMIT 1`;
+		if (lettre) {
+			throw new SuppressionRefuseeError('Un paiement est lettré sur cette cotisation : délettrez-le d’abord, ou annulez la cotisation.');
+		}
+		await tx`DELETE FROM cotisations WHERE id = ${id}`;
+	});
+}
+
+export async function deleteAbonnement(id: number): Promise<void> {
+	const sql = await getDb();
+	await sql.begin(async (tx) => {
+		const [used] = await tx`SELECT 1 FROM cotisations WHERE abonnement_id = ${id} LIMIT 1`;
+		if (used) throw new SuppressionRefuseeError('Cet abonnement a déjà été facturé : suspendez-le plutôt.');
+		await tx`DELETE FROM abonnements WHERE id = ${id}`;
+	});
+}
