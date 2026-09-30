@@ -263,6 +263,16 @@ export async function updateUserProfile(
 	return { changed: true, before, after };
 }
 
+// Membership enforcement (compta/adhesionSync.ts): a deactivated user can't log in anywhere
+// Authentik protects. Reads the current flag first so a no-op isn't written (and not audited).
+export async function setUserActive(pk: number, active: boolean): Promise<boolean> {
+	const current = await authentikApiFetch(`core/users/${pk}/`);
+	const user = (await current.json()) as { is_active: boolean };
+	if (user.is_active === active) return false;
+	await authentikApiFetch(`core/users/${pk}/`, { method: 'PATCH', body: JSON.stringify({ is_active: active }) });
+	return true;
+}
+
 // Not part of PROFILE_ATTRIBUTE_FIELDS: that whitelist is specifically the merge boundary for
 // the member-editable profile form, whereas rfid_uid is provisioned by us and never user-entered.
 const RFID_UID_ATTRIBUTE = 'rfid_uid';

@@ -1,0 +1,325 @@
+# Comptabilité intégrée — conception
+
+Passport remplace Dolibarr. Ce document fixe le modèle et les décisions prises avec le CA le
+27 septembre 2026 ; c'est la référence quand une question de périmètre se pose. Il décrit la cible
+complète — les phases ci-dessous disent ce qui est livré et ce qui ne l'est pas encore.
+
+## Périmètre
+
+- Tiers (clients, fournisseurs, sponsors, adhérents, membres) et leurs liens.
+- Cotisations et sponsorings, avec le droit de membre qui en découle.
+- Factures émises (lignes, numérotation, PDF, UBL téléchargeable) et reçues.
+- Banque et caisse : comptes, mouvements, import CSV Belfius, virements internes, lettrage.
+- Notes de frais soumises par les membres, validées par la trésorerie.
+- Livre journal simplifié et pièces pour la publication des comptes annuels (petite ASBL).
+
+Hors périmètre : TVA (l'ASBL est en franchise, voir plus bas), devises autres que l'euro,
+envoi Peppol automatisé (le dépôt se fait à la main sur Doccle).
+
+## Rôles Passport
+
+| Groupe Authentik | Voit |
+| --- | --- |
+| membre (tout compte) | sa propre situation : cotisation, factures de sa société s'il en est administrateur, ses notes de frais |
+| `Passport Admin` | l'administration des comptes (existant) — **pas** le détail comptable |
+| trésorerie (`PUBLIC_AUTHENTIK_TRESORIER_GROUP`) | tout le module `/compta` |
+
+Le contrôle est indépendant de celui des admins, mais le CA a choisi (28/09/2026) de pointer la
+variable sur le groupe `Passport Admin` : les admins sont les trésoriers. Créer un groupe
+`Trésorier` distinct ne demande que de changer la variable.
+
+## Tiers
+
+Une seule table `tiers`. Un tiers a une **nature** (`personne_physique` ou `personne_morale`) ;
+ses **rôles** ne sont pas une énumération mais des faits cumulables — une société peut être
+sponsor et cliente, une personne adhérente et fournisseur :
+
+- `est_client`, `est_fournisseur` : drapeaux, posés à la main ou à la première facture.
+- adhérent : a des cotisations.
+- sponsor : a des cotisations de type `sponsoring`.
+- **membre : jamais stocké**, toujours calculé (voir plus bas).
+
+Une personne physique qui a un compte Passport porte `authentik_pk`, le même entier que le `sub`
+du jeton OIDC (voir `authentikPk()` dans `src/lib/types.ts`) — c'est la clef entre les deux
+mondes, plus fiable que l'email que Dolibarr imposait.
+
+`exempte_cotisation` remplace le type d'adhérent « membre d'honneur » de Dolibarr (type sans
+cotisation requise) : la personne est membre sans payer.
+
+### Liens personne ↔ société
+
+`tiers_liens` relie une personne physique à une personne morale. Une ligne porte des rôles
+cumulables — `est_employe`, `est_administrateur` (preneur de décision : voit les factures de la
+société dans Passport), `est_contact` (personne de contact, une ou plusieurs), et
+`destinataire_factures` (reçoit les factures par email) — plus `herite_adhesion` : cette
+personne consomme-t-elle un siège de la cotisation de la société ? Un lien a une période
+(`depuis`, `jusqua` nullable) ; il n'est pas supprimé quand la personne part, il est clos.
+
+Le nombre de liens `herite_adhesion` en cours d'une société ne peut pas dépasser les `sieges`
+de sa cotisation courante. C'est vérifié à l'écriture du lien.
+
+## Cotisations
+
+Une table `cotisations`, trois types :
+
+| `type` | qui | montant | `sieges` | création |
+| --- | --- | --- | --- | --- |
+| `libre` | personne physique | quel qu'il soit | 1 | par la trésorerie au lettrage d'un paiement, durée fixée d'après la communication, le montant ou ce que le membre a dit |
+| `facturee` | société adhérente | prix de l'abonnement | ceux de l'abonnement (défini au contrat) | générée avec la facture, au début de chaque période |
+| `sponsoring` | société sponsor | libre | fixés sur la facture | à la main, période choisie sur la facture |
+
+Une cotisation couvre `[debut, fin)` : **`fin` est exclusive**, c'est le premier jour non
+couvert. Deux cotisations qui se suivent ont donc `fin` de l'une = `debut` de la suivante,
+sans tolérance ni artefact de bornes (Dolibarr stockait une fin inclusive à 23 h, d'où la
+tolérance de 24 h de l'ancien code). Les dates sont des `DATE` calendaires, lues en UTC comme
+les mois de trous le sont déjà.
+
+`statut` : `attendue` (facture émise, pas encore payée) → `active` (payée, ou `libre` créée
+directement active) ; `annulee` sinon. **Une cotisation facturée ne donne le droit qu'une fois
+payée** ; entre-temps le délai de grâce ci-dessous fait le pont.
+
+Une société adhérente a un `abonnement` : `prix`, `periodicite` (`mois` | `annee`), `sieges`,
+`prochaine_echeance`. Un planificateur (même mécanisme que `birthdayScheduler`) émet la facture
+et la cotisation `attendue` à chaque échéance, puis avance l'échéance.
+
+## Droit de membre (calculé)
+
+Pour une personne physique P à l'instant t :
+
+```
+couvert(P, t) ⇔ P.exempte_cotisation
+              ∨ ∃ cotisation active de P avec debut ≤ t < fin
+              ∨ ∃ lien(P → S) en cours avec herite_adhesion
+                  ∧ ∃ cotisation active de S avec debut ≤ t < fin
+```
+
+Le statut affiché en découle, avec le **délai de grâce** `compta_settings.delai_grace_jours`
+(réglé par la trésorerie, 90 jours par défaut) :
+
+| statut | condition |
+| --- | --- |
+| `non_applicable` | exempté (membre d'honneur) |
+| `a_jour` | couvert à t |
+| `en_grace` | plus couvert, mais dernière fin de couverture + délai de grâce > t |
+| `expiree` | plus couvert depuis plus longtemps que le délai de grâce |
+| `en_attente` | jamais eu de couverture |
+
+Le statut se calcule aussi bien pour la personne que pour la société (sans la partie « lien »),
+et la raison est conservée pour l'affichage (« via votre cotisation » / « via Société X »). Une
+personne liée à une société **et** qui paie aussi sa propre cotisation cumule les deux : la
+couverture est l'union des périodes, l'historique montre les deux origines, et `/cotisation` dit
+explicitement « couvert·e à la fois par votre cotisation personnelle et par Société X ».
+
+**Membre ⇔ compte Authentik.** Quand `compta_settings.desactivation_auto` est activé (réglage
+trésorerie, désactivé par défaut), `adhesionSync.ts` désactive toutes les six heures le compte
+Authentik des personnes en `expiree`, et réactive celles qu'il avait lui-même désactivées
+(`tiers.desactive_le`) dès qu'elles sont à nouveau couvertes. Admins et trésoriers ne sont jamais
+désactivés ; chaque action va dans l'audit. L'invitation automatique d'une personne sans compte
+reste manuelle (`/admin/invite`). La détection des trous de cotisation (mois non perçus) est
+reprise telle quelle de l'ancien `dolibarr.ts`, adaptée aux fins exclusives.
+
+## Factures
+
+`factures` (`sens` : `emise` | `recue`) et `facture_lignes`. Une facture émise est en
+`brouillon` tant qu'elle se modifie ; à la **validation** elle reçoit son numéro, son PDF est
+généré et stocké dans Postgres (colonne `bytea`, une seule chose à sauvegarder), et elle devient immuable — une correction passe par une note de
+crédit (`type = 'note_de_credit'`, `facture_origine_id`). Statuts : `brouillon` → `validee` →
+`payee`, ou `annulee` (brouillon seulement).
+
+- **Numérotation** : séquentielle sans trou, par année, `AAAA-NNNN`, attribuée sous
+  `pg_advisory_xact_lock` comme les migrations.
+- **Communication structurée** belge `+++NNN/NNNN/NNNNN+++` (mod 97) dérivée du numéro, imprimée
+  sur la facture pour le lettrage automatique.
+- **TVA** : l'ASBL est en franchise (art. 56bis CTVA). Chaque facture porte la mention
+  « Régime particulier de franchise des petites entreprises — TVA non applicable », un taux de
+  0 % et aucun numéro de TVA. Il n'y a ni taux ni base par ligne à gérer.
+- **PDF** généré côté serveur sans navigateur (`pdfkit`) — le conteneur tourne en lecture seule
+  sans capacités, Chromium n'y a pas sa place.
+- **UBL** : XML Peppol BIS Billing 3.0 (`Invoice` ou `CreditNote`) généré à la validation avec
+  le PDF, stocké en base, téléchargeable pour dépôt à la main sur Doccle, et joint à l'email.
+  Adresses électroniques en schéma `0208` (n° BCE) ou `EM` (email) faute de BCE. Exonération en
+  catégorie de taxe `E` avec la raison textuelle, **sans code `VATEX`** : la FAQ officielle
+  (efacture.belgium.be, « questions spécifiques ») indique que la reprise des exonérations propres
+  à la Belgique dans la liste VATEX est encore en négociation au niveau européen, et ne donne pas de
+  code pour la franchise. La raison textuelle suffit au schéma ; à revoir si un code belge est
+  publié.
+- Factures **reçues** : saisie (numéro du fournisseur, lignes, PDF déposé) ou **import d'un UBL**
+  fournisseur — tiers retrouvé par n° BCE/TVA ou nom, sinon créé ; lignes ramenées au TTC payé ;
+  PDF embarqué conservé.
+
+Un membre voit ses factures sur `/cotisation` et, s'il est `est_administrateur` d'une société,
+celles de la société sur la page de celle-ci, `/societes/[id]` — qui porte aussi la cotisation de
+la société, ses sièges, ses personnes liées et **son IBAN** (l'IBAN d'une société n'est jamais sur
+la fiche d'une personne ; la trésorerie le modifie aussi depuis la fiche tiers). La route
+`/cotisation/invoice/[id]` garde son contrôle « c'est bien la mienne ou celle d'une société que
+j'administre ».
+
+## Banque et caisse
+
+- `comptes` : `type` (`banque` | `caisse`), nom, IBAN, solde d'ouverture.
+- `mouvements` : compte, date de valeur, montant signé, libellé, contrepartie (nom, IBAN),
+  communication, `import_id`, `external_id` pour dédoublonner les ré-imports.
+- Virement interne : deux mouvements opposés créés atomiquement, liés par `transfert_id`.
+- `lettrages` : un mouvement ↔ une cible (`facture`, `cotisation`, `note_de_frais`, `autre`)
+  pour un montant. Une ligne par affectation : un paiement couvre plusieurs factures, un paiement
+  partiel est possible. Une facture passe à `payee` quand la somme lettrée atteint son total ;
+  une cotisation `attendue` passe à `active`.
+- Import : **CSV Belfius** d'abord (export « CSV » de Belfius Direct Net : `Compte;Date de
+  comptabilisation;N° d'extrait;N° de transaction;Compte contrepartie;Nom contrepartie…;Transaction;
+  Date valeur;Montant;Devise;…;Communications`, point-virgule, montants `1.234,56`, dates
+  `jj/mm/aaaa` ; le lecteur repère l'en-tête par ses intitulés et tolère un préambule). Pas d'import
+  CODA : décision du CA, le CSV suffit.
+- Auto-lettrage à l'import sur la communication structurée ; le reste est proposé à la
+  trésorerie, qui tranche (c'est là qu'une cotisation `libre` naît).
+
+## Notes de frais
+
+Tout membre soumet une note depuis `/notes-de-frais` (date, libellé, montant, justificatif
+conservé en base). La trésorerie accepte ou refuse (avec motif) depuis `/compta/notes-de-frais` ;
+une note acceptée devient une cible de lettrage : le virement de remboursement (sortie d'argent)
+lui est affecté et elle passe « remboursée ». Statuts : `soumise` → `acceptee` | `refusee` ;
+`acceptee` → `remboursee`. Une décision s'annule (retour à `soumise`) tant que rien n'est
+remboursé, et la trésorerie peut corriger date, libellé et montant.
+
+## Réception des factures fournisseurs (Doccle)
+
+Doccle envoie chaque facture par email, PDF et UBL joints, à la boîte de la trésorerie. Passport
+relève cette boîte (`reception.ts`, à la demande ou toutes les heures) **en lecture seule** : il
+ne marque, ne déplace ni ne supprime aucun mail, et retient de son côté ce qu'il a déjà relevé
+(`messages_releves`).
+
+1. **Sélection** : les mails avec pièce jointe dont l'expéditeur est d'un domaine accepté
+   (`compta_settings.reception_domaines`, `doccle.be` par défaut).
+2. **Contrôle d'origine** (`receptionVerification.ts`) : l'en-tête `From` ne prouve rien, c'est
+   l'expéditeur qui l'écrit. Ce qui prouve, c'est le verdict que Gmail a enregistré à la
+   réception (`Authentication-Results` de `mx.google.com`, le premier de ce nom). Un mail est
+   « d'origine prouvée » si son domaine `From` est accepté **et** que DMARC a réussi pour ce
+   domaine ; à défaut de tout verdict DMARC, une signature DKIM valide du même domaine suffit. SPF
+   seul ne suffit pas (il porte sur l'enveloppe), un DMARC en échec n'est jamais rattrapé, et un
+   mail à plusieurs `From` est refusé. Le détail (adresse réelle, DMARC, DKIM, SPF, raisons) est
+   conservé et affiché.
+3. **Pièces** : chaque XML lisible comme facture UBL est un document ; son PDF est la pièce de
+   même nom, ou l'unique PDF du mail s'il n'y a qu'une facture. Un PDF sans UBL est un document
+   à encoder à la main. Le reste est écarté, et dit.
+4. **Validation** (`/compta/reception`) : le trésorier voit l'origine, la facture lue, le
+   fournisseur reconnu (numéro d'entreprise, puis nom) ou à créer, et un éventuel doublon. Il
+   importe — la facture reçue est créée avec ses lignes, son PDF et son UBL — ou écarte. Un mail
+   d'origine non prouvée ne s'importe que s'il coche avoir vérifié lui-même, ce que l'audit note.
+
+Rien n'entre dans les livres sans cette validation.
+
+## Rappels de paiement
+
+`/compta/rappels` liste les factures émises échues et non soldées (le reste dû tient compte des
+paiements partiels lettrés). Une facture est **proposée** au rappel `rappel_delai_jours` (14 par
+défaut) après son échéance, puis à nouveau après chaque rappel. Le trésorier coche, relit le
+texte exact de chaque mail, ajoute éventuellement un message, et envoie : **aucun rappel ne part
+seul**. Le ton suit le rang (rappel, deuxième rappel, dernier rappel) ; la facture est jointe ;
+chaque envoi est conservé (`rappels` : destinataires, texte, reste dû) et audité.
+
+## Corrections
+
+Tout ce qui est encodé se corrige depuis l'écran où on le voit : fiche, liens (rôles, siège,
+dates), cotisations, abonnements, mouvements, factures reçues, notes de frais, rubriques. Deux
+limites, voulues :
+
+- **Une facture émise numérotée est figée** : elle a été envoyée, sa correction est une note de
+  crédit suivie d'une nouvelle facture. (Un brouillon se modifie librement ; « marquée payée »
+  s'annule.)
+- **Un mouvement venu d'un extrait garde la date et le montant de la banque** ; son libellé, sa
+  contrepartie et sa communication se complètent.
+
+Ce qui a laissé une trace ailleurs se défait dans l'ordre : on retire le lettrage avant de
+supprimer un mouvement ou une facture reçue, avant d'annuler un paiement ou une décision. Une
+suppression est réservée à l'erreur d'encodage ; ce qui a existé se clôture (lien) ou s'annule
+(cotisation). Chaque correction est auditée avec l'avant et l'après.
+
+## Sorties comptables
+
+Petite ASBL, comptabilité simplifiée : `/compta/journal`, par exercice civil, donne
+
+- le **livre journal** (tous les mouvements de tous les comptes, virements internes exclus,
+  chacun rangé d'après ses lettrages), exportable en CSV ;
+- les **comptes annuels au schéma minimum normalisé** (AR du 29 avril 2019, annexe 8), en PDF :
+  l'**état des recettes et dépenses** et l'**annexe** en cinq points — règles d'évaluation,
+  adaptation de ces règles, informations complémentaires, **état du patrimoine**, droits et
+  engagements.
+
+Les rubriques sont celles du modèle (`$lib/rubriques.ts`) : cotisations, dons et legs, subsides,
+autres recettes ; marchandises et services, rémunérations, services et biens divers, autres
+dépenses. Chaque document a une rubrique par défaut (cotisation → cotisations ; facture reçue et
+note de frais → services et biens divers ; vente et sponsoring → autres recettes, le sponsoring
+ayant une contrepartie, il n'est pas un don) que le trésorier change sur la facture ou sur le
+lettrage. La rubrique décide du côté : un remboursement à un client diminue les recettes de sa
+rubrique. Ce qui n'est pas lettré reste à part, et le PDF porte « Projet » tant qu'il en reste.
+
+Dans l'état du patrimoine, les liquidités (soldes des comptes), les créances (factures émises non
+payées) et les dettes envers fournisseurs et membres viennent des livres ; le reste (immeubles,
+machines, mobilier, stocks, placements, dettes financières et fiscales, droits et engagements)
+vient de l'inventaire et se saisit par exercice (`comptes_annuels`), comme les textes de
+l'annexe et la date d'approbation par l'assemblée générale. Pas de plan comptable en partie
+double.
+
+Le **solde d'ouverture** d'un compte est sa propriété (`comptes.solde_ouverture`), pas un
+mouvement : la ligne « Solde initial » de Dolibarr y est convertie à l'import, et n'apparaît donc
+pas comme une recette.
+
+## Emails et notifications
+
+Les emails passent par l'**API Gmail** (`gmail.ts`), depuis la boîte de la trésorerie : envoi des
+factures et des rappels, lecture des factures reçues. Le client OAuth vient de l'environnement
+(`GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`) ; la boîte est connectée par un trésorier depuis
+`/compta/parametres` (écran de consentement Google), et le jeton de rafraîchissement est conservé
+chiffré (AES-256-GCM, clé dérivée du secret du client). Deux autorisations seulement : envoyer
+(`gmail.send`) et lire (`gmail.readonly`).
+
+Une facture émise est envoyée à son tiers — email du tiers plus les personnes « reçoit les
+factures » de la société — avec PDF et UBL joints (`factureMail.ts`). Le bouton est sur la
+facture ; le planificateur d'abonnements envoie lui-même dès l'émission quand une boîte est
+connectée, et la facture garde la trace de l'envoi (`envoyee_le`, `envoyee_a`). Sans boîte
+connectée, rien ne part et l'interface le dit.
+
+**Mattermost** (`comptaNotifications.ts`, bot existant) : un canal et un interrupteur par
+événement, tous éteints par défaut, réglés dans `/compta/parametres` — factures reçues à valider,
+note de frais soumise, récapitulatif hebdomadaire des factures à relancer, factures d'abonnement
+émises. Un message signale et renvoie vers Passport ; il ne contient ni coordonnées bancaires ni
+détail d'une dépense.
+
+## Migration depuis Dolibarr
+
+Tout l'historique est importé — tiers, adhérents et leurs souscriptions (indispensable pour les
+trous de cotisation), factures avec leurs PDF archivés, comptes bancaires. L'import est un
+module serveur lancé depuis `/compta/import` par un trésorier, avec un aperçu à blanc avant
+application ; il est idempotent (clefs `dolibarr_*_id`) et peut être rejoué. Correspondances :
+
+| Dolibarr | Passport |
+| --- | --- |
+| adhérent `morphy = phy` | tiers `personne_physique` (+ lien vers le tiers de `fk_soc` s'il existe) |
+| adhérent `morphy = mor` | tiers `personne_morale` (depuis `fk_soc`) ; nom/prénom de l'adhérent → personne physique liée, `est_contact` |
+| type d'adhérent sans cotisation | `exempte_cotisation` |
+| souscription `[dateh, datef]` | cotisation `[debut, datef + 1 jour)` |
+| tiers `client` / `fournisseur` | `est_client` / `est_fournisseur` |
+| facture client (statut ≥ validée) | facture `emise`, PDF archivé, numéro Dolibarr conservé dans `reference_externe` |
+| facture fournisseur | facture `recue`, numéro du fournisseur, montant TTC payé |
+| compte bancaire (type 1 banque, 2 caisse) et ses écritures | `comptes` et `mouvements` (`external_id` = `dolibarr-<id>`) |
+
+Le rapprochement adhérent ↔ compte Authentik se fait par email à l'import (c'est tout ce que
+Dolibarr a), puis `authentik_pk` fait foi.
+
+## Phases
+
+1. **Tiers, liens, cotisations, abonnements, rôle Trésorier, import Dolibarr** ; le statut de
+   cotisation, l'historique et les IBAN sont lus dans Postgres. *(livré)*
+2. **Factures émises et reçues** : lignes, numérotation, PDF, notes de crédit, abonnements et
+   génération planifiée ; import des factures Dolibarr ; plus rien ne lit Dolibarr au runtime,
+   `dolibarr.ts` ne sert plus qu'à l'import. *(livré)*
+3. **Banque et caisse** : comptes, mouvements, import Belfius, lettrage (automatique sur la
+   communication structurée, manuel sinon), virements internes ; import des comptes et écritures
+   Dolibarr. *(livré)*
+4. **UBL**, import d'UBL fournisseur, envoi des factures par email. *(livré)*
+5. Notes de frais, livre journal et comptes annuels, désactivation Authentik automatique. *(livré)*
+6. **API Gmail** (envoi et lecture), **réception des factures Doccle** avec contrôle d'origine
+   et validation. *(livré)*
+7. **Rappels de paiement**, envoyés après validation. *(livré)*
+8. **Comptes annuels au modèle officiel**, rubriques de l'annexe 8, solde d'ouverture. *(livré)*
+9. **Corrections** partout, notifications Mattermost, tables en cartes sur mobile. *(livré)*

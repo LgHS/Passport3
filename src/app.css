@@ -75,6 +75,71 @@
 		@apply block px-4 py-3 font-bold uppercase transition-colors hover:bg-black hover:text-white;
 	}
 
+	/* A table that becomes a stack of cards on a phone: one markup for both, where the rest of the
+	   app writes the cards and the table twice. Each <td> names its column with data-label; a
+	   cell without one (the row's title, an actions cell) takes the full width. Used by the
+	   treasury pages, which are mostly tables. */
+	/* Plain CSS with !important where a cell's own utility classes (border, padding, alignment)
+	   would otherwise win: utilities outrank this layer. */
+	@media (width < 40rem) {
+		.table-cards,
+		.table-cards tbody,
+		.table-cards tfoot {
+			display: block;
+		}
+		.table-cards thead {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+			white-space: nowrap;
+		}
+		.table-cards tr {
+			display: block;
+			margin-bottom: 0.5rem;
+			border: 1px solid #000;
+			padding: 0.75rem;
+		}
+		.table-cards td {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			gap: 1rem;
+			border: 0 !important;
+			padding: 0.125rem 0 !important;
+			text-align: right;
+			overflow-wrap: anywhere;
+		}
+		.table-cards td[data-label]::before {
+			content: attr(data-label);
+			flex-shrink: 0;
+			text-align: left;
+			font-size: 0.75rem;
+			font-weight: 700;
+			text-transform: uppercase;
+			color: var(--color-gray-600);
+		}
+		.table-cards td:not([data-label]) {
+			display: block;
+			text-align: left;
+		}
+		/* The row's title when it's a link filling its cell on a larger screen: here it spans the
+		   card's width, so its hover background (black) covers a full band, not just the text. */
+		.table-cards td:has(> a.block) {
+			margin: 0 -0.5rem;
+			padding: 0.25rem 0.5rem !important;
+		}
+		.table-cards td > a.block {
+			padding: 0 !important;
+			font-weight: 700;
+		}
+		.table-cards td:empty,
+		.table-cards td.hidden {
+			display: none;
+		}
+	}
+
 	.hazard-stripes {
 		background-image: repeating-linear-gradient(
 			45deg,

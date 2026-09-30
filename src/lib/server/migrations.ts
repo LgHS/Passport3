@@ -372,6 +372,496 @@ const migrations: Migration[] = [
 				)
 			`;
 		}
+	},
+	{
+		version: 20,
+		name: 'create compta: tiers, tiers_liens, abonnements, cotisations, compta_settings',
+		up: async (sql) => {
+			// The accounting module's foundation — see docs/compta.md for the model these tables
+			// implement. Column names are French on purpose: they mirror the vocabulary the treasury
+			// and the CA use (tiers, cotisation, abonnement), which is also what the UI shows.
+			await sql`
+				CREATE TABLE tiers (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					nature TEXT NOT NULL CHECK (nature IN ('personne_physique', 'personne_morale')),
+					-- Family name for a person, legal name for an organisation.
+					nom TEXT NOT NULL,
+					prenom TEXT,
+					email TEXT,
+					telephone TEXT,
+					adresse TEXT,
+					code_postal TEXT,
+					ville TEXT,
+					pays TEXT NOT NULL DEFAULT 'BE',
+					-- Belgian enterprise number (BCE/KBO), organisations only.
+					numero_entreprise TEXT,
+					-- One IBAN per tiers: a person's own, or an organisation's. The old Dolibarr split
+					-- (ibanPerso on the member, ibanPro on the third party) maps to two tiers here.
+					iban TEXT,
+					-- Authentik user pk (= the OIDC \`sub\`), persons with a Passport account only. UNIQUE:
+					-- one account is one person.
+					authentik_pk INTEGER UNIQUE,
+					-- Dolibarr's "member type without subscription" (membre d'honneur): a member who owes
+					-- nothing, status non_applicable.
+					exempte_cotisation BOOLEAN NOT NULL DEFAULT false,
+					-- Roles are cumulative facts, not a type (see docs/compta.md, "Tiers"). Adhérent,
+					-- sponsor and membre aren't columns: they follow from cotisations and liens.
+					est_client BOOLEAN NOT NULL DEFAULT false,
+					est_fournisseur BOOLEAN NOT NULL DEFAULT false,
+					actif BOOLEAN NOT NULL DEFAULT true,
+					notes TEXT,
+					-- Import keys, so the Dolibarr import can be re-run without duplicating anything.
+					-- A Dolibarr member and its billing third party may both land on one tiers.
+					dolibarr_member_id INTEGER UNIQUE,
+					dolibarr_soc_id INTEGER UNIQUE
+				)
+			`;
+			// Login-time lookup falls back to the email when authentik_pk isn't linked yet (the
+			// Dolibarr import only knows emails) — and the UI searches by name.
+			await sql`CREATE INDEX tiers_lower_email ON tiers (lower(email))`;
+			await sql`CREATE INDEX tiers_lower_nom ON tiers (lower(nom))`;
+
+			await sql`
+				CREATE TABLE tiers_liens (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					organisation_id INTEGER NOT NULL REFERENCES tiers(id) ON DELETE CASCADE,
+					personne_id INTEGER NOT NULL REFERENCES tiers(id) ON DELETE CASCADE,
+					-- Cumulative roles within the organisation (docs/compta.md, "Liens").
+					est_employe BOOLEAN NOT NULL DEFAULT false,
+					est_administrateur BOOLEAN NOT NULL DEFAULT false,
+					est_contact BOOLEAN NOT NULL DEFAULT false,
+					destinataire_factures BOOLEAN NOT NULL DEFAULT false,
+					-- Does this person take one of the organisation's membership seats?
+					herite_adhesion BOOLEAN NOT NULL DEFAULT false,
+					-- A link is closed (jusqua set), never deleted, when someone leaves: the history of
+					-- who was covered by which company is part of the books.
+					depuis DATE NOT NULL DEFAULT CURRENT_DATE,
+					jusqua DATE,
+					CHECK (jusqua IS NULL OR jusqua > depuis),
+					CHECK (organisation_id <> personne_id),
+					UNIQUE (organisation_id, personne_id)
+				)
+			`;
+			await sql`CREATE INDEX tiers_liens_personne ON tiers_liens (personne_id)`;
+
+			await sql`
+				CREATE TABLE abonnements (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					tiers_id INTEGER NOT NULL REFERENCES tiers(id),
+					-- Invoice line label, e.g. "Affiliation Hackerspace 12 mois".
+					libelle TEXT NOT NULL,
+					-- NUMERIC, never a float, for money. postgres.js hands it back as a string; the
+					-- compta modules convert it at the boundary.
+					prix NUMERIC(12, 2) NOT NULL CHECK (prix >= 0),
+					periodicite TEXT NOT NULL CHECK (periodicite IN ('mois', 'annee')),
+					-- Seats granted per period, "défini au contrat".
+					sieges INTEGER NOT NULL DEFAULT 1 CHECK (sieges >= 0),
+					-- Start of the next period to invoice; the scheduler advances it after issuing.
+					prochaine_echeance DATE NOT NULL,
+					actif BOOLEAN NOT NULL DEFAULT true
+				)
+			`;
+			await sql`CREATE INDEX abonnements_tiers ON abonnements (tiers_id)`;
+
+			await sql`
+				CREATE TABLE cotisations (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					tiers_id INTEGER NOT NULL REFERENCES tiers(id),
+					type TEXT NOT NULL CHECK (type IN ('libre', 'facturee', 'sponsoring')),
+					-- Covered period is [debut, fin): \`fin\` is the first day NOT covered, so consecutive
+					-- cotisations share a boundary exactly and adjacency needs no tolerance (Dolibarr
+					-- stored an inclusive end at 23:00, hence the old 24h tolerance).
+					debut DATE NOT NULL,
+					fin DATE NOT NULL,
+					montant NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (montant >= 0),
+					sieges INTEGER NOT NULL DEFAULT 1 CHECK (sieges >= 0),
+					-- attendue = invoiced, not paid yet (grants nothing); active = paid, or a \`libre\`
+					-- one created from a matched payment; annulee = never counts.
+					statut TEXT NOT NULL DEFAULT 'active' CHECK (statut IN ('attendue', 'active', 'annulee')),
+					abonnement_id INTEGER REFERENCES abonnements(id),
+					-- facture_id comes with the factures table (phase 2).
+					paye_le DATE,
+					note TEXT,
+					dolibarr_subscription_id INTEGER UNIQUE,
+					CHECK (fin > debut)
+				)
+			`;
+			await sql`CREATE INDEX cotisations_tiers_debut ON cotisations (tiers_id, debut)`;
+
+			// Single-row settings table, same pattern as birthday_settings.
+			await sql`
+				CREATE TABLE compta_settings (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					-- Days after coverage ends before a member is deactivated (status en_grace → expiree).
+					delai_grace_jours INTEGER NOT NULL DEFAULT 90 CHECK (delai_grace_jours >= 0)
+				)
+			`;
+			await sql`INSERT INTO compta_settings (id) VALUES (1)`;
+		}
+	},
+	{
+		version: 21,
+		name: 'create compta: factures, facture_lignes, facture_sequences; invoice settings',
+		up: async (sql) => {
+			// Issued and received invoices in one table, told apart by `sens` — see docs/compta.md,
+			// "Factures". An issued invoice is mutable while `brouillon`; validation numbers it,
+			// renders its PDF and freezes it (corrections go through a note de crédit).
+			await sql`
+				CREATE TABLE factures (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					sens TEXT NOT NULL CHECK (sens IN ('emise', 'recue')),
+					type TEXT NOT NULL DEFAULT 'facture' CHECK (type IN ('facture', 'note_de_credit')),
+					tiers_id INTEGER NOT NULL REFERENCES tiers(id),
+					-- Ours (AAAA-NNNN, assigned at validation) for an issued invoice; the supplier's
+					-- number for a received one.
+					numero TEXT,
+					statut TEXT NOT NULL DEFAULT 'brouillon'
+						CHECK (statut IN ('brouillon', 'validee', 'payee', 'annulee')),
+					date_emission DATE,
+					date_echeance DATE,
+					-- No VAT (franchise regime): the total is the sum of the lines, full stop.
+					total NUMERIC(12, 2) NOT NULL DEFAULT 0,
+					-- Short subject printed under the header, and free text printed at the bottom.
+					objet TEXT,
+					note TEXT,
+					-- Belgian structured communication (+++NNN/NNNN/NNNNN+++) derived from the number,
+					-- for automatic matching of the payment (phase 3).
+					communication_structuree TEXT,
+					-- The invoice a note de crédit cancels.
+					facture_origine_id INTEGER REFERENCES factures(id),
+					-- Number the document had in the previous system (Dolibarr ref), for the archive.
+					reference_externe TEXT,
+					-- The documents themselves, in the database rather than on the data volume: one store
+					-- to back up, and a row can never point at a missing file. The PDF of an issued invoice
+					-- is generated once at validation and never regenerated: what was sent must stay
+					-- reproducible. Never selected in lists (see factures.ts's has_pdf), only on download.
+					pdf BYTEA,
+					ubl BYTEA,
+					payee_le DATE,
+					-- Optional dues block: when set, validation creates the matching cotisation
+					-- (attendue) and payment activates it. cotisation_fin is exclusive like
+					-- cotisations.fin.
+					cotisation_type TEXT CHECK (cotisation_type IN ('facturee', 'sponsoring')),
+					cotisation_debut DATE,
+					cotisation_fin DATE,
+					cotisation_sieges INTEGER,
+					dolibarr_invoice_id INTEGER UNIQUE,
+					dolibarr_supplier_invoice_id INTEGER UNIQUE,
+					CHECK (cotisation_type IS NULL OR (cotisation_debut IS NOT NULL AND cotisation_fin IS NOT NULL AND cotisation_fin > cotisation_debut))
+				)
+			`;
+			// Our own numbering must be unique; two suppliers may well reuse a number between them.
+			await sql`CREATE UNIQUE INDEX factures_numero_emise ON factures (numero) WHERE sens = 'emise'`;
+			await sql`CREATE INDEX factures_tiers_date ON factures (tiers_id, date_emission DESC)`;
+
+			await sql`
+				CREATE TABLE facture_lignes (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					facture_id INTEGER NOT NULL REFERENCES factures(id) ON DELETE CASCADE,
+					ordre INTEGER NOT NULL,
+					libelle TEXT NOT NULL,
+					quantite NUMERIC(12, 3) NOT NULL DEFAULT 1,
+					prix_unitaire NUMERIC(12, 2) NOT NULL,
+					total NUMERIC(12, 2) NOT NULL
+				)
+			`;
+			await sql`CREATE INDEX facture_lignes_facture ON facture_lignes (facture_id, ordre)`;
+
+			// One row per year: the last number handed out. Read and bumped under an advisory lock
+			// at validation (factures.ts), which is what makes the sequence gapless.
+			await sql`
+				CREATE TABLE facture_sequences (
+					annee INTEGER PRIMARY KEY,
+					dernier INTEGER NOT NULL DEFAULT 0
+				)
+			`;
+
+			await sql`ALTER TABLE cotisations ADD COLUMN facture_id INTEGER REFERENCES factures(id)`;
+
+			// What the PDF prints about the issuer, editable from /compta/parametres. Defaults are
+			// what the footer already shows; the address is for the treasury to fill in.
+			await sql`
+				ALTER TABLE compta_settings
+					ADD COLUMN emetteur_nom TEXT NOT NULL DEFAULT 'Liège Hackerspace ASBL',
+					ADD COLUMN emetteur_adresse TEXT NOT NULL DEFAULT '',
+					ADD COLUMN emetteur_numero_entreprise TEXT NOT NULL DEFAULT '0649.448.256',
+					ADD COLUMN emetteur_email TEXT NOT NULL DEFAULT 'compta@lghs.be',
+					ADD COLUMN emetteur_iban TEXT NOT NULL DEFAULT '',
+					ADD COLUMN mention_tva TEXT NOT NULL DEFAULT 'Régime particulier de franchise des petites entreprises — TVA non applicable (art. 56bis CTVA)',
+					ADD COLUMN delai_paiement_jours INTEGER NOT NULL DEFAULT 30 CHECK (delai_paiement_jours >= 0)
+			`;
+		}
+	},
+	{
+		version: 22,
+		name: 'create compta: comptes, mouvements, imports_bancaires, lettrages',
+		up: async (sql) => {
+			// Bank and cash accounts with their movements, and the matching (lettrage) of movements
+			// against invoices, dues and expense claims — docs/compta.md, "Banque et caisse".
+			await sql`
+				CREATE TABLE comptes (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					type TEXT NOT NULL CHECK (type IN ('banque', 'caisse')),
+					nom TEXT NOT NULL,
+					iban TEXT,
+					-- Balance before the first recorded movement; the current balance is this plus the
+					-- sum of movements, computed on read.
+					solde_ouverture NUMERIC(12, 2) NOT NULL DEFAULT 0,
+					date_ouverture DATE NOT NULL DEFAULT CURRENT_DATE,
+					actif BOOLEAN NOT NULL DEFAULT true,
+					dolibarr_bank_id INTEGER UNIQUE
+				)
+			`;
+
+			// One row per statement file imported, for the audit trail and for "where did this
+			// movement come from".
+			await sql`
+				CREATE TABLE imports_bancaires (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					compte_id INTEGER NOT NULL REFERENCES comptes(id),
+					nom_fichier TEXT NOT NULL,
+					lignes INTEGER NOT NULL,
+					nouvelles INTEGER NOT NULL,
+					actor_sub TEXT NOT NULL
+				)
+			`;
+
+			await sql`
+				CREATE TABLE mouvements (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					compte_id INTEGER NOT NULL REFERENCES comptes(id),
+					date_valeur DATE NOT NULL,
+					-- Signed: money in is positive, money out negative.
+					montant NUMERIC(12, 2) NOT NULL,
+					libelle TEXT NOT NULL,
+					contrepartie_nom TEXT,
+					contrepartie_iban TEXT,
+					communication TEXT,
+					import_id INTEGER REFERENCES imports_bancaires(id),
+					-- Bank-side identity of the line (statement + transaction number, or a hash of the
+					-- row), so re-importing an overlapping export never duplicates a movement.
+					external_id TEXT,
+					-- Both legs of an internal transfer share the id of the first leg.
+					transfert_id INTEGER,
+					UNIQUE (compte_id, external_id)
+				)
+			`;
+			await sql`CREATE INDEX mouvements_compte_date ON mouvements (compte_id, date_valeur DESC, id DESC)`;
+
+			// One row per allocation of (part of) a movement to a target: a payment can settle
+			// several invoices, an invoice can be paid in several times.
+			await sql`
+				CREATE TABLE lettrages (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					mouvement_id INTEGER NOT NULL REFERENCES mouvements(id) ON DELETE CASCADE,
+					cible_type TEXT NOT NULL CHECK (cible_type IN ('facture', 'cotisation', 'note_de_frais', 'autre')),
+					-- NULL only for 'autre' (a free-text allocation: bank fees, a donation…).
+					cible_id INTEGER,
+					-- Always positive; the movement's sign says which way the money went.
+					montant NUMERIC(12, 2) NOT NULL CHECK (montant > 0),
+					libelle TEXT,
+					CHECK (cible_type = 'autre' OR cible_id IS NOT NULL)
+				)
+			`;
+			await sql`CREATE INDEX lettrages_mouvement ON lettrages (mouvement_id)`;
+			await sql`CREATE INDEX lettrages_cible ON lettrages (cible_type, cible_id)`;
+		}
+	},
+	{
+		version: 23,
+		name: 'factures: envoi par email',
+		up: async (sql) => {
+			// When and to whom an issued invoice was last emailed (factureMail.ts) — shown on the
+			// invoice, and what stops the scheduler from sending a subscription invoice twice.
+			await sql`ALTER TABLE factures ADD COLUMN envoyee_le TIMESTAMPTZ, ADD COLUMN envoyee_a TEXT`;
+		}
+	},
+	{
+		version: 24,
+		name: 'create notes_de_frais; automatic Authentik deactivation',
+		up: async (sql) => {
+			// Expense claims: a member submits, the treasury accepts or refuses, and the refund is a
+			// bank movement matched against the claim (lettrages, cible note_de_frais) — docs/compta.md.
+			await sql`
+				CREATE TABLE notes_de_frais (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					tiers_id INTEGER NOT NULL REFERENCES tiers(id),
+					date DATE NOT NULL,
+					libelle TEXT NOT NULL,
+					montant NUMERIC(12, 2) NOT NULL CHECK (montant > 0),
+					statut TEXT NOT NULL DEFAULT 'soumise' CHECK (statut IN ('soumise', 'acceptee', 'refusee', 'remboursee')),
+					-- The receipt, in the row like invoice PDFs.
+					justificatif BYTEA,
+					justificatif_nom TEXT,
+					justificatif_type TEXT,
+					decision_le TIMESTAMPTZ,
+					decision_par TEXT,
+					motif TEXT,
+					remboursee_le DATE
+				)
+			`;
+			await sql`CREATE INDEX notes_de_frais_tiers ON notes_de_frais (tiers_id, id DESC)`;
+			await sql`CREATE INDEX notes_de_frais_statut ON notes_de_frais (statut)`;
+
+			// Off by default: switching it on (from /compta/parametres) makes adhesionSync.ts deactivate
+			// the Authentik account of members whose dues expired past the grace period, and reactivate
+			// those it deactivated once they're covered again.
+			await sql`ALTER TABLE compta_settings ADD COLUMN desactivation_auto BOOLEAN NOT NULL DEFAULT false`;
+			// Only accounts Passport itself deactivated are ever reactivated by it.
+			await sql`ALTER TABLE tiers ADD COLUMN desactive_le TIMESTAMPTZ`;
+		}
+	},
+	{
+		version: 25,
+		name: 'create gmail_connexion, messages_releves, documents_recus',
+		up: async (sql) => {
+			// The treasury's Gmail mailbox (gmail.ts): one row, the OAuth refresh token encrypted.
+			await sql`
+				CREATE TABLE gmail_connexion (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					email TEXT NOT NULL,
+					refresh_token TEXT NOT NULL,
+					connecte_le TIMESTAMPTZ NOT NULL DEFAULT now(),
+					connecte_par TEXT NOT NULL
+				)
+			`;
+
+			// Every mail already collected from the mailbox (reception.ts), so that it's fetched
+			// once — the mailbox itself is only ever read, never labelled or modified. The sender
+			// check is kept with its evidence, for the treasurer to review.
+			await sql`
+				CREATE TABLE messages_releves (
+					gmail_message_id TEXT PRIMARY KEY,
+					releve_le TIMESTAMPTZ NOT NULL DEFAULT now(),
+					recu_le TIMESTAMPTZ NOT NULL,
+					expediteur TEXT NOT NULL,
+					sujet TEXT NOT NULL,
+					verifie BOOLEAN NOT NULL,
+					verification JSONB NOT NULL
+				)
+			`;
+
+			// The invoices found in those mails, waiting for the treasurer: nothing here is in the
+			// books until it's imported (facture_id set) — see docs/compta.md, "Réception".
+			await sql`
+				CREATE TABLE documents_recus (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					gmail_message_id TEXT NOT NULL REFERENCES messages_releves(gmail_message_id),
+					-- Rank of the document within its mail (a mail can carry several invoices).
+					position INTEGER NOT NULL,
+					statut TEXT NOT NULL DEFAULT 'a_traiter' CHECK (statut IN ('a_traiter', 'importe', 'ignore')),
+					pdf BYTEA,
+					pdf_nom TEXT,
+					ubl BYTEA,
+					ubl_nom TEXT,
+					-- Read from the UBL when there is one, for the list; the import re-reads the file.
+					fournisseur_nom TEXT,
+					numero TEXT,
+					date_emission DATE,
+					total NUMERIC(12, 2),
+					facture_id INTEGER REFERENCES factures(id) ON DELETE SET NULL,
+					traite_le TIMESTAMPTZ,
+					traite_par TEXT,
+					UNIQUE (gmail_message_id, position),
+					CHECK (pdf IS NOT NULL OR ubl IS NOT NULL)
+				)
+			`;
+			await sql`CREATE INDEX documents_recus_statut ON documents_recus (statut, id DESC)`;
+
+			// Sender domains accepted as "Doccle" (comma-separated), and how far back to look.
+			await sql`
+				ALTER TABLE compta_settings
+					ADD COLUMN reception_domaines TEXT NOT NULL DEFAULT 'doccle.be',
+					ADD COLUMN reception_auto BOOLEAN NOT NULL DEFAULT false
+			`;
+		}
+	},
+	{
+		version: 26,
+		name: 'create rappels',
+		up: async (sql) => {
+			// Payment reminders actually sent for an issued invoice (rappels.ts). A reminder is
+			// proposed by the app and sent only once a treasurer picked it: what's here is history.
+			await sql`
+				CREATE TABLE rappels (
+					id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					facture_id INTEGER NOT NULL REFERENCES factures(id) ON DELETE CASCADE,
+					-- 1 for the first reminder of an invoice, 2 for the second, and so on.
+					niveau INTEGER NOT NULL CHECK (niveau >= 1),
+					envoye_le TIMESTAMPTZ NOT NULL DEFAULT now(),
+					envoye_a TEXT NOT NULL,
+					envoye_par TEXT NOT NULL,
+					-- What was still owed when the reminder left, and the text that was sent.
+					reste NUMERIC(12, 2) NOT NULL,
+					message TEXT NOT NULL
+				)
+			`;
+			await sql`CREATE INDEX rappels_facture ON rappels (facture_id, id DESC)`;
+			// Days past the due date before a first reminder is proposed, and between two reminders.
+			await sql`
+				ALTER TABLE compta_settings
+					ADD COLUMN rappel_delai_jours INTEGER NOT NULL DEFAULT 14 CHECK (rappel_delai_jours >= 0)
+			`;
+		}
+	},
+	{
+		version: 27,
+		name: 'official headings, comptes_annuels, opening balances',
+		up: async (sql) => {
+			// The heading of the official statement (rubriques.ts) a document falls under, when the
+			// treasurer chose one; NULL means the default for that kind of document.
+			await sql`ALTER TABLE factures ADD COLUMN rubrique TEXT`;
+			await sql`ALTER TABLE notes_de_frais ADD COLUMN rubrique TEXT`;
+			await sql`ALTER TABLE cotisations ADD COLUMN rubrique TEXT`;
+			await sql`ALTER TABLE lettrages ADD COLUMN rubrique TEXT`;
+
+			// What the annual accounts need and the books can't know: the notes of the annexe, and
+			// the assets, debts, rights and commitments that aren't bank balances or invoices.
+			await sql`
+				CREATE TABLE comptes_annuels (
+					annee INTEGER PRIMARY KEY,
+					updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+					updated_by TEXT NOT NULL,
+					regles_evaluation TEXT NOT NULL DEFAULT '',
+					adaptation_regles TEXT NOT NULL DEFAULT '',
+					informations_complementaires TEXT NOT NULL DEFAULT '',
+					-- Amounts keyed by line (comptesAnnuels.ts), and free text for what can't be quantified.
+					montants JSONB NOT NULL DEFAULT '{}',
+					droits_engagements_texte TEXT NOT NULL DEFAULT '',
+					-- Date the general assembly approved the accounts, printed on the document.
+					approuves_le DATE
+				)
+			`;
+
+			// Dolibarr keeps an account's opening balance as a bank line ("Solde initial"); imported
+			// as a movement it showed up as a receipt. It's the account's opening balance.
+			const lignes = await sql<{ id: number; compte_id: number; date_valeur: string; montant: string }[]>`
+				SELECT m.id, m.compte_id, m.date_valeur::text AS date_valeur, m.montant
+				FROM mouvements m
+				WHERE m.external_id LIKE 'dolibarr-%' AND m.libelle ~* '^\\(?\\s*(solde initial|initialbankbalance)\\s*\\)?$'
+				  AND NOT EXISTS (SELECT 1 FROM lettrages l WHERE l.mouvement_id = m.id)
+			`;
+			for (const l of lignes) {
+				await sql`
+					UPDATE comptes SET solde_ouverture = solde_ouverture + ${l.montant}, date_ouverture = LEAST(date_ouverture, ${l.date_valeur}::date)
+					WHERE id = ${l.compte_id}
+				`;
+				await sql`DELETE FROM mouvements WHERE id = ${l.id}`;
+			}
+		}
 	}
 ];
 

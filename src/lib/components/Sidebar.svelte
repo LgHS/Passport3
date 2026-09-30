@@ -4,6 +4,7 @@
 	import {
 		displayName,
 		isAdmin,
+		isTresorier,
 		COTISATION_STATUS_LABEL,
 		COTISATION_STATUS_COLOR,
 		type AppUser,
@@ -43,7 +44,7 @@
 
 	const itemClass =
 		'no-underline-fx flex items-center gap-3 rounded px-4 py-1.5 text-sm font-bold uppercase transition-colors';
-	// Small grey heading above a group of entries ("Mon compte", "Hackerspace", "Sécurité", "Admin"); the
+	// Small grey heading above a group of entries ("Mon compte", "Hackerspace", "Sécurité", "Admin", "Compta"); the
 	// foldable ones are buttons with the same look.
 	const sectionLabelClass = 'mt-3 mb-0.5 px-4 text-xs font-bold tracking-wide text-gray-500 uppercase';
 	function itemStateClass(href: string, active = isActive(href)): string {
@@ -57,14 +58,18 @@
 			page.url.pathname.startsWith('/admin/invite')
 	);
 
+	// "Tableau de bord" is /compta itself only; every page under it has its own entry.
+	const comptaHomeActive = $derived(page.url.pathname === '/compta');
+
 	// Foldable menu sections, open by default. Only the ones a member closed are remembered, per
 	// browser (same convenience-only storage as the collapsed sidebar below). Sécurité isn't one of
 	// them: Incidents must always be one glance away.
 	const SECTIONS_STORAGE_KEY = 'sidebar-closed-sections';
 	const SECTION_PATHS: Record<string, string[]> = {
-		account: ['/profile', '/cotisation', '/badge', '/permissions', '/github'],
+		account: ['/profile', '/cotisation', '/notes-de-frais', '/societes', '/badge', '/permissions', '/github'],
 		hackerspace: ['/trombinoscope', '/tasks', '/wishlist'],
-		admin: ['/admin']
+		admin: ['/admin'],
+		compta: ['/compta']
 	};
 	let closedSections = $state<Record<string, boolean>>({});
 
@@ -235,6 +240,13 @@
 						</svg>
 						Cotisation
 					</a>
+					<a href="/notes-de-frais" onclick={closeOverlay} class="{itemClass} {itemStateClass('/notes-de-frais')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path d="M5 3.5h7l3 3v10H5z" stroke-linejoin="round" />
+							<path d="M12 3.5v3h3 M7.5 10h5 M7.5 13h5" stroke-linecap="round" />
+						</svg>
+						Notes de frais
+					</a>
 					<a href="/badge" onclick={closeOverlay} class="{itemClass} {itemStateClass('/badge')}">
 						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
 							<rect x="5" y="2" width="10" height="16" rx="2" />
@@ -330,6 +342,54 @@
 						<a href="/admin/audit" onclick={closeOverlay} class="{itemClass} {itemStateClass('/admin/audit')}">
 							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="6.5" /><path d="M10 6.5 V10 L12.5 11.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
 							Audit
+						</a>
+					</div>
+				{/if}
+			{/if}
+
+			{#if isTresorier(user)}
+				{@render foldHeader('compta', 'Compta')}
+				{#if !closedSections.compta}
+					<div class="flex flex-col gap-0.5" transition:slide={{ duration: foldDuration }}>
+						<a href="/compta" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta', comptaHomeActive)}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3.5" y="3.5" width="13" height="13" rx="1" /><path d="M6.5 13.5 V10.5 M10 13.5 V6.5 M13.5 13.5 V9" stroke-linecap="round" /></svg>
+							Tableau de bord
+						</a>
+						<a href="/compta/tiers" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/tiers')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="7" r="3" /><path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round" /></svg>
+							Tiers
+						</a>
+						<a href="/compta/factures" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/factures')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 3.5h7l3 3v10H5z" stroke-linejoin="round" /><path d="M12 3.5v3h3 M7.5 10h5 M7.5 13h5" stroke-linecap="round" /></svg>
+							Factures
+						</a>
+						<a href="/compta/reception" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/reception')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3.5 11.5 L5.5 4.5 H14.5 L16.5 11.5 V15.5 H3.5 Z" stroke-linejoin="round" /><path d="M3.5 11.5 H7.5 L8.5 13.5 H11.5 L12.5 11.5 H16.5" stroke-linejoin="round" /></svg>
+							Réception Doccle
+						</a>
+						<a href="/compta/rappels" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/rappels')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5.5 14.5 V9.5 C5.5 6.8 7.5 4.5 10 4.5 S14.5 6.8 14.5 9.5 V14.5 Z" stroke-linejoin="round" /><path d="M4 14.5 H16 M9 17 H11" stroke-linecap="round" /></svg>
+							Rappels
+						</a>
+						<a href="/compta/banque" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/banque')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8 L10 3.5 L17 8 Z" stroke-linejoin="round" /><path d="M5 8 V14.5 M10 8 V14.5 M15 8 V14.5 M3 16.5 H17" stroke-linecap="round" /></svg>
+							Banque &amp; caisse
+						</a>
+						<a href="/compta/notes-de-frais" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/notes-de-frais')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5.5 3.5 H14.5 V16.5 L12.5 15 L10 16.5 L7.5 15 L5.5 16.5 Z" stroke-linejoin="round" /><path d="M8 7.5 H12 M8 10.5 H12" stroke-linecap="round" /></svg>
+							Notes de frais
+						</a>
+						<a href="/compta/journal" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/journal')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4.5 3.5 H15.5 V16.5 H4.5 Z" stroke-linejoin="round" /><path d="M7.5 3.5 V16.5 M10 7.5 H13 M10 10.5 H13" stroke-linecap="round" /></svg>
+							Journal &amp; comptes
+						</a>
+						<a href="/compta/parametres" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/parametres')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="2.5" /><path d="M10 3.5 V5.5 M10 14.5 V16.5 M3.5 10 H5.5 M14.5 10 H16.5 M5.6 5.6 L7 7 M13 13 L14.4 14.4 M5.6 14.4 L7 13 M13 7 L14.4 5.6" stroke-linecap="round" /></svg>
+							Paramètres
+						</a>
+						<a href="/compta/import" onclick={closeOverlay} class="{itemClass} {itemStateClass('/compta/import')}">
+							<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3.5 V12 M6.5 8.5 L10 12 L13.5 8.5" stroke-linecap="round" stroke-linejoin="round" /><path d="M4 14 V16.5 H16 V14" stroke-linecap="round" stroke-linejoin="round" /></svg>
+							Import Dolibarr
 						</a>
 					</div>
 				{/if}

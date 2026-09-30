@@ -3,12 +3,20 @@ import { dev } from '$app/environment';
 import { OidcUnavailableError, verifyIdToken } from '$lib/server/authentik';
 import { clearSessionCookie, SESSION_COOKIE } from '$lib/server/session';
 import { startBirthdayScheduler } from '$lib/server/birthdayScheduler';
+import { startFactureScheduler } from '$lib/server/compta/factureScheduler';
+import { startAdhesionSync } from '$lib/server/compta/adhesionSync';
+import { startReceptionScheduler } from '$lib/server/compta/reception';
+import { startRappelDigest } from '$lib/server/compta/rappels';
 import { startTaskReminderScheduler } from '$lib/server/taskReminders';
 import { DATABASE_UNAVAILABLE_MESSAGE, isDatabaseUnavailable } from '$lib/server/db';
 
 // Module scope, not inside `handle` below — runs exactly once per server process, unlike `handle`
 // which runs on every request.
 startBirthdayScheduler();
+startFactureScheduler();
+startAdhesionSync();
+startReceptionScheduler();
+startRappelDigest();
 startTaskReminderScheduler();
 
 export const handle: Handle = async ({ event, resolve }) => {

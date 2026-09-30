@@ -11,8 +11,8 @@
 	// rationale as the badge UUID field: the input owns its value once the user starts typing.
 	// svelte-ignore state_referenced_locally
 	let ibanPersoValue = $state(form?.ibanPerso ?? data.bankInfo?.perso ?? '');
-	// svelte-ignore state_referenced_locally
-	let ibanProValue = $state(form?.ibanPro ?? data.bankInfo?.pro ?? '');
+	// Administers at least one organisation: its IBAN is edited on the organisation's page.
+	const isPro = $derived((data.bankInfo?.organisations.length ?? 0) > 0);
 
 	// Groups into 4-character blocks as you type (BE71 0961 2345 6769) so a long IBAN stays
 	// readable — purely cosmetic, the server strips whitespace again before validating.
@@ -28,8 +28,6 @@
 			? 'Compte avec lequel vous payez vos consommations.'
 			: 'Compte avec lequel vous payez vos cotisations et consommations.';
 	}
-	const IBAN_PRO_TOOLTIP =
-		'Compte avec lequel vous payez vos cotisations et factures du hackerspace.';
 
 	const dateFormat = new Intl.DateTimeFormat('fr-BE', { dateStyle: 'medium' });
 	function formatDate(date: Date | null): string {
@@ -55,26 +53,13 @@
 		return invoice.paid ? 'text-green-700' : 'text-red-700';
 	}
 
-	// Dolibarr may return a subscription with either bound missing (see parseDolibarrDate: "", 0 and
-	// "0" all mean "no date"). One that still has a start or an end can be placed on the timeline;
-	// one with neither carries no chronological information at all and is listed apart. Pinning the
-	// latter to epoch 0 instead would invent a phantom "1970" entry in the year pager — holding a row
-	// nobody would ever page back far enough to reach.
-	const datedSubscriptions = $derived(
-		data.subscriptions.filter((s) => s.start !== null || s.end !== null)
-	);
-	const undatedSubscriptions = $derived(
-		data.subscriptions.filter((s) => s.start === null && s.end === null)
-	);
-
 	// Merges the real subscriptions with the detected gaps into one chronological list so the table
 	// can render "missing cotisation" rows interleaved at their correct position.
 	//
-	// `year` is stored per row rather than re-derived from `date` downstream, because the two kinds
-	// don't live in the same clock: a subscription is an instant (rendered in the reader's timezone),
-	// a gap is a calendar month the server pinned to UTC midnight. Reading a gap's year locally would
-	// file January's gap under the previous year for any reader at a negative offset — the same slip
-	// the UTC formatter above guards against, and the reason both must be handled at the source.
+	// `year` is stored per row rather than re-derived from `date` downstream. Both kinds are
+	// calendar days the server pinned to UTC midnight (a cotisation's bounds as much as a gap's
+	// month), so both are read with getUTCFullYear and formatted in UTC below — read locally, a
+	// 1 January boundary files under the previous year for any reader at a negative offset.
 	type CotisationRow =
 		| {
 				kind: 'subscription';
@@ -85,15 +70,12 @@
 		| { kind: 'gap'; date: number; year: number; gap: PageData['gaps'][number] };
 	const cotisationRows = $derived<CotisationRow[]>(
 		[
-			...datedSubscriptions.map((subscription) => {
-				const anchor = (subscription.start ?? subscription.end) as Date;
-				return {
-					kind: 'subscription' as const,
-					date: anchor.getTime(),
-					year: anchor.getFullYear(),
-					subscription
-				};
-			}),
+			...data.subscriptions.map((subscription) => ({
+				kind: 'subscription' as const,
+				date: subscription.start.getTime(),
+				year: subscription.start.getUTCFullYear(),
+				subscription
+			})),
 			...data.gaps.map((gap) => ({
 				kind: 'gap' as const,
 				date: gap.start.getTime(),
@@ -161,6 +143,19 @@
 	const displayedInvoices = $derived([...yearInvoices, ...undatedInvoices]);
 </script>
 
+<!-- Where a cotisation came from (an organisation's, inherited through a link) and whether it's
+     still awaiting payment — an invoiced-but-unpaid one shows here but grants nothing yet. -->
+{#snippet subscriptionNote(subscription: PageData['subscriptions'][number])}
+	{#if subscription.via}
+		<span class="text-gray-500">via {subscription.via}</span>
+	{/if}
+	{#if subscription.statut === 'attendue'}
+		<span class="text-orange-600">(en attente de paiement)</span>
+	{:else if subscription.statut === 'annulee'}
+		<span class="text-gray-500">(annulée)</span>
+	{/if}
+{/snippet}
+
 {#snippet downloadIcon()}
 	<svg viewBox="0 0 20 20" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.75">
 		<path d="M10 3v10.5m0 0-3.25-3.25M10 13.5l3.25-3.25" stroke-linecap="round" stroke-linejoin="round" />
@@ -176,15 +171,26 @@
 	<section class="w-full md:w-2/3">
 		<h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma cotisation</h1>
 
-		{#if data.unavailable}
-			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-				Service de cotisation temporairement indisponible. Réessayez dans quelques instants.
-			</p>
-		{:else if data.status === null}
+		{#if data.status === null}
 			<CotisationStatusBlock status={null} datefin={null} />
 		{:else}
 			<div class="mb-6">
-				<CotisationStatusBlock status={data.status} datefin={data.datefin} isInactive={data.isInactive} />
+				<CotisationStatusBlock
+					status={data.status}
+					datefin={data.datefin}
+					finGrace={data.finGrace}
+					isInactive={data.isInactive}
+				/>
+				{#if data.sources.length > 1}
+					<p class="mt-2 text-sm text-gray-600">
+						Vous êtes couvert·e à la fois par
+						{data.sources.map((s) => (s === null ? 'votre cotisation personnelle' : s)).join(' et par ')}.
+					</p>
+				{:else if data.via}
+					<p class="mt-2 text-sm text-gray-600">
+						Votre cotisation est prise en charge par <span class="font-bold">{data.via}</span>.
+					</p>
+				{/if}
 			</div>
 
 			{#if availableYears.length > 1}
@@ -209,16 +215,19 @@
 				</div>
 			{/if}
 
-			{#if yearRows.length > 0 || undatedSubscriptions.length > 0}
+			{#if yearRows.length > 0}
 				<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->
 				<div class="space-y-2 sm:hidden">
 					{#each yearRows as row (row.kind === 'subscription' ? `sub-${row.subscription.id}` : `gap-${row.gap.start.getTime()}`)}
 						{#if row.kind === 'subscription'}
 							<div class="border border-black p-3 text-sm">
 								<p class="font-bold">
-									{formatDate(row.subscription.start)} — {formatDate(row.subscription.end)}
+									{gapDateFormat.format(row.subscription.start)} — {gapDateFormat.format(row.subscription.end)}
 								</p>
-								<p class="mt-1 text-gray-600">{amountFormat.format(row.subscription.amount)}</p>
+								<p class="mt-1 text-gray-600">
+									{amountFormat.format(row.subscription.amount)}
+									{@render subscriptionNote(row.subscription)}
+								</p>
 							</div>
 						{:else}
 							<div class="border border-black bg-red-50 p-3 text-sm text-red-700">
@@ -228,14 +237,6 @@
 								<p class="mt-1">Non perçu</p>
 							</div>
 						{/if}
-					{/each}
-					{#each undatedSubscriptions as subscription (`undated-${subscription.id}`)}
-						<div class="border border-black p-3 text-sm">
-							<p class="font-bold">
-								{formatDate(subscription.start)} — {formatDate(subscription.end)}
-							</p>
-							<p class="mt-1 text-gray-600">{amountFormat.format(subscription.amount)}</p>
-						</div>
 					{/each}
 				</div>
 
@@ -252,11 +253,12 @@
 							{#each yearRows as row (row.kind === 'subscription' ? `sub-${row.subscription.id}` : `gap-${row.gap.start.getTime()}`)}
 								{#if row.kind === 'subscription'}
 									<tr>
-										<td class="border border-black px-3 py-2">{formatDate(row.subscription.start)}</td>
-										<td class="border border-black px-3 py-2">{formatDate(row.subscription.end)}</td>
-										<td class="border border-black px-3 py-2"
-											>{amountFormat.format(row.subscription.amount)}</td
-										>
+										<td class="border border-black px-3 py-2">{gapDateFormat.format(row.subscription.start)}</td>
+										<td class="border border-black px-3 py-2">{gapDateFormat.format(row.subscription.end)}</td>
+										<td class="border border-black px-3 py-2">
+											{amountFormat.format(row.subscription.amount)}
+											{@render subscriptionNote(row.subscription)}
+										</td>
 									</tr>
 								{:else}
 									<tr class="bg-red-50 text-red-700">
@@ -265,18 +267,6 @@
 										<td class="border border-black px-3 py-2">Non perçu</td>
 									</tr>
 								{/if}
-							{/each}
-							<!-- Belonging to no year, these repeat on every page rather than becoming
-							     unreachable. Both date cells render as "—", so a duplicate is recognisable
-							     as the same row and not mistaken for a second subscription. -->
-							{#each undatedSubscriptions as subscription (`undated-${subscription.id}`)}
-								<tr>
-									<td class="border border-black px-3 py-2">{formatDate(subscription.start)}</td>
-									<td class="border border-black px-3 py-2">{formatDate(subscription.end)}</td>
-									<td class="border border-black px-3 py-2"
-										>{amountFormat.format(subscription.amount)}</td
-									>
-								</tr>
 							{/each}
 						</tbody>
 					</table>
@@ -408,9 +398,8 @@
 				</div>
 
 				<p class="mt-3 text-sm text-gray-600">
-					Si vous êtes enregistré·e sur le réseau Peppol, la facture vous est également envoyée
-					par ce biais. Si le bouton de téléchargement est inactif, la facture est abandonnée ou
-					dans un état anormal. Pour toute question, contactez
+					Si le bouton de téléchargement est inactif, la facture est annulée ou son document n'est
+					pas disponible. Pour toute question, contactez
 					<a href="mailto:compta@lghs.be">compta@lghs.be</a>.
 				</p>
 			{/if}
@@ -423,18 +412,14 @@
 			Renseigner vos coordonnées bancaires facilite l'automatisation des tâches de comptabilité.
 		</p>
 
-		{#if data.unavailable}
-			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-				Service temporairement indisponible. Réessayez dans quelques instants.
-			</p>
-		{:else if data.bankInfo === null}
+		{#if data.bankInfo === null}
 			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
 				Compte introuvable.
 			</p>
 		{:else}
 			{#if form?.success}
 				<p class="mb-4 border-4 border-black bg-lghs-yellow px-4 py-3 text-sm font-bold">
-					{data.bankInfo.isPro ? 'Les IBAN ont été mis à jour.' : "L'IBAN a été mis à jour."}
+					L'IBAN a été mis à jour.
 				</p>
 			{/if}
 			{#if form?.error}
@@ -477,26 +462,8 @@
 						oninput={(e) => (ibanPersoValue = formatIbanInput(e.currentTarget.value))}
 						class="w-full border border-black px-3 py-2 font-mono text-sm uppercase placeholder:text-gray-300 placeholder:normal-case"
 					/>
-					<p class="mt-1 text-xs text-gray-500">{ibanPersoTooltip(data.bankInfo.isPro)}</p>
+					<p class="mt-1 text-xs text-gray-500">{ibanPersoTooltip(isPro)}</p>
 				</div>
-
-				{#if data.bankInfo.isPro}
-					<div class="mb-4">
-						<label class="mb-1 block text-sm font-bold uppercase" for="ibanPro">
-							IBAN professionnel
-						</label>
-						<input
-							id="ibanPro"
-							name="ibanPro"
-							type="text"
-							placeholder="BE71 0961 2345 6769"
-							value={ibanProValue}
-							oninput={(e) => (ibanProValue = formatIbanInput(e.currentTarget.value))}
-							class="w-full border border-black px-3 py-2 font-mono text-sm uppercase placeholder:text-gray-300 placeholder:normal-case"
-						/>
-						<p class="mt-1 text-xs text-gray-500">{IBAN_PRO_TOOLTIP}</p>
-					</div>
-				{/if}
 
 				<button
 					type="submit"
@@ -506,6 +473,21 @@
 					{submittingBankInfo ? 'Enregistrement…' : 'Enregistrer'}
 				</button>
 			</form>
+
+			{#if isPro}
+				<h2 class="mt-8 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Mes sociétés</h2>
+				<p class="mb-3 text-sm text-gray-600">
+					Vous administrez ces sociétés : leur IBAN, leurs factures et leurs personnes liées se gèrent sur leur page.
+				</p>
+				<ul class="space-y-2">
+					{#each data.bankInfo.organisations as org (org.id)}
+						<li class="border border-black p-3 text-sm">
+							<a href="/societes/{org.id}" class="font-bold">{org.nom}</a>
+							{#if !org.ibanSet}<span class="ml-2 text-xs text-red-700">IBAN à renseigner</span>{/if}
+						</li>
+					{/each}
+				</ul>
+			{/if}
 		{/if}
 	</section>
 </div>

@@ -1,218 +1,152 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { getSituationForTiers } from '$lib/server/compta/cotisations';
 import {
-	getMemberByEmail,
-	getMemberSubscriptions,
-	getMemberTypes,
-	deriveCotisationStatus,
-	detectCotisationGaps,
-	parseDolibarrDate,
-	getThirdPartyIbanPro,
-	updateMemberIbanPerso,
-	updateThirdPartyIbanPro,
 	findIbanOwnerConflict,
-	getThirdPartyInvoices,
-	DolibarrUnavailableError
-} from '$lib/server/dolibarr';
-import { validateBankInfoSubmission, maskIban, normalizeIban } from '$lib/server/bankValidation';
+	listOrganisationsAdministrees,
+	resolveTiersForUser,
+	tiersDisplayName,
+	updateTiersIban,
+	type Tiers
+} from '$lib/server/compta/tiers';
+import { listFactures, type Facture } from '$lib/server/compta/factures';
+import { isValidIban, maskIban, normalizeIban } from '$lib/server/bankValidation';
 import { logAuditEvent } from '$lib/server/auditLog';
 import { authentikPk, displayName } from '$lib/types';
 
-const DOLIBARR_UNAVAILABLE_MESSAGE = 'Service temporairement indisponible. Réessayez dans quelques instants.';
-
-// Auth guard shared by the load and the action below — never trust a client-submitted member/
-// thirdparty id, always re-derive from the authenticated session's email.
-async function resolveOwnMember(locals: App.Locals) {
+// Auth guard shared by the load and the action below — never trust a client-submitted tiers id,
+// always re-derive from the authenticated session.
+async function resolveOwnTiers(locals: App.Locals): Promise<Tiers | null> {
 	if (!locals.user) {
 		redirect(302, '/login');
 	}
-
-	const email = locals.user.email;
-	if (!email) {
-		error(500, 'Impossible de résoudre votre adresse email pour interroger Dolibarr.');
-	}
-
-	return getMemberByEmail(email);
+	return resolveTiersForUser(locals.user);
 }
 
-// Distinct from "no Dolibarr member found" below — see feedback_distinguish-fetch-failure-from-empty.
-// A member with genuinely no Dolibarr record and a member Dolibarr couldn't be reached for both
-// end up with `status: null`, but only `unavailable: true` means "we don't know yet, ask again"
-// rather than "confirmed: nothing to show here".
+// The organisations linked from the bank section: id and name, and whether an IBAN is set.
+function bankOrganisation(t: Tiers) {
+	return { id: t.id, nom: tiersDisplayName(t), ibanSet: t.iban !== null };
+}
+
+// "No tiers found" is a plausible business state (not yet registered in the books), rendered by
+// the page as "compte introuvable"; a Postgres outage, by contrast, throws and is reported by
+// handleError — so this page no longer needs an `unavailable` flag of its own.
 const NO_MEMBER_RESULT = {
-	unavailable: false,
 	status: null,
 	datefin: null,
+	finGrace: null,
+	via: null,
+	sources: [] as (string | null)[],
 	subscriptions: [],
 	gaps: [],
 	isInactive: false,
 	bankInfo: null,
-	invoices: []
+	invoices: [] as MemberInvoice[]
 };
 
+// What the page renders per invoice — no storage path, nothing internal.
+export interface MemberInvoice {
+	id: number;
+	ref: string;
+	date: Date | null;
+	amount: number;
+	paid: boolean;
+	abandoned: boolean;
+	type: string;
+	downloadable: boolean;
+}
+
+// The member's own invoices and those of the organisations they administer. Drafts are never
+// shown: their amount can still change and they have no PDF yet.
+async function loadInvoices(tiers: Tiers, organisations: Tiers[]): Promise<MemberInvoice[]> {
+	const factures = await listFactures({ sens: 'emise', tiersIds: [tiers, ...organisations].map((t) => t.id) });
+	return factures
+		.filter((f) => f.statut !== 'brouillon')
+		.map((f: Facture) => ({
+			id: f.id,
+			ref: f.numero ?? f.referenceExterne ?? `#${f.id}`,
+			date: f.dateEmission,
+			amount: f.total,
+			paid: f.statut === 'payee',
+			abandoned: f.statut === 'annulee',
+			type: f.type === 'note_de_credit' ? 'Note de crédit' : 'Facture',
+			downloadable: f.hasPdf && f.statut !== 'annulee'
+		}));
+}
+
 export const load: PageServerLoad = async ({ locals }) => {
-	try {
-		const member = await resolveOwnMember(locals);
-		if (!member) {
-			// Not a technical failure — a plausible business state (registration not yet synced to
-			// Dolibarr, or a data mismatch) — so the page handles it itself with an explanation
-			// instead of bouncing to the generic error page.
-			return NO_MEMBER_RESULT;
-		}
-
-		const [types, subscriptions, ibanPro, invoices] = await Promise.all([
-			getMemberTypes(),
-			getMemberSubscriptions(member.id),
-			member.fkSoc ? getThirdPartyIbanPro(member.fkSoc) : Promise.resolve(null),
-			// Invoices hang off the billing third-party, same as ibanPro above — not every invoice
-			// lines up with a subscription period (see the dedicated section below the subscription
-			// table), so this is intentionally its own list rather than a column on `subscriptions`.
-			member.fkSoc ? getThirdPartyInvoices(member.fkSoc) : Promise.resolve([])
-		]);
-		const { gaps, isInactive } = detectCotisationGaps(subscriptions);
-
-		return {
-			unavailable: false,
-			status: deriveCotisationStatus(member, types),
-			datefin: parseDolibarrDate(member.datefin),
-			subscriptions,
-			gaps,
-			isInactive,
-			bankInfo: {
-				perso: member.ibanPerso,
-				// `pro` is only meaningful when the member is linked to a billing third-party — the
-				// page only renders both fields at all when isPro is true, regardless of whether an
-				// IBAN has actually been entered there yet.
-				isPro: member.fkSoc !== null,
-				pro: ibanPro
-			},
-			invoices
-		};
-	} catch (err) {
-		if (err instanceof DolibarrUnavailableError) {
-			return { ...NO_MEMBER_RESULT, unavailable: true };
-		}
-		throw err;
+	const tiers = await resolveOwnTiers(locals);
+	if (!tiers) {
+		// Not a technical failure — a plausible business state (not yet registered in the books,
+		// or an email mismatch) — so the page handles it itself with an explanation instead of
+		// bouncing to the generic error page.
+		return NO_MEMBER_RESULT;
 	}
+
+	const [situation, organisations] = await Promise.all([
+		getSituationForTiers(tiers),
+		listOrganisationsAdministrees(tiers.id)
+	]);
+	const invoices = await loadInvoices(tiers, organisations);
+
+	return {
+		status: situation.status,
+		datefin: situation.datefin,
+		finGrace: situation.finGrace,
+		via: situation.via,
+		subscriptions: situation.subscriptions,
+		gaps: situation.gaps,
+		isInactive: situation.isInactive,
+		sources: situation.sourcesAujourdhui,
+		bankInfo: {
+			perso: tiers.iban,
+			// The organisations the member administers: each has its own page, where its IBAN is
+			// edited. Empty for a "classic" member.
+			organisations: organisations.map(bankOrganisation)
+		},
+		invoices
+	};
 };
 
 export const actions: Actions = {
+	// Only the member's own IBAN is edited here; an organisation's IBAN lives on its own page
+	// (/societes/[id]), for its administrators.
 	updateBankInfo: async ({ request, locals }) => {
-		try {
-			const member = await resolveOwnMember(locals);
-			if (!member) {
-				error(404, 'Aucun adhérent Dolibarr trouvé pour votre adresse email.');
-			}
-			const user = locals.user!;
-			// Dolibarr's member.id (used everywhere else in this file) and Authentik's pk are two
-			// different id spaces — the audit trail is keyed on the latter, same as every other
-			// action, so it resolves separately here even though the rest of this action never needs it.
-			const pk = authentikPk(user);
-
-			const formData = await request.formData();
-			// The pro IBAN only exists for members linked to a billing third-party — strip it before
-			// validation (rather than after) so a non-pro member can never have their legitimate
-			// ibanPerso update rejected by a stray/malformed ibanPro that isn't even theirs to set.
-			if (!member.fkSoc) {
-				formData.delete('ibanPro');
-			}
-
-			const result = validateBankInfoSubmission(formData);
-			if (!result.ok) {
-				return fail(400, { error: result.error, ibanPerso: result.ibanPerso, ibanPro: result.ibanPro });
-			}
-
-			// Canonicalized before comparing: `member.ibanPerso`/`currentIbanPro` come straight from
-			// Dolibarr (`string | null`, and not guaranteed to be stored in the same normalized form
-			// validateBankInfoSubmission() already put `result.*` through), while an empty submitted
-			// field is `''` rather than `null`. Comparing the raw values would treat "no IBAN on
-			// either side" as a change (`'' !== null`), and a same IBAN stored with different
-			// spacing as a false difference — both would defeat the point of only touching what
-			// actually changed. Also doubles as the audit trail's "before" value below, rather than
-			// fetching the same third-party IBAN from Dolibarr a second time.
-			const currentIbanPro = member.fkSoc ? await getThirdPartyIbanPro(member.fkSoc) : null;
-			const storedIbanPerso = normalizeIban(member.ibanPerso ?? '');
-			const storedIbanPro = normalizeIban(currentIbanPro ?? '');
-			const ibanPersoChanged = result.ibanPerso !== storedIbanPerso;
-			const ibanProChanged = member.fkSoc !== null && result.ibanPro !== storedIbanPro;
-
-			// Stop a member from entering someone else's IBAN — a same-person perso/pro match (the
-			// "indépendant" case) is fine, anything else isn't (findIbanOwnerConflict excludes the
-			// caller's own member id/third-party id for exactly that reason, regardless of which
-			// field is being checked). Only checked for values that actually changed: an unchanged
-			// value was already vetted when it was originally set, so re-checking it here would
-			// only add two full-table Dolibarr scans per field for nothing, and could wrongly block
-			// an edit to the *other* field over a pre-existing, untouched value.
-			const own = { memberId: member.id, fkSoc: member.fkSoc };
-			const conflictChecks = [
-				ibanPersoChanged && result.ibanPerso
-					? findIbanOwnerConflict(result.ibanPerso, own)
-					: Promise.resolve(false),
-				ibanProChanged && result.ibanPro
-					? findIbanOwnerConflict(result.ibanPro, own)
-					: Promise.resolve(false)
-			];
-			if ((await Promise.all(conflictChecks)).some(Boolean)) {
-				return fail(400, {
-					error: 'Cet IBAN est déjà utilisé.',
-					ibanPerso: result.ibanPerso,
-					ibanPro: result.ibanPro
-				});
-			}
-
-			// One write at a time rather than in parallel — if the second one fails, we then know
-			// precisely which one landed instead of a bare "something went wrong" while part of the
-			// change may have already gone through.
-			if (ibanPersoChanged) {
-				try {
-					await updateMemberIbanPerso(member.id, result.ibanPerso);
-				} catch (err) {
-					if (err instanceof DolibarrUnavailableError) throw err;
-					return fail(500, {
-						error: "La mise à jour de l'IBAN personnel a échoué, réessayez.",
-						ibanPerso: result.ibanPerso,
-						ibanPro: result.ibanPro
-					});
-				}
-			}
-			if (ibanProChanged) {
-				try {
-					await updateThirdPartyIbanPro(member.fkSoc as number, result.ibanPro);
-				} catch (err) {
-					// A genuine Dolibarr outage still reads as "temporarily unavailable" overall
-					// (the outer catch below) — this only refines the message for a real,
-					// non-outage failure on this second write specifically.
-					if (err instanceof DolibarrUnavailableError) throw err;
-					return fail(500, {
-						error: ibanPersoChanged
-							? "L'IBAN personnel a été enregistré, mais l'IBAN professionnel n'a pas pu être mis à jour. Réessayez avec l'IBAN professionnel."
-							: "La mise à jour de l'IBAN professionnel a échoué, réessayez.",
-						ibanPerso: result.ibanPerso,
-						ibanPro: result.ibanPro
-					});
-				}
-			}
-
-			// Masked to the last 4 digits — this is the flagship case an audit trail exists for
-			// (knowing who changed a payout IBAN, for fraud prevention), but the full number doesn't
-			// need to live a second time at rest here just to serve that purpose.
-			await logAuditEvent(
-				{ sub: user.sub, label: displayName(user) },
-				'user',
-				'bankInfo.update',
-				pk ? { pk } : { email: user.email },
-				{
-					before: { ibanPerso: maskIban(member.ibanPerso ?? ''), ibanPro: maskIban(currentIbanPro ?? '') },
-					after: { ibanPerso: maskIban(result.ibanPerso), ibanPro: maskIban(result.ibanPro) }
-				}
-			);
-
-			return { success: true, ibanPerso: result.ibanPerso, ibanPro: result.ibanPro };
-		} catch (err) {
-			if (err instanceof DolibarrUnavailableError) {
-				return fail(503, { error: DOLIBARR_UNAVAILABLE_MESSAGE });
-			}
-			throw err;
+		const tiers = await resolveOwnTiers(locals);
+		if (!tiers) {
+			error(404, 'Aucun tiers trouvé pour votre compte.');
 		}
+		const user = locals.user!;
+		const pk = authentikPk(user);
+
+		const formData = await request.formData();
+		const ibanPerso = normalizeIban(String(formData.get('ibanPerso') ?? ''));
+		// Empty is a valid submission — it means "clear this IBAN" — but anything non-empty has to
+		// be a real, checksum-valid IBAN before it's written into the books.
+		if (ibanPerso && !isValidIban(ibanPerso)) {
+			return fail(400, { error: 'IBAN personnel invalide (vérifiez le numéro).', ibanPerso });
+		}
+		if (ibanPerso === normalizeIban(tiers.iban ?? '')) {
+			return { success: true, ibanPerso };
+		}
+		// Stop a member from entering someone else's IBAN. Their own tiers and the organisations
+		// they administer are excluded — a person and their one-person company legitimately share
+		// one (the "indépendant" case).
+		const organisations = await listOrganisationsAdministrees(tiers.id);
+		if (ibanPerso && (await findIbanOwnerConflict(ibanPerso, [tiers.id, ...organisations.map((o) => o.id)]))) {
+			return fail(400, { error: 'Cet IBAN est déjà utilisé.', ibanPerso });
+		}
+		await updateTiersIban(tiers.id, ibanPerso);
+		// Masked to the last 4 digits — this is the flagship case an audit trail exists for
+		// (knowing who changed a payout IBAN, for fraud prevention), but the full number doesn't
+		// need to live a second time at rest here just to serve that purpose.
+		await logAuditEvent(
+			{ sub: user.sub, label: displayName(user) },
+			'user',
+			'bankInfo.update',
+			pk ? { pk } : { email: user.email },
+			{ before: maskIban(tiers.iban ?? ''), after: maskIban(ibanPerso) }
+		);
+		return { success: true, ibanPerso };
 	}
 };

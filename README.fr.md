@@ -9,7 +9,7 @@ Il offre une interface unique et conviviale permettant aux membres de gérer leu
 Passport3 sert d'interface personnalisée pour plusieurs services internes, notamment :
 
 - **Authentik** pour l'authentification et la gestion d'identité
-- **Dolibarr** pour les adhésions, cotisations et paiements
+- **Son propre module comptable** pour les tiers, adhésions, factures et (bientôt) le rapprochement bancaire — voir `docs/compta.md`
 - **GitHub** pour demander l'accès à l'organisation du hackerspace
 - **Les systèmes de contrôle d'accès** pour l'accès physique au hackerspace
 - D'autres services communautaires et de gestion des membres
@@ -51,19 +51,19 @@ Passport3 fournit une interface personnalisée pour les membres tout en s'appuya
 - Les groupes et rôles
 - La sécurité et la gestion des sessions
 
-### Dolibarr
+### Comptabilité (compta)
 
-Dolibarr est utilisé pour la gestion administrative et financière des adhésions.
+Passport3 tient lui-même les comptes de l'ASBL (il a remplacé Dolibarr) : tiers (personnes et
+sociétés, avec leurs liens et rôles), adhésions et cotisations, factures émises et reçues avec leurs
+PDF, et le statut d'adhésion qui en découle pour chaque membre. Le module vit sous `/compta`,
+réservé au groupe Authentik `Trésorier` (`PUBLIC_AUTHENTIK_TRESORIER_GROUP`), et est décrit dans
+`docs/compta.md`. Un import unique depuis Dolibarr est disponible sur `/compta/import`.
 
-Passport3 communique avec Dolibarr pour récupérer ou gérer :
-
-- Les fiches des membres
-- Les cotisations d'adhésion
-- Les dates d'expiration des cotisations
-- Les paiements
-- Les factures et documents justificatifs
-- Le statut administratif d'adhésion
-- Les coordonnées bancaires personnelles et professionnelles (IBAN)
+Les emails passent par l'API Gmail, depuis la boîte de la trésorerie : les factures et les rappels
+de paiement en partent, et les factures fournisseurs que Doccle y envoie sont relevées (en lecture
+seule), contrôlées sur leur origine (DMARC/DKIM) et importées après validation par un trésorier.
+Renseignez `GMAIL_CLIENT_ID` et `GMAIL_CLIENT_SECRET` (voir `.env.example`), puis connectez la
+boîte depuis `/compta/parametres`.
 
 ### GitHub
 

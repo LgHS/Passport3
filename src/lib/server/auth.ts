@@ -1,5 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
-import { isAdmin, type AppUser } from '$lib/types';
+import { isAdmin, isTresorier, type AppUser } from '$lib/types';
 
 // SvelteKit form actions never run ancestor `+layout.server.ts` `load` functions — a POST to
 // an action under /admin/* bypasses admin/+layout.server.ts's isAdmin check entirely. Every
@@ -18,5 +18,21 @@ export function requireAdmin(locals: App.Locals): void {
 // assertion at every one of them.
 export function requireAdminUser(locals: App.Locals): AppUser {
 	requireAdmin(locals);
+	return locals.user as AppUser;
+}
+
+// Same shape as requireAdmin, for the /compta module. The same caveat applies: form actions under
+// /compta/* skip the layout guard, so every action calls this itself.
+export function requireTresorier(locals: App.Locals): void {
+	if (!locals.user) {
+		redirect(302, '/login');
+	}
+	if (!isTresorier(locals.user)) {
+		error(403, 'Accès réservé à la trésorerie.');
+	}
+}
+
+export function requireTresorierUser(locals: App.Locals): AppUser {
+	requireTresorier(locals);
 	return locals.user as AppUser;
 }

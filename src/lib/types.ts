@@ -25,10 +25,21 @@ export function isAdmin(user: AppUser): boolean {
 	return adminGroup ? (user.groups?.includes(adminGroup) ?? false) : false;
 }
 
-export type CotisationStatus = 'a_jour' | 'en_attente' | 'expiree' | 'non_applicable';
+// Deliberately independent of isAdmin: an admin manages accounts, a treasurer manages the books,
+// and the CA wants the two kept apart — an admin only sees /compta if they're also in this group.
+export function isTresorier(user: AppUser): boolean {
+	const group = env.PUBLIC_AUTHENTIK_TRESORIER_GROUP;
+	return group ? (user.groups?.includes(group) ?? false) : false;
+}
+
+// `en_grace`: coverage has ended but the treasury-configured grace period hasn't run out yet, so
+// access stays open — distinct from `expiree`, which is what actually deactivates the member (see
+// docs/compta.md, "Droit de membre").
+export type CotisationStatus = 'a_jour' | 'en_grace' | 'en_attente' | 'expiree' | 'non_applicable';
 
 export const COTISATION_STATUS_LABEL: Record<CotisationStatus, string> = {
 	a_jour: 'Cotisation à jour',
+	en_grace: 'Cotisation à renouveler',
 	en_attente: 'Cotisation en attente',
 	expiree: 'Cotisation expirée',
 	non_applicable: "Membre d'honneur"
@@ -36,6 +47,7 @@ export const COTISATION_STATUS_LABEL: Record<CotisationStatus, string> = {
 
 export const COTISATION_STATUS_COLOR: Record<CotisationStatus, string> = {
 	a_jour: '#22c55e',
+	en_grace: '#eab308',
 	en_attente: '#f97316',
 	expiree: '#ef4444',
 	non_applicable: 'var(--color-lghs-yellow)'
@@ -57,7 +69,6 @@ export interface MattermostCacheStatus {
 
 export interface SystemStatus {
 	authentik: ServiceStatus;
-	dolibarr: ServiceStatus;
 	mattermost: ServiceStatus;
 	database: ServiceStatus;
 }
