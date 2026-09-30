@@ -79,6 +79,8 @@
 	   app writes the cards and the table twice. Each <td> names its column with data-label; a
 	   cell without one (the row's title, an actions cell) takes the full width. Used by the
 	   treasury pages, which are mostly tables. */
+	/* Plain CSS with !important where a cell's own utility classes (border, padding, alignment)
+	   would otherwise win: utilities outrank this layer. */
 	@media (width < 40rem) {
 		.table-cards,
 		.table-cards tbody,
@@ -86,27 +88,49 @@
 			display: block;
 		}
 		.table-cards thead {
-			@apply sr-only;
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+			white-space: nowrap;
 		}
 		.table-cards tr {
-			@apply mb-2 block border border-black p-3;
+			display: block;
+			margin-bottom: 0.5rem;
+			border: 1px solid #000;
+			padding: 0.75rem;
 		}
-		.table-cards td,
-		.table-cards th[scope='row'] {
-			@apply flex items-baseline justify-between gap-4 border-0 px-0 py-0.5 text-right;
+		.table-cards td {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			gap: 1rem;
+			border: 0 !important;
+			padding: 0.125rem 0 !important;
+			text-align: right;
+			overflow-wrap: anywhere;
 		}
 		.table-cards td[data-label]::before {
 			content: attr(data-label);
-			@apply shrink-0 text-left text-xs font-bold text-gray-600 uppercase;
+			flex-shrink: 0;
+			text-align: left;
+			font-size: 0.75rem;
+			font-weight: 700;
+			text-transform: uppercase;
+			color: var(--color-gray-600);
 		}
 		.table-cards td:not([data-label]) {
-			@apply block text-left;
+			display: block;
+			text-align: left;
 		}
 		/* The row's title when it's a link filling its cell on a larger screen. */
 		.table-cards td > a.block {
-			@apply p-0 font-bold;
+			padding: 0 !important;
+			font-weight: 700;
 		}
-		.table-cards td:empty {
+		.table-cards td:empty,
+		.table-cards td.hidden {
 			display: none;
 		}
 	}
