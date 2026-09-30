@@ -65,8 +65,8 @@
 				<tbody>
 					{#each data.factures as f (f.id)}
 						<tr class="group {f.statut === 'annulee' ? 'text-gray-400' : ''}">
-							<td class="border border-black p-0">
-								<a href="/compta/factures/{f.id}" class="no-underline-fx block px-3 py-2 font-mono transition-colors group-hover:bg-black group-hover:text-white">
+							<td class="border border-black p-0 transition-colors group-hover:bg-black group-hover:text-white">
+								<a href="/compta/factures/{f.id}" class="no-underline-fx block px-3 py-2 font-mono group-hover:text-white">
 									{f.numero ?? `brouillon #${f.id}`}{f.type === 'note_de_credit' ? ' (NC)' : ''}
 								</a>
 							</td>

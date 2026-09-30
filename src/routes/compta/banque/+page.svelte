@@ -115,8 +115,8 @@
 				<tbody>
 					{#each data.comptes as c (c.id)}
 						<tr class="group {c.actif ? '' : 'text-gray-400'}">
-							<td class="border border-black p-0">
-								<a href="/compta/banque/{c.id}" class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white">{c.nom}</a>
+							<td class="border border-black p-0 transition-colors group-hover:bg-black group-hover:text-white">
+								<a href="/compta/banque/{c.id}" class="no-underline-fx block px-3 py-2 group-hover:text-white">{c.nom}</a>
 							</td>
 							<td class="border border-black px-3 py-2" data-label="Type">{c.type === 'banque' ? 'Banque' : 'Caisse'}</td>
 							<td class="border border-black px-3 py-2 font-mono text-xs" data-label="IBAN">{c.iban ?? '—'}</td>
@@ -148,8 +148,8 @@
 				<tbody>
 					{#each data.nonLettres as m (m.id)}
 						<tr class="group">
-							<td class="border border-black p-0">
-								<a href="/compta/banque/mouvements/{m.id}" class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white">{dateFormat.format(m.dateValeur)}</a>
+							<td class="border border-black p-0 transition-colors group-hover:bg-black group-hover:text-white">
+								<a href="/compta/banque/mouvements/{m.id}" class="no-underline-fx block px-3 py-2 group-hover:text-white">{dateFormat.format(m.dateValeur)}</a>
 							</td>
 							<td class="border border-black px-3 py-2" data-label="Compte">{m.compteNom}</td>
 							<td class="border border-black px-3 py-2" data-label="Libellé">{m.libelle}{m.communication ? ` — ${m.communication}` : ''}</td>

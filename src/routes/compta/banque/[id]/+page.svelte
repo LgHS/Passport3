@@ -184,8 +184,8 @@
 				<tbody>
 					{#each rows as { m, solde } (m.id)}
 						<tr class="group">
-							<td class="border border-black p-0">
-								<a href="/compta/banque/mouvements/{m.id}" class="no-underline-fx block px-3 py-2 whitespace-nowrap transition-colors group-hover:bg-black group-hover:text-white">{dateFormat.format(m.dateValeur)}</a>
+							<td class="border border-black p-0 transition-colors group-hover:bg-black group-hover:text-white">
+								<a href="/compta/banque/mouvements/{m.id}" class="no-underline-fx block px-3 py-2 whitespace-nowrap group-hover:text-white">{dateFormat.format(m.dateValeur)}</a>
 							</td>
 							<td class="border border-black px-3 py-2" data-label="Libellé">{m.libelle}{m.communication ? ` — ${m.communication}` : ''}</td>
 							<td class="border border-black px-3 py-2" data-label="Contrepartie">{m.contrepartieNom ?? m.contrepartieIban ?? '—'}</td>
