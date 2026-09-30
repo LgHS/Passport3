@@ -11,7 +11,7 @@
 	let v = $state({ ...(form?.values ?? data.settings) });
 
 	$effect(() => {
-		if (form?.success) showToast('success', form.gmailDeconnecte ? 'Boîte Gmail déconnectée.' : 'Paramètres enregistrés.');
+		if (form?.success) showToast('success', form.gmailDeconnecte ? 'Boîte Gmail déconnectée.' : form.notifications ? 'Notifications enregistrées.' : 'Paramètres enregistrés.');
 		else if (form?.error) showToast('error', form.error);
 	});
 	// Back from Google's consent screen.
@@ -125,6 +125,31 @@
 		<button type="submit" disabled={submitting} class="btn-primary px-4 py-2 disabled:opacity-50">
 			{submitting ? 'Enregistrement…' : 'Enregistrer'}
 		</button>
+	</form>
+
+	<h2 class="mt-10 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Notifications Mattermost</h2>
+	<form method="POST" action="?/notifications" class="border border-black p-4 text-sm" use:enhance={() => async ({ update }) => update({ reset: false })}>
+		<p class="mb-4 text-gray-600">
+			Ce que le bot annonce dans le canal de la trésorerie. Un message dit qu'il y a quelque chose à traiter et renvoie
+			vers Passport ; il ne contient ni coordonnées bancaires ni détail d'une dépense.
+		</p>
+		{#if !data.notifications.botConfigured}
+			<p class="mb-4 border border-black bg-gray-100 px-4 py-3">
+				Le bot Mattermost n'est pas configuré (<code>MATTERMOST_URL</code>, <code>MATTERMOST_BOT_TOKEN</code>) : rien ne sera
+				annoncé.
+			</p>
+		{/if}
+		<label class={labelClass} for="channel">Identifiant du canal</label>
+		<input id="channel" name="channel" type="text" value={data.notifications.channel} placeholder="26 caractères" class="{inputClass} mb-4 max-w-md font-mono" />
+		<div class="mb-4 grid gap-2">
+			{#each data.notifications.evenements as e (e.id)}
+				<label class="flex items-start gap-3">
+					<input type="checkbox" name={e.id} checked={e.actif} class="mt-1" />
+					<span>{e.label}</span>
+				</label>
+			{/each}
+		</div>
+		<button type="submit" class="btn-primary px-4 py-2">Enregistrer les notifications</button>
 	</form>
 
 	<h2 id="gmail" class="mt-10 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Boîte Gmail</h2>

@@ -170,7 +170,7 @@
 	<h2 class={h2Class}>Mouvements <span class="text-xs font-normal normal-case opacity-80">{data.mouvements.length} derniers</span></h2>
 	{#if rows.length > 0}
 		<div class="overflow-x-auto">
-			<table class="w-full border-collapse text-sm">
+			<table class="table-cards w-full border-collapse text-sm">
 				<thead>
 					<tr class="bg-black text-white uppercase">
 						<th class="border border-black px-3 py-2 text-left">Date</th>
@@ -187,11 +187,11 @@
 							<td class="border border-black p-0">
 								<a href="/compta/banque/mouvements/{m.id}" class="no-underline-fx block px-3 py-2 whitespace-nowrap transition-colors group-hover:bg-black group-hover:text-white">{dateFormat.format(m.dateValeur)}</a>
 							</td>
-							<td class="border border-black px-3 py-2">{m.libelle}{m.communication ? ` — ${m.communication}` : ''}</td>
-							<td class="border border-black px-3 py-2">{m.contrepartieNom ?? m.contrepartieIban ?? '—'}</td>
-							<td class="border border-black px-3 py-2 text-right {m.montant < 0 ? 'text-red-700' : 'text-green-700'}">{amountFormat.format(m.montant)}</td>
-							<td class="border border-black px-3 py-2 text-right">{amountFormat.format(solde)}</td>
-							<td class="border border-black px-3 py-2 text-center">
+							<td class="border border-black px-3 py-2" data-label="Libellé">{m.libelle}{m.communication ? ` — ${m.communication}` : ''}</td>
+							<td class="border border-black px-3 py-2" data-label="Contrepartie">{m.contrepartieNom ?? m.contrepartieIban ?? '—'}</td>
+							<td class="border border-black px-3 py-2 sm:text-right {m.montant < 0 ? 'text-red-700' : 'text-green-700'}" data-label="Montant">{amountFormat.format(m.montant)}</td>
+							<td class="border border-black px-3 py-2 sm:text-right" data-label="Solde">{amountFormat.format(solde)}</td>
+							<td class="border border-black px-3 py-2 sm:text-center" data-label="Lettré">
 								{#if m.transfertId !== null}<span class="text-gray-500" title="Virement interne">⇄</span>
 								{:else if m.reste === 0}✓
 								{:else if m.lettre > 0}<span class="text-orange-600" title="Partiellement">◐</span>

@@ -68,7 +68,7 @@
 		</div>
 		{#if data.situation.subscriptions.length > 0}
 			<div class="mb-8 overflow-x-auto">
-				<table class="w-full border-collapse text-sm">
+				<table class="table-cards w-full border-collapse text-sm">
 					<thead>
 						<tr class="bg-black text-white uppercase">
 							<th class="border border-black px-3 py-2 text-left">Début</th>
@@ -79,9 +79,9 @@
 					<tbody>
 						{#each data.situation.subscriptions as s (s.id)}
 							<tr>
-								<td class="border border-black px-3 py-2">{fmt(s.start)}</td>
-								<td class="border border-black px-3 py-2">{fmt(s.end)}</td>
-								<td class="border border-black px-3 py-2">
+								<td class="border border-black px-3 py-2" data-label="Début">{fmt(s.start)}</td>
+								<td class="border border-black px-3 py-2" data-label="Fin">{fmt(s.end)}</td>
+								<td class="border border-black px-3 py-2" data-label="Montant">
 									{amountFormat.format(s.amount)}
 									{#if s.statut === 'attendue'}<span class="text-orange-600">(en attente de paiement)</span>
 									{:else if s.statut === 'annulee'}<span class="text-gray-500">(annulée)</span>{/if}
@@ -95,7 +95,7 @@
 
 		<h2 class={h2Class}>Personnes liées</h2>
 		<div class="mb-8 overflow-x-auto">
-			<table class="w-full border-collapse text-sm">
+			<table class="table-cards w-full border-collapse text-sm">
 				<thead>
 					<tr class="bg-black text-white uppercase">
 						<th class="border border-black px-3 py-2 text-left">Nom</th>
@@ -107,8 +107,8 @@
 					{#each data.personnes as p (p.id)}
 						<tr>
 							<td class="border border-black px-3 py-2">{p.nom}{p.email ? ` · ${p.email}` : ''}</td>
-							<td class="border border-black px-3 py-2">{p.roles.join(', ') || '—'}</td>
-							<td class="border border-black px-3 py-2 text-center">{p.membre ? '✓' : '—'}</td>
+							<td class="border border-black px-3 py-2" data-label="Rôles">{p.roles.join(', ') || '—'}</td>
+							<td class="border border-black px-3 py-2 sm:text-center" data-label="Membre via la société">{p.membre ? '✓' : '—'}</td>
 						</tr>
 					{/each}
 				</tbody>
@@ -118,7 +118,7 @@
 		<h2 class={h2Class}>Factures</h2>
 		{#if data.invoices.length > 0}
 			<div class="overflow-x-auto">
-				<table class="w-full border-collapse text-sm">
+				<table class="table-cards w-full border-collapse text-sm">
 					<thead>
 						<tr class="bg-black text-white uppercase">
 							<th class="border border-black px-3 py-2 text-left">Référence</th>
@@ -132,10 +132,10 @@
 						{#each data.invoices as i (i.id)}
 							<tr>
 								<td class="border border-black px-3 py-2">{i.ref}</td>
-								<td class="border border-black px-3 py-2">{i.type}</td>
-								<td class="border border-black px-3 py-2">{fmt(i.date)}</td>
-								<td class="border border-black px-3 py-2 font-bold {invoiceStatusColor(i)}">{amountFormat.format(i.amount)} ({invoiceStatusLabel(i)})</td>
-								<td class="border border-black px-3 py-2 text-center">
+								<td class="border border-black px-3 py-2" data-label="Type">{i.type}</td>
+								<td class="border border-black px-3 py-2" data-label="Date">{fmt(i.date)}</td>
+								<td class="border border-black px-3 py-2 font-bold {invoiceStatusColor(i)}" data-label="Montant">{amountFormat.format(i.amount)} ({invoiceStatusLabel(i)})</td>
+								<td class="border border-black px-3 py-2 sm:text-center">
 									{#if i.downloadable}<a href="/cotisation/invoice/{i.id}" class="text-xs">PDF</a>{:else}—{/if}
 								</td>
 							</tr>

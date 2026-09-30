@@ -1,3 +1,4 @@
+import { lienPassport, notifierCompta } from './comptaNotifications';
 import { getDb } from '$lib/server/db';
 import { addUTCMonths, brusselsToday, parseIsoDate, parseMoney, toIsoDate } from './dates';
 import { createFacture, validerFacture } from './factures';
@@ -116,8 +117,13 @@ export function startFactureScheduler(): void {
 
 	const run = () =>
 		issueDueInvoices()
-			.then((n) => {
-				if (n > 0) console.info(`[factureScheduler] ${n} facture(s) d'abonnement émise(s)`);
+			.then(async (n) => {
+				if (n === 0) return;
+				console.info(`[factureScheduler] ${n} facture(s) d'abonnement émise(s)`);
+				await notifierCompta(
+					'abonnements',
+					`📄 ${n} facture${n > 1 ? 's' : ''} d’abonnement émise${n > 1 ? 's' : ''} : ${lienPassport('/compta/factures?sens=emise&statut=validee', 'factures à encaisser')}`
+				);
 			})
 			.catch((err) => console.error('[factureScheduler] check failed:', err));
 	run();

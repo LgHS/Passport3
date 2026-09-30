@@ -79,7 +79,7 @@
 
 	{#if filtered.length > 0}
 		<div class="overflow-x-auto">
-			<table class="w-full border-collapse text-sm">
+			<table class="table-cards w-full border-collapse text-sm">
 				<thead>
 					<tr class="bg-black text-white uppercase">
 						<th class="border border-black px-3 py-2 text-left">Nom</th>
@@ -100,10 +100,10 @@
 									{t.displayName}
 								</a>
 							</td>
-							<td class="border border-black px-3 py-2">{t.nature === 'personne_morale' ? 'Société' : 'Personne'}</td>
-							<td class="border border-black px-3 py-2">{t.email ?? '—'}</td>
-							<td class="border border-black px-3 py-2">{roles(t)}</td>
-							<td class="border border-black px-3 py-2 font-mono text-xs">{t.iban ? `••••${t.iban.slice(-4)}` : '—'}</td>
+							<td class="border border-black px-3 py-2" data-label="Nature">{t.nature === 'personne_morale' ? 'Société' : 'Personne'}</td>
+							<td class="border border-black px-3 py-2" data-label="Email">{t.email ?? '—'}</td>
+							<td class="border border-black px-3 py-2" data-label="Rôles">{roles(t)}</td>
+							<td class="border border-black px-3 py-2 font-mono text-xs" data-label="IBAN">{t.iban ? `••••${t.iban.slice(-4)}` : '—'}</td>
 						</tr>
 					{/each}
 				</tbody>

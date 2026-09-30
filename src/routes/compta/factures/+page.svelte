@@ -51,7 +51,7 @@
 
 	{#if data.factures.length > 0}
 		<div class="overflow-x-auto">
-			<table class="w-full border-collapse text-sm">
+			<table class="table-cards w-full border-collapse text-sm">
 				<thead>
 					<tr class="bg-black text-white uppercase">
 						<th class="border border-black px-3 py-2 text-left">Numéro</th>
@@ -70,11 +70,11 @@
 									{f.numero ?? `brouillon #${f.id}`}{f.type === 'note_de_credit' ? ' (NC)' : ''}
 								</a>
 							</td>
-							<td class="border border-black px-3 py-2">{f.tiers.nom}</td>
-							<td class="border border-black px-3 py-2">{fmt(f.dateEmission)}</td>
-							<td class="border border-black px-3 py-2">{fmt(f.dateEcheance)}</td>
-							<td class="border border-black px-3 py-2 text-right">{amountFormat.format(f.total)}</td>
-							<td class="border border-black px-3 py-2 {FACTURE_STATUT_CLASS[f.statut]}">{factureStatutLabel(f.statut, f.type)}</td>
+							<td class="border border-black px-3 py-2" data-label={data.sens === 'emise' ? 'Client' : 'Fournisseur'}>{f.tiers.nom}</td>
+							<td class="border border-black px-3 py-2" data-label="Date">{fmt(f.dateEmission)}</td>
+							<td class="border border-black px-3 py-2" data-label="Échéance">{fmt(f.dateEcheance)}</td>
+							<td class="border border-black px-3 py-2 sm:text-right" data-label="Montant">{amountFormat.format(f.total)}</td>
+							<td class="border border-black px-3 py-2 {FACTURE_STATUT_CLASS[f.statut]}" data-label="Statut">{factureStatutLabel(f.statut, f.type)}</td>
 						</tr>
 					{/each}
 				</tbody>

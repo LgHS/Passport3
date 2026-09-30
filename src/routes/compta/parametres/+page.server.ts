@@ -6,6 +6,8 @@ import { isValidIban, normalizeIban } from '$lib/server/bankValidation';
 import { deconnecterGmail, getGmailConnexion, GmailError, gmailAuthUrl, isGmailClientConfigured } from '$lib/server/compta/gmail';
 import { generateState } from '$lib/server/pkce';
 import { setGmailOAuthStateCookie } from '$lib/server/session';
+import { COMPTA_EVENEMENTS, isMattermostBotConfigured, type ComptaEvenement } from '$lib/server/compta/comptaNotifications';
+import { getSetting, setSetting, SETTING_KEYS } from '$lib/server/appSettings';
 import { logAuditEvent } from '$lib/server/auditLog';
 import { displayName } from '$lib/types';
 
@@ -22,10 +24,24 @@ function normalizeDomaines(raw: string): string | null {
 	return [...new Set(domaines)].join(', ');
 }
 
+// Mattermost channel ids are 26 lowercase alphanumerics.
+const CHANNEL_ID_RE = /^[a-z0-9]{26}$/;
+const EVENEMENTS = Object.keys(COMPTA_EVENEMENTS) as ComptaEvenement[];
+
+async function loadNotifications() {
+	const actifs = await Promise.all(EVENEMENTS.map(async (e) => (await getSetting(COMPTA_EVENEMENTS[e].key)) === 'true'));
+	return {
+		botConfigured: isMattermostBotConfigured(),
+		channel: (await getSetting(SETTING_KEYS.comptaChannel)) ?? '',
+		evenements: EVENEMENTS.map((e, i) => ({ id: e, label: COMPTA_EVENEMENTS[e].label, actif: actifs[i] }))
+	};
+}
+
 export const load: PageServerLoad = async ({ url }) => {
 	const clientConfigured = isGmailClientConfigured();
 	return {
 		settings: await getComptaSettings(),
+		notifications: await loadNotifications(),
 		gmail: {
 			clientConfigured,
 			connexion: clientConfigured ? await getGmailConnexion() : null,
@@ -88,6 +104,27 @@ export const actions: Actions = {
 			rappelDelaiJours: values.rappelDelaiJours
 		});
 		return { success: true, values };
+	},
+
+	notifications: async ({ request, locals }) => {
+		const tresorier = requireTresorierUser(locals);
+		const formData = await request.formData();
+		const channel = String(formData.get('channel') ?? '').trim();
+		if (channel && !CHANNEL_ID_RE.test(channel)) {
+			return fail(400, { error: 'Identifiant de canal invalide (26 caractères, visible dans « Afficher les informations » du canal).' });
+		}
+		const avant = await loadNotifications();
+		const apres: Record<string, boolean> = {};
+		for (const e of EVENEMENTS) {
+			apres[e] = formData.has(e);
+			await setSetting(COMPTA_EVENEMENTS[e].key, apres[e] ? 'true' : null);
+		}
+		await setSetting(SETTING_KEYS.comptaChannel, channel || null);
+		await logAuditEvent({ sub: tresorier.sub, label: displayName(tresorier) }, 'admin', 'compta.notifications.update', {}, {
+			avant: { channel: avant.channel || null, ...Object.fromEntries(avant.evenements.map((e) => [e.id, e.actif])) },
+			apres: { channel: channel || null, ...apres }
+		});
+		return { success: true, notifications: true };
 	},
 
 	// Sends the treasurer to Google's consent screen; the callback route stores the access.
