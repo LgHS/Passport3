@@ -167,8 +167,8 @@ j'administre ».
 - Import : **CSV Belfius** d'abord (export « CSV » de Belfius Direct Net : `Compte;Date de
   comptabilisation;N° d'extrait;N° de transaction;Compte contrepartie;Nom contrepartie…;Transaction;
   Date valeur;Montant;Devise;…;Communications`, point-virgule, montants `1.234,56`, dates
-  `jj/mm/aaaa` ; le lecteur repère l'en-tête par ses intitulés et tolère un préambule). CODA
-  (commun aux banques belges) ensuite si utile.
+  `jj/mm/aaaa` ; le lecteur repère l'en-tête par ses intitulés et tolère un préambule). Pas d'import
+  CODA : décision du CA, le CSV suffit.
 - Auto-lettrage à l'import sur la communication structurée ; le reste est proposé à la
   trésorerie, qui tranche (c'est là qu'une cotisation `libre` naît).
 
@@ -178,27 +178,112 @@ Tout membre soumet une note depuis `/notes-de-frais` (date, libellé, montant, j
 conservé en base). La trésorerie accepte ou refuse (avec motif) depuis `/compta/notes-de-frais` ;
 une note acceptée devient une cible de lettrage : le virement de remboursement (sortie d'argent)
 lui est affecté et elle passe « remboursée ». Statuts : `soumise` → `acceptee` | `refusee` ;
-`acceptee` → `remboursee`.
+`acceptee` → `remboursee`. Une décision s'annule (retour à `soumise`) tant que rien n'est
+remboursé, et la trésorerie peut corriger date, libellé et montant.
+
+## Réception des factures fournisseurs (Doccle)
+
+Doccle envoie chaque facture par email, PDF et UBL joints, à la boîte de la trésorerie. Passport
+relève cette boîte (`reception.ts`, à la demande ou toutes les heures) **en lecture seule** : il
+ne marque, ne déplace ni ne supprime aucun mail, et retient de son côté ce qu'il a déjà relevé
+(`messages_releves`).
+
+1. **Sélection** : les mails avec pièce jointe dont l'expéditeur est d'un domaine accepté
+   (`compta_settings.reception_domaines`, `doccle.be` par défaut).
+2. **Contrôle d'origine** (`receptionVerification.ts`) : l'en-tête `From` ne prouve rien, c'est
+   l'expéditeur qui l'écrit. Ce qui prouve, c'est le verdict que Gmail a enregistré à la
+   réception (`Authentication-Results` de `mx.google.com`, le premier de ce nom). Un mail est
+   « d'origine prouvée » si son domaine `From` est accepté **et** que DMARC a réussi pour ce
+   domaine ; à défaut de tout verdict DMARC, une signature DKIM valide du même domaine suffit. SPF
+   seul ne suffit pas (il porte sur l'enveloppe), un DMARC en échec n'est jamais rattrapé, et un
+   mail à plusieurs `From` est refusé. Le détail (adresse réelle, DMARC, DKIM, SPF, raisons) est
+   conservé et affiché.
+3. **Pièces** : chaque XML lisible comme facture UBL est un document ; son PDF est la pièce de
+   même nom, ou l'unique PDF du mail s'il n'y a qu'une facture. Un PDF sans UBL est un document
+   à encoder à la main. Le reste est écarté, et dit.
+4. **Validation** (`/compta/reception`) : le trésorier voit l'origine, la facture lue, le
+   fournisseur reconnu (numéro d'entreprise, puis nom) ou à créer, et un éventuel doublon. Il
+   importe — la facture reçue est créée avec ses lignes, son PDF et son UBL — ou écarte. Un mail
+   d'origine non prouvée ne s'importe que s'il coche avoir vérifié lui-même, ce que l'audit note.
+
+Rien n'entre dans les livres sans cette validation.
+
+## Rappels de paiement
+
+`/compta/rappels` liste les factures émises échues et non soldées (le reste dû tient compte des
+paiements partiels lettrés). Une facture est **proposée** au rappel `rappel_delai_jours` (14 par
+défaut) après son échéance, puis à nouveau après chaque rappel. Le trésorier coche, relit le
+texte exact de chaque mail, ajoute éventuellement un message, et envoie : **aucun rappel ne part
+seul**. Le ton suit le rang (rappel, deuxième rappel, dernier rappel) ; la facture est jointe ;
+chaque envoi est conservé (`rappels` : destinataires, texte, reste dû) et audité.
+
+## Corrections
+
+Tout ce qui est encodé se corrige depuis l'écran où on le voit : fiche, liens (rôles, siège,
+dates), cotisations, abonnements, mouvements, factures reçues, notes de frais, rubriques. Deux
+limites, voulues :
+
+- **Une facture émise numérotée est figée** : elle a été envoyée, sa correction est une note de
+  crédit suivie d'une nouvelle facture. (Un brouillon se modifie librement ; « marquée payée »
+  s'annule.)
+- **Un mouvement venu d'un extrait garde la date et le montant de la banque** ; son libellé, sa
+  contrepartie et sa communication se complètent.
+
+Ce qui a laissé une trace ailleurs se défait dans l'ordre : on retire le lettrage avant de
+supprimer un mouvement ou une facture reçue, avant d'annuler un paiement ou une décision. Une
+suppression est réservée à l'erreur d'encodage ; ce qui a existé se clôture (lien) ou s'annule
+(cotisation). Chaque correction est auditée avec l'avant et l'après.
 
 ## Sorties comptables
 
-Petite ASBL, comptabilité simplifiée (AR du 26 juin 2003) : `/compta/journal`, par exercice
-civil, donne le **livre journal** (tous les mouvements de tous les comptes, virements internes
-exclus, chacun rangé d'après ses lettrages), l'**état des recettes et dépenses** par rubrique
-(cotisations, dons et sponsoring, ventes et prestations, autres recettes ; achats et services,
-remboursements de frais, autres dépenses ; « non lettré » à part, pour ce qui reste à qualifier)
-et l'**état du patrimoine** au 31/12 (soldes des comptes, créances = factures émises non payées,
-dettes = factures reçues et notes de frais acceptées non payées). Export CSV du journal pour le
-comptable. Pas de plan comptable en partie double.
+Petite ASBL, comptabilité simplifiée : `/compta/journal`, par exercice civil, donne
+
+- le **livre journal** (tous les mouvements de tous les comptes, virements internes exclus,
+  chacun rangé d'après ses lettrages), exportable en CSV ;
+- les **comptes annuels au schéma minimum normalisé** (AR du 29 avril 2019, annexe 8), en PDF :
+  l'**état des recettes et dépenses** et l'**annexe** en cinq points — règles d'évaluation,
+  adaptation de ces règles, informations complémentaires, **état du patrimoine**, droits et
+  engagements.
+
+Les rubriques sont celles du modèle (`$lib/rubriques.ts`) : cotisations, dons et legs, subsides,
+autres recettes ; marchandises et services, rémunérations, services et biens divers, autres
+dépenses. Chaque document a une rubrique par défaut (cotisation → cotisations ; facture reçue et
+note de frais → services et biens divers ; vente et sponsoring → autres recettes, le sponsoring
+ayant une contrepartie, il n'est pas un don) que le trésorier change sur la facture ou sur le
+lettrage. La rubrique décide du côté : un remboursement à un client diminue les recettes de sa
+rubrique. Ce qui n'est pas lettré reste à part, et le PDF porte « Projet » tant qu'il en reste.
+
+Dans l'état du patrimoine, les liquidités (soldes des comptes), les créances (factures émises non
+payées) et les dettes envers fournisseurs et membres viennent des livres ; le reste (immeubles,
+machines, mobilier, stocks, placements, dettes financières et fiscales, droits et engagements)
+vient de l'inventaire et se saisit par exercice (`comptes_annuels`), comme les textes de
+l'annexe et la date d'approbation par l'assemblée générale. Pas de plan comptable en partie
+double.
+
+Le **solde d'ouverture** d'un compte est sa propriété (`comptes.solde_ouverture`), pas un
+mouvement : la ligne « Solde initial » de Dolibarr y est convertie à l'import, et n'apparaît donc
+pas comme une recette.
 
 ## Emails et notifications
 
-Le transport SMTP (`SMTP_URL`, `SMTP_FROM`, `mailer.ts`) sert à envoyer une facture émise à son
-tiers — email du tiers plus les personnes « reçoit les factures » de la société — avec PDF et
-UBL joints (`factureMail.ts`). Le bouton est sur la facture ; le planificateur d'abonnements
-envoie lui-même dès l'émission quand SMTP est configuré, et la facture garde la trace de l'envoi
-(`envoyee_le`, `envoyee_a`). Sans configuration, rien ne part et l'interface le dit. Mattermost
-(bot existant) reste disponible pour les notifications internes.
+Les emails passent par l'**API Gmail** (`gmail.ts`), depuis la boîte de la trésorerie : envoi des
+factures et des rappels, lecture des factures reçues. Le client OAuth vient de l'environnement
+(`GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`) ; la boîte est connectée par un trésorier depuis
+`/compta/parametres` (écran de consentement Google), et le jeton de rafraîchissement est conservé
+chiffré (AES-256-GCM, clé dérivée du secret du client). Deux autorisations seulement : envoyer
+(`gmail.send`) et lire (`gmail.readonly`).
+
+Une facture émise est envoyée à son tiers — email du tiers plus les personnes « reçoit les
+factures » de la société — avec PDF et UBL joints (`factureMail.ts`). Le bouton est sur la
+facture ; le planificateur d'abonnements envoie lui-même dès l'émission quand une boîte est
+connectée, et la facture garde la trace de l'envoi (`envoyee_le`, `envoyee_a`). Sans boîte
+connectée, rien ne part et l'interface le dit.
+
+**Mattermost** (`comptaNotifications.ts`, bot existant) : un canal et un interrupteur par
+événement, tous éteints par défaut, réglés dans `/compta/parametres` — factures reçues à valider,
+note de frais soumise, récapitulatif hebdomadaire des factures à relancer, factures d'abonnement
+émises. Un message signale et renvoie vers Passport ; il ne contient ni coordonnées bancaires ni
+détail d'une dépense.
 
 ## Migration depuis Dolibarr
 
@@ -231,5 +316,10 @@ Dolibarr a), puis `authentik_pk` fait foi.
 3. **Banque et caisse** : comptes, mouvements, import Belfius, lettrage (automatique sur la
    communication structurée, manuel sinon), virements internes ; import des comptes et écritures
    Dolibarr. *(livré)*
-4. **UBL**, import d'UBL fournisseur, envoi des factures par email (SMTP). *(livré)*
+4. **UBL**, import d'UBL fournisseur, envoi des factures par email. *(livré)*
 5. Notes de frais, livre journal et comptes annuels, désactivation Authentik automatique. *(livré)*
+6. **API Gmail** (envoi et lecture), **réception des factures Doccle** avec contrôle d'origine
+   et validation. *(livré)*
+7. **Rappels de paiement**, envoyés après validation. *(livré)*
+8. **Comptes annuels au modèle officiel**, rubriques de l'annexe 8, solde d'ouverture. *(livré)*
+9. **Corrections** partout, notifications Mattermost, tables en cartes sur mobile. *(livré)*

@@ -102,6 +102,10 @@
 		.table-cards td:not([data-label]) {
 			@apply block text-left;
 		}
+		/* The row's title when it's a link filling its cell on a larger screen. */
+		.table-cards td > a.block {
+			@apply p-0 font-bold;
+		}
 		.table-cards td:empty {
 			display: none;
 		}

@@ -1,3 +1,4 @@
+import { lienPassport, notifierCompta } from '$lib/server/compta/comptaNotifications';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { creerNoteDeFrais, listNotesDeFrais, NoteDeFraisError, retirerNoteDeFrais } from '$lib/server/compta/notesDeFrais';
@@ -47,6 +48,11 @@ export const actions: Actions = {
 		}
 
 		const note = await creerNoteDeFrais({ tiersId: tiers.id, date, libelle, montant, justificatif });
+		// Best effort, and only if the treasury switched it on; the label stays out of the channel.
+		await notifierCompta(
+			'notesDeFrais',
+			`🧾 Note de frais de ${montant.toFixed(2).replace('.', ',')} € soumise par ${displayName(locals.user!)} : ${lienPassport('/compta/notes-de-frais?statut=soumise', 'à traiter')}`
+		);
 		const pk = authentikPk(locals.user);
 		await logAuditEvent({ sub: locals.user.sub, label: displayName(locals.user) }, 'user', 'noteDeFrais.soumettre', pk ? { pk } : { email: locals.user.email }, {
 			noteId: note.id,

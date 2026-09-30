@@ -102,7 +102,7 @@
 
 	{#if data.comptes.length > 0}
 		<div class="mb-8 overflow-x-auto">
-			<table class="w-full border-collapse text-sm">
+			<table class="table-cards w-full border-collapse text-sm">
 				<thead>
 					<tr class="bg-black text-white uppercase">
 						<th class="border border-black px-3 py-2 text-left">Compte</th>
@@ -118,10 +118,10 @@
 							<td class="border border-black p-0">
 								<a href="/compta/banque/{c.id}" class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white">{c.nom}</a>
 							</td>
-							<td class="border border-black px-3 py-2">{c.type === 'banque' ? 'Banque' : 'Caisse'}</td>
-							<td class="border border-black px-3 py-2 font-mono text-xs">{c.iban ?? '—'}</td>
-							<td class="border border-black px-3 py-2 text-right font-bold">{amountFormat.format(c.solde)}</td>
-							<td class="border border-black px-3 py-2 text-right {c.nonLettres > 0 ? 'text-orange-600' : ''}">{c.nonLettres}</td>
+							<td class="border border-black px-3 py-2" data-label="Type">{c.type === 'banque' ? 'Banque' : 'Caisse'}</td>
+							<td class="border border-black px-3 py-2 font-mono text-xs" data-label="IBAN">{c.iban ?? '—'}</td>
+							<td class="border border-black px-3 py-2 sm:text-right font-bold" data-label="Solde">{amountFormat.format(c.solde)}</td>
+						<td class="border border-black px-3 py-2 sm:text-right {c.nonLettres > 0 ? 'text-orange-600' : ''}" data-label="À lettrer">{c.nonLettres}</td>
 						</tr>
 					{/each}
 				</tbody>
@@ -134,7 +134,7 @@
 	<h2 class={h2Class}>Mouvements à lettrer</h2>
 	{#if data.nonLettres.length > 0}
 		<div class="overflow-x-auto">
-			<table class="w-full border-collapse text-sm">
+			<table class="table-cards w-full border-collapse text-sm">
 				<thead>
 					<tr class="bg-black text-white uppercase">
 						<th class="border border-black px-3 py-2 text-left">Date</th>
@@ -151,11 +151,11 @@
 							<td class="border border-black p-0">
 								<a href="/compta/banque/mouvements/{m.id}" class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white">{dateFormat.format(m.dateValeur)}</a>
 							</td>
-							<td class="border border-black px-3 py-2">{m.compteNom}</td>
-							<td class="border border-black px-3 py-2">{m.libelle}{m.communication ? ` — ${m.communication}` : ''}</td>
-							<td class="border border-black px-3 py-2">{m.contrepartieNom ?? m.contrepartieIban ?? '—'}</td>
-							<td class="border border-black px-3 py-2 text-right {m.montant < 0 ? 'text-red-700' : 'text-green-700'}">{amountFormat.format(m.montant)}</td>
-							<td class="border border-black px-3 py-2 text-right">{amountFormat.format(m.reste)}</td>
+							<td class="border border-black px-3 py-2" data-label="Compte">{m.compteNom}</td>
+							<td class="border border-black px-3 py-2" data-label="Libellé">{m.libelle}{m.communication ? ` — ${m.communication}` : ''}</td>
+							<td class="border border-black px-3 py-2" data-label="Contrepartie">{m.contrepartieNom ?? m.contrepartieIban ?? '—'}</td>
+							<td class="border border-black px-3 py-2 sm:text-right {m.montant < 0 ? 'text-red-700' : 'text-green-700'}" data-label="Montant">{amountFormat.format(m.montant)}</td>
+							<td class="border border-black px-3 py-2 sm:text-right" data-label="Reste">{amountFormat.format(m.reste)}</td>
 						</tr>
 					{/each}
 				</tbody>

@@ -59,6 +59,11 @@ with their PDFs, and the resulting membership status shown to each member. The m
 `/compta`, restricted to the `Trésorier` Authentik group (`PUBLIC_AUTHENTIK_TRESORIER_GROUP`), and
 is described in `docs/compta.md`. A one-shot import from Dolibarr is available at `/compta/import`.
 
+Email goes through the Gmail API, from the treasury's mailbox: invoices and payment reminders are
+sent from it, and the supplier invoices Doccle emails to it are collected (read-only), checked for
+their origin (DMARC/DKIM) and imported once a treasurer validated them. Set `GMAIL_CLIENT_ID` and
+`GMAIL_CLIENT_SECRET` (see `.env.example`), then connect the mailbox from `/compta/parametres`.
+
 ### GitHub
 
 Passport3 lets members request access to the hackerspace's GitHub organization themselves,

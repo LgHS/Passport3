@@ -59,6 +59,12 @@ PDF, et le statut d'adhésion qui en découle pour chaque membre. Le module vit 
 réservé au groupe Authentik `Trésorier` (`PUBLIC_AUTHENTIK_TRESORIER_GROUP`), et est décrit dans
 `docs/compta.md`. Un import unique depuis Dolibarr est disponible sur `/compta/import`.
 
+Les emails passent par l'API Gmail, depuis la boîte de la trésorerie : les factures et les rappels
+de paiement en partent, et les factures fournisseurs que Doccle y envoie sont relevées (en lecture
+seule), contrôlées sur leur origine (DMARC/DKIM) et importées après validation par un trésorier.
+Renseignez `GMAIL_CLIENT_ID` et `GMAIL_CLIENT_SECRET` (voir `.env.example`), puis connectez la
+boîte depuis `/compta/parametres`.
+
 ### GitHub
 
 Passport3 permet aux membres de demander eux-mêmes l'accès à l'organisation GitHub du hackerspace, sans passer par un·e admin.

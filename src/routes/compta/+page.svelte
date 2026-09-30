@@ -57,7 +57,7 @@
 
 	{#if shown.length > 0}
 		<div class="overflow-x-auto">
-			<table class="w-full border-collapse text-sm">
+			<table class="table-cards w-full border-collapse text-sm">
 				<thead>
 					<tr class="bg-black text-white uppercase">
 						<th class="border border-black px-3 py-2 text-left">Nom</th>
@@ -79,8 +79,8 @@
 									{m.nom}
 								</a>
 							</td>
-							<td class="border border-black px-3 py-2">{m.email ?? '—'}</td>
-							<td class="border border-black px-3 py-2">
+							<td class="border border-black px-3 py-2" data-label="Email">{m.email ?? '—'}</td>
+							<td class="border border-black px-3 py-2" data-label="Statut">
 								<span class="inline-flex items-center gap-2">
 									<span
 										class="inline-block h-2 w-2 shrink-0 rounded-full"
@@ -90,9 +90,9 @@
 									{COTISATION_STATUS_LABEL[m.status]}
 								</span>
 							</td>
-							<td class="border border-black px-3 py-2">{m.datefin ? dateFormat.format(m.datefin) : '—'}</td>
-							<td class="border border-black px-3 py-2">{m.via ?? '—'}</td>
-							<td class="border border-black px-3 py-2 text-center" title={m.hasAccount ? 'Compte Authentik lié' : 'Aucun compte lié'}>
+							<td class="border border-black px-3 py-2" data-label="Couvert jusqu'au">{m.datefin ? dateFormat.format(m.datefin) : '—'}</td>
+							<td class="border border-black px-3 py-2" data-label="Via">{m.via ?? '—'}</td>
+							<td class="border border-black px-3 py-2 sm:text-center" title={m.hasAccount ? 'Compte Authentik lié' : 'Aucun compte lié'} data-label="Compte">
 								{m.hasAccount ? '✓' : '—'}
 							</td>
 						</tr>
