@@ -13,7 +13,7 @@ function resolvePk(locals: App.Locals): number {
 	}
 	const pk = authentikPk(locals.user);
 	if (!pk) {
-		error(500, 'Impossible de résoudre votre identifiant Authentik (sub).');
+		error(500, 'Impossible de résoudre ton identifiant Authentik (sub).');
 	}
 	return pk;
 }
@@ -53,7 +53,7 @@ export const actions: Actions = {
 		// username is only ever set by the OAuth callback, never hand-typed into this form.
 		const githubUsername = await getGithubUsername(pk);
 		if (!githubUsername) {
-			return fail(400, { error: "Connectez d'abord votre compte GitHub." });
+			return fail(400, { error: "Connecte d'abord ton compte GitHub." });
 		}
 
 		const result = await inviteToGithubOrg(githubUsername);

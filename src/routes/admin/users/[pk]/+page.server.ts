@@ -151,7 +151,7 @@ export const actions: Actions = {
 		try {
 			mutation = await updateTrombinoscopeOptin(pk, optin);
 		} catch {
-			return fail(500, { optinError: "La sauvegarde de la visibilité a échoué, réessayez." });
+			return fail(500, { optinError: "La sauvegarde de la visibilité a échoué, réessaie." });
 		}
 
 		await logAuditEvent(
@@ -204,7 +204,7 @@ export const actions: Actions = {
 				tagExtended: tagExtended || null
 			});
 		} catch {
-			return fail(500, { tagError: 'La sauvegarde du rôle a échoué, réessayez.', tag, tagColor, tagExtended });
+			return fail(500, { tagError: 'La sauvegarde du rôle a échoué, réessaie.', tag, tagColor, tagExtended });
 		}
 
 		await logAuditEvent(
@@ -233,7 +233,7 @@ export const actions: Actions = {
 			mutation = await updateEmergencyContacts(pk, result.contacts);
 		} catch {
 			return fail(500, {
-				emergencyContactsError: "La sauvegarde des contacts d'urgence a échoué, réessayez.",
+				emergencyContactsError: "La sauvegarde des contacts d'urgence a échoué, réessaie.",
 				emergencyContacts: result.contacts
 			});
 		}

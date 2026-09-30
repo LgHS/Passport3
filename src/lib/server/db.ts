@@ -105,7 +105,7 @@ export function isDatabaseUnavailable(err: unknown): boolean {
 }
 
 export const DATABASE_UNAVAILABLE_MESSAGE =
-	'La base de données de Passport est temporairement indisponible. Réessayez dans quelques instants.';
+	'La base de données de Passport est temporairement indisponible. Réessaie dans quelques instants.';
 
 // Footer status check (see health.ts). Never throws, and gives up after `timeoutMs` — including
 // while the connection itself is still being attempted.

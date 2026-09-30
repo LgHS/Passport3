@@ -137,7 +137,7 @@ export const actions: Actions = {
 		if (!admin && !(isOwnPendingItem && item.voteCount === 0)) {
 			return fail(403, {
 				error: admin
-					? "Vous n'avez pas le droit de modifier cette proposition."
+					? "Tu n'as pas le droit de modifier cette proposition."
 					: 'Cette proposition ne peut plus être modifiée (déjà votée ou déjà tranchée).'
 			});
 		}
@@ -214,7 +214,7 @@ export const actions: Actions = {
 		const admin = isAdmin(user);
 		const isOwnPendingItem = item.status === 'pending' && item.authorSub === user.sub;
 		if (!admin && !isOwnPendingItem) {
-			return fail(403, { error: "Vous n'avez pas le droit de supprimer cette proposition." });
+			return fail(403, { error: "Tu n'as pas le droit de supprimer cette proposition." });
 		}
 
 		await deleteWishlistItem(itemId);

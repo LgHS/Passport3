@@ -12,7 +12,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 	const email = locals.user.email;
 	if (!email) {
-		error(500, 'Impossible de résoudre votre adresse email pour interroger Dolibarr.');
+		error(500, 'Impossible de résoudre ton adresse email pour interroger Dolibarr.');
 	}
 
 	const invoiceId = Number(params.id);
@@ -45,7 +45,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		});
 	} catch (err) {
 		if (err instanceof DolibarrUnavailableError) {
-			error(503, 'Service temporairement indisponible. Réessayez dans quelques instants.');
+			error(503, 'Service temporairement indisponible. Réessaie dans quelques instants.');
 		}
 		throw err;
 	}

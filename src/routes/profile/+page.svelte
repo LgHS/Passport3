@@ -9,7 +9,7 @@
 	// Same treatment for an MFA device: destructive, and losing a second factor is worth a question.
 	function confirmDeleteMfaDevice(device: { name: string }) {
 		return ({ cancel }: { cancel: () => void }) => {
-			if (!confirm(`Supprimer l'appareil ${device.name} ? Vous ne pourrez plus l'utiliser pour vous connecter.`)) cancel();
+			if (!confirm(`Supprimer l'appareil ${device.name} ? Tu ne pourras plus l'utiliser pour te connecter.`)) cancel();
 		};
 	}
 
@@ -132,7 +132,7 @@
 			visibleUsernames={data.visibleUsernames}
 		/>
 	{:else}
-		Vous
+		Toi
 	{/if}
 {/snippet}
 
@@ -146,15 +146,15 @@
 
 {#if data.mfaDevices.length === 0}
 	<p class="mb-6 border-4 border-black bg-lghs-yellow px-4 py-3 text-sm font-bold">
-		Vous n'avez configuré aucun MFA.
+		Tu n'as configuré aucun MFA.
 		<button
 			type="button"
 			onclick={() => (activeTab = 'mfa')}
 			class="underline underline-offset-2"
 		>
-			Ajoutez-en un
+			Ajoutes-en un
 		</button>
-		 pour sécuriser votre compte.
+		 pour sécuriser ton compte.
 	</p>
 {/if}
 
@@ -278,8 +278,7 @@
 {:else if activeTab === 'sessions'}
 	<section class="w-full">
 		<p class="mb-4 text-sm text-gray-600">
-			Les appareils et navigateurs actuellement connectés à votre compte. Si l'un d'eux ne vous
-			est pas familier, révoquez-le : il sera immédiatement déconnecté.
+			Les appareils et navigateurs actuellement connectés à ton compte. Si l'un d'eux ne t'est pas familier, révoque-le : il sera immédiatement déconnecté.
 		</p>
 		{#if data.sessions.length > 0}
 			<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->
@@ -350,8 +349,8 @@
 {:else if activeTab === 'mfa'}
 	<section class="w-full">
 		<p class="mb-4 text-sm text-gray-600">
-			La double authentification protège votre compte même si votre mot de passe venait à être
-			compromis : il faudrait aussi avoir accès à votre téléphone ou votre clé de sécurité pour
+			La double authentification protège ton compte même si ton mot de passe venait à être
+			compromis : il faudrait aussi avoir accès à ton téléphone ou ta clé de sécurité pour
 			s'y connecter.
 		</p>
 		<div class="relative mb-4 inline-block" data-add-mfa-menu>
@@ -465,7 +464,7 @@
 		<div class="mx-auto max-w-2xl">
 			{#if data.mattermostUnavailable}
 				<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-					Impossible de vérifier votre compte Mattermost pour le moment. Réessayez plus tard.
+					Impossible de vérifier ton compte Mattermost pour le moment. Réessaie plus tard.
 				</p>
 			{:else if data.mattermostUsername}
 				<form
@@ -502,14 +501,14 @@
 						Recevoir un message sur Mattermost pour les événements liés à mon compte
 					</label>
 					<p class="mt-2 text-xs text-gray-500">
-						Toutes les modifications majeures apportées à votre compte envoient un message privé
+						Toutes les modifications majeures apportées à ton compte envoient un message privé
 						sur Mattermost. Activé par défaut, désactivable à tout moment. Compte lié :
 						<span class="font-bold">@{data.mattermostUsername}</span>.
 					</p>
 				</form>
 			{:else}
 				<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-					Aucun compte Mattermost lié à votre adresse email. Rien à envoyer pour l'instant.
+					Aucun compte Mattermost lié à ton adresse email. Rien à envoyer pour l'instant.
 					Cette option apparaîtra dès qu'un compte sera relié.
 				</p>
 			{/if}
@@ -518,7 +517,7 @@
 {:else if activeTab === 'audit'}
 	<section class="w-full">
 		<p class="mb-4 text-sm text-gray-600">
-			L'historique des actions faites sur votre compte, par vous ou par un administrateur.
+			L'historique des actions faites sur ton compte, par toi ou par un admin.
 			Certaines opérations menées directement dans nos autres outils internes (comme la
 			comptabilité) n'y transitent pas encore.
 		</p>

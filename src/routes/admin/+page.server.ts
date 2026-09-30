@@ -2,7 +2,7 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { listUsers, listUserPksWithMfa, AuthentikUnavailableError } from '$lib/server/authentikAdmin';
 
-const AUTHENTIK_UNAVAILABLE_MESSAGE = 'Service temporairement indisponible. Réessayez dans quelques instants.';
+const AUTHENTIK_UNAVAILABLE_MESSAGE = 'Service temporairement indisponible. Réessaie dans quelques instants.';
 
 export const load: PageServerLoad = async () => {
 	try {

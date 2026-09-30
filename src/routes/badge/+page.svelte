@@ -21,7 +21,7 @@
 
 {#if form?.success}
 	<p class="mb-6 border-4 border-black bg-lghs-yellow px-4 py-3 text-sm font-bold">
-		{wasEmpty ? 'Votre badge a été généré.' : 'Votre (vos) badge(s) a (ont) été régénéré(s).'}
+		{wasEmpty ? 'Ton badge a été généré.' : 'Ton UUID a été régénéré : tes anciens badges ne fonctionnent plus.'}
 	</p>
 {:else if form?.error}
 	<p class="mb-6 border-4 border-black bg-red-600 px-4 py-3 text-sm font-bold text-white">
@@ -32,11 +32,11 @@
 {#if uuid === null}
 	<section class="mx-auto max-w-2xl text-center">
 		<p class="mb-2 text-sm text-gray-600">
-			Cet identifiant unique sert à sécuriser votre porte-clé ou votre carte d'accès RFID au
+			Cet identifiant unique sert à sécuriser ton porte-clé ou ta carte d'accès RFID au
 			hackerspace.
 		</p>
 		<p class="mb-6 text-sm text-gray-600">
-			Vous n'en avez pas encore : générez-le pour pouvoir l'utiliser.
+			Tu n'en as pas encore : génère-le pour pouvoir l'utiliser.
 		</p>
 		<form
 			method="POST"
@@ -63,7 +63,7 @@
 	<div class="flex flex-col gap-8 md:flex-row md:items-start">
 		<section class="w-full md:w-2/3">
 			<p class="mb-2 text-sm text-gray-600">
-				Cet identifiant unique sert à sécuriser votre porte-clé ou votre carte d'accès RFID au
+				Cet identifiant unique sert à sécuriser ton porte-clé ou ta carte d'accès RFID au
 				hackerspace.
 			</p>
 			<p class="mb-2 text-sm text-gray-600">
@@ -115,7 +115,7 @@
 				<div class="p-6">
 					<p class="mb-3 text-sm font-bold uppercase">Attention, action irréversible</p>
 					<p class="mb-4 text-sm text-gray-600">
-						En régénérant votre UUID, tous vos badges actuels cesseront de fonctionner immédiatement.
+						En régénérant ton UUID, tous tes badges actuels cesseront de fonctionner immédiatement.
 						À n'utiliser qu'en cas de perte ou de copie d'un badge.
 					</p>
 					<form

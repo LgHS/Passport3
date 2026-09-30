@@ -33,7 +33,7 @@ import { logAuditEvent, listAuditEventsForTarget } from '$lib/server/auditLog';
 import { resolveActorUsernames } from '$lib/server/auditActors';
 import { authentikPk, displayName } from '$lib/types';
 
-const AUTHENTIK_UNAVAILABLE_MESSAGE = 'Service temporairement indisponible. Réessayez dans quelques instants.';
+const AUTHENTIK_UNAVAILABLE_MESSAGE = 'Service temporairement indisponible. Réessaie dans quelques instants.';
 
 function resolvePk(locals: App.Locals): number {
 	if (!locals.user) {
@@ -41,7 +41,7 @@ function resolvePk(locals: App.Locals): number {
 	}
 	const pk = authentikPk(locals.user);
 	if (!pk) {
-		error(500, 'Impossible de résoudre votre identifiant Authentik (sub).');
+		error(500, 'Impossible de résoudre ton identifiant Authentik (sub).');
 	}
 	return pk;
 }
@@ -53,7 +53,7 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 	// hitting the Authentik API again for the same user.
 	const { profile } = await parent();
 	if (!profile) {
-		error(500, 'Impossible de récupérer votre profil Authentik.');
+		error(500, 'Impossible de récupérer ton profil Authentik.');
 	}
 
 	let sessions,
@@ -198,7 +198,7 @@ export const actions: Actions = {
 			const info = await getUsernameChangeInfo(pk);
 			if (info.nextChangeAllowedAt) {
 				return fail(400, {
-					usernameError: `Vous devez attendre le ${new Date(info.nextChangeAllowedAt).toLocaleDateString('fr-BE')} avant de pouvoir modifier à nouveau votre nom d'utilisateur.`,
+					usernameError: `Tu dois attendre le ${new Date(info.nextChangeAllowedAt).toLocaleDateString('fr-BE')} avant de pouvoir modifier à nouveau ton nom d'utilisateur.`,
 					firstName: result.firstName,
 					lastName: result.lastName,
 					attributes: result.attributes
@@ -377,7 +377,7 @@ export const actions: Actions = {
 			// checkbox toggle always flips) so the client can resync instead of leaving the toggle
 			// showing a state that was never actually saved.
 			return fail(500, {
-				notificationPreferencesError: 'La sauvegarde a échoué, réessayez.',
+				notificationPreferencesError: 'La sauvegarde a échoué, réessaie.',
 				notificationPreferences: { mattermostDm: !prefs.mattermostDm }
 			});
 		}
@@ -399,7 +399,7 @@ export const actions: Actions = {
 			mutation = await updateEmergencyContacts(pk, result.contacts);
 		} catch {
 			return fail(500, {
-				emergencyContactsError: "La sauvegarde des contacts d'urgence a échoué, réessayez.",
+				emergencyContactsError: "La sauvegarde des contacts d'urgence a échoué, réessaie.",
 				emergencyContacts: result.contacts
 			});
 		}

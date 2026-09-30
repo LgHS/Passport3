@@ -60,12 +60,12 @@ export function validateIncidentSubmission(formData: FormData): IncidentValidati
 
 	// Sworn statement: declarations are kept for legal and insurance purposes.
 	if (!formData.has('certified')) {
-		return { ok: false, error: "Cochez la case certifiant l'exactitude de la déclaration." };
+		return { ok: false, error: "Coche la case certifiant l'exactitude de la déclaration." };
 	}
 
 	const people = String(formData.get('people') ?? '').trim();
 	if (!people) {
-		return { ok: false, error: 'Indiquez les personnes impliquées.' };
+		return { ok: false, error: 'Indique les personnes impliquées.' };
 	}
 	if (people.length > PEOPLE_MAX_LENGTH) {
 		return { ok: false, error: `Les personnes impliquées ne peuvent pas dépasser ${PEOPLE_MAX_LENGTH} caractères.` };
@@ -97,7 +97,7 @@ export function validateIncidentSubmission(formData: FormData): IncidentValidati
 					formData,
 					'firstAidUsed',
 					'firstAidDetails',
-					'Indiquez ce qui a été utilisé dans la trousse de secours.'
+					'Indique ce qui a été utilisé dans la trousse de secours.'
 				)
 			: ({ ok: true, used: false, details: null } as const);
 	if (!firstAid.ok) return { ok: false, error: firstAid.error };
@@ -106,7 +106,7 @@ export function validateIncidentSubmission(formData: FormData): IncidentValidati
 		formData,
 		'fireDeviceUsed',
 		'fireDeviceDetails',
-		"Indiquez quel dispositif anti-incendie a été utilisé."
+		"Indique quel dispositif anti-incendie a été utilisé."
 	);
 	if (!fireDevice.ok) return { ok: false, error: fireDevice.error };
 

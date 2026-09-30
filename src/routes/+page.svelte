@@ -110,8 +110,7 @@
 		<br><a href="https://lghs.be" target="_blank" rel="noopener">Liège Hackerspace</a>
 	</p>
 	<p class="mb-8 text-sm text-gray-600">
-		Il centralise les informations et les services liés à votre adhésion afin de vous permettre de
-		gérer facilement votre compte et vos accès au hackerspace.
+		Passport centralise les informations et les services liés à ton adhésion afin de te permettre de gérer facilement ton compte et tes accès au hackerspace.
 	</p>
 	<a
 		href="/login"
@@ -125,8 +124,7 @@
 		<h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Passport</h1>
 		<p class="mb-2 max-w-2xl text-lg font-bold">Bienvenue sur Passport, {displayName(data.user)} !</p>
 		<p class="text-sm text-gray-600">
-			Il centralise les informations et les services liés à votre adhésion afin de vous permettre
-			de gérer facilement votre compte et vos accès au hackerspace. En cas de souci :
+			Passport centralise les informations et les services liés à ton adhésion afin de te permettre de gérer facilement ton compte et tes accès au hackerspace. En cas de souci :
 			<a href="mailto:noc@lghs.be">noc@lghs.be</a>
 		</p>
 	</section>
@@ -138,7 +136,7 @@
 			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Ma cotisation</h2>
 			{#if data.cotisationUnavailable}
 				<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-					Service de cotisation temporairement indisponible. Réessayez dans quelques instants.
+					Service de cotisation temporairement indisponible. Réessaie dans quelques instants.
 				</p>
 			{:else}
 				<CotisationStatusBlock
@@ -204,7 +202,7 @@
 	{#if data.groups === null || data.groups.length === 0}
 		<section>
 			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Mes apps</h2>
-			<p class="text-sm">Aucune application ne vous est accessible pour le moment.</p>
+			<p class="text-sm">Aucune application ne t'est accessible pour le moment.</p>
 		</section>
 	{:else}
 		{#each data.groups as group (group.name)}

@@ -390,7 +390,7 @@ export async function updateUsername(pk: number, username: string): Promise<User
 }
 
 // Called right after a successful username change, matching the warning shown before that change
-// ("vous serez déconnecté de toutes vos sessions et services") — a straight loop over each
+// ("tu seras déconnecté·e de toutes tes sessions et services") — a straight loop over each
 // session's own DELETE, no per-session ownership re-check needed since listSessions() only ever
 // returns sessions belonging to this exact username in the first place.
 export async function revokeAllSessions(username: string): Promise<void> {

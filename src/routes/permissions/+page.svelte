@@ -11,7 +11,7 @@
 <h1 class="mb-6 bg-black px-4 py-3 text-base font-bold text-white uppercase">Permissions</h1>
 
 <p class="mb-6 text-sm text-gray-600">
-	Liste des groupes auxquels votre compte appartient. Chaque groupe vous donne accès à un certain
+	Liste des groupes auxquels ton compte appartient. Chaque groupe te donne accès à un certain
 	nombre de permissions.
 </p>
 
@@ -60,6 +60,6 @@
 	</div>
 {:else}
 	<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-		Il y a un petit problème : aucun groupe n'est associé à votre compte.
+		Il y a un petit problème : aucun groupe n'est associé à ton compte.
 	</p>
 {/if}

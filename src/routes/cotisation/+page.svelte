@@ -25,11 +25,11 @@
 	// consumption stays personal, cotisation/invoices go through the linked company.
 	function ibanPersoTooltip(isPro: boolean): string {
 		return isPro
-			? 'Compte avec lequel vous payez vos consommations.'
-			: 'Compte avec lequel vous payez vos cotisations et consommations.';
+			? 'Compte avec lequel tu paies tes consommations.'
+			: 'Compte avec lequel tu paies tes cotisations et consommations.';
 	}
 	const IBAN_PRO_TOOLTIP =
-		'Compte avec lequel vous payez vos cotisations et factures du hackerspace.';
+		'Compte avec lequel tu paies tes cotisations et factures du hackerspace.';
 
 	const dateFormat = new Intl.DateTimeFormat('fr-BE', { dateStyle: 'medium' });
 	function formatDate(date: Date | null): string {
@@ -178,7 +178,7 @@
 
 		{#if data.unavailable}
 			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-				Service de cotisation temporairement indisponible. Réessayez dans quelques instants.
+				Service de cotisation temporairement indisponible. Réessaie dans quelques instants.
 			</p>
 		{:else if data.status === null}
 			<CotisationStatusBlock status={null} datefin={null} />
@@ -290,7 +290,7 @@
 			{#if hasGapsOnPage}
 				<p class="mt-3 text-sm text-gray-600">
 					<span class="font-bold text-red-700">Non perçu</span> signale un mois pour lequel nous
-					n'avons trouvé aucune cotisation. Si ça vous semble être une erreur, contactez
+					n'avons trouvé aucune cotisation. Si ça te semble être une erreur, contacte
 					<a href="mailto:compta@lghs.be">compta@lghs.be</a>.
 				</p>
 			{/if}
@@ -332,7 +332,7 @@
 								<p class="font-bold">{invoice.ref} <span class="text-gray-600">({invoice.type})</span></p>
 								{#if invoice.abandoned}
 									<span
-										title="Facture abandonnée, contactez compta@lghs.be"
+										title="Facture abandonnée, contacte compta@lghs.be"
 										class="shrink-0 text-gray-400"
 									>
 										{@render downloadIcon()}
@@ -383,7 +383,7 @@
 									<td class="border border-black px-3 py-2 text-center">
 										{#if invoice.abandoned}
 											<span
-												title="Facture abandonnée, contactez compta@lghs.be"
+												title="Facture abandonnée, contacte compta@lghs.be"
 												class="inline-flex text-gray-400"
 											>
 												{@render downloadIcon()}
@@ -408,9 +408,9 @@
 				</div>
 
 				<p class="mt-3 text-sm text-gray-600">
-					Si vous êtes enregistré·e sur le réseau Peppol, la facture vous est également envoyée
+					Si tu es enregistré·e sur le réseau Peppol, la facture t'est également envoyée
 					par ce biais. Si le bouton de téléchargement est inactif, la facture est abandonnée ou
-					dans un état anormal. Pour toute question, contactez
+					dans un état anormal. Pour toute question, contacte
 					<a href="mailto:compta@lghs.be">compta@lghs.be</a>.
 				</p>
 			{/if}
@@ -420,12 +420,12 @@
 	<section class="w-full md:w-1/3">
 		<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Infos bancaires</h2>
 		<p class="mb-6 text-sm text-gray-600">
-			Renseigner vos coordonnées bancaires facilite l'automatisation des tâches de comptabilité.
+			Renseigner tes coordonnées bancaires facilite l'automatisation des tâches de comptabilité.
 		</p>
 
 		{#if data.unavailable}
 			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-				Service temporairement indisponible. Réessayez dans quelques instants.
+				Service temporairement indisponible. Réessaie dans quelques instants.
 			</p>
 		{:else if data.bankInfo === null}
 			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
@@ -442,7 +442,7 @@
 					<p class="text-sm font-bold">{form.error}</p>
 					{#if form.error === 'Cet IBAN est déjà utilisé.'}
 						<p class="mt-1 text-sm">
-							Contactez <a href="mailto:compta@lghs.be" class="no-underline-fx underline"
+							Contacte <a href="mailto:compta@lghs.be" class="no-underline-fx underline"
 								>compta@lghs.be</a
 							>.
 						</p>

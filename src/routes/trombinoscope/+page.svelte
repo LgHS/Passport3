@@ -14,8 +14,8 @@
 			showToast(
 				'success',
 				form.optin.visible
-					? 'Votre profil est maintenant visible dans le trombinoscope.'
-					: 'Votre profil est maintenant caché du trombinoscope.'
+					? 'Ton profil est maintenant visible dans le trombinoscope.'
+					: 'Ton profil est maintenant caché du trombinoscope.'
 			);
 		} else if (form?.error) {
 			showToast('error', form.error);
@@ -295,7 +295,7 @@
 							class="w-full border border-black px-3 py-2 text-sm"
 						/>
 						<p class="mt-1 text-xs text-gray-500">
-							Laissez vide pour afficher votre email de compte, ou indiquez une autre adresse à
+							Laisse vide pour afficher ton email de compte, ou indique une autre adresse à
 							montrer à la place. Adresse publique, visible par tous les membres.
 						</p>
 					</div>

@@ -263,7 +263,7 @@
 							class="w-full border border-black px-3 py-2 text-sm"
 						/>
 						<p class="mt-1 text-xs text-gray-500">
-							Laissez vide pour afficher l'email de compte du membre, ou indiquez une autre
+							Laisse vide pour afficher l'email de compte du membre, ou indique une autre
 							adresse à montrer à la place. Adresse publique, visible par tous les membres.
 						</p>
 					</div>
@@ -275,7 +275,7 @@
 			{/if}
 
 			<p class="mt-4 text-sm text-gray-600">
-				Avant d'activer un nouveau champ, assurez-vous du consentement du membre concerné : ces
+				Avant d'activer un nouveau champ, assure-toi du consentement du membre concerné : ces
 				informations deviennent publiques dans le trombinoscope.
 			</p>
 
@@ -391,7 +391,7 @@
 		</p>
 		{#if data.groups === null}
 			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-				Impossible de charger les groupes pour le moment, réessayez plus tard.
+				Impossible de charger les groupes pour le moment, réessaie plus tard.
 			</p>
 		{:else if data.groups.length > 0}
 			<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->
@@ -447,7 +447,7 @@
 	{#if emergencyContactsSectionOpen}
 		{#if data.emergencyContacts === null}
 			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-				Impossible de charger les contacts d'urgence pour le moment. Réessayez plus tard.
+				Impossible de charger les contacts d'urgence pour le moment. Réessaie plus tard.
 			</p>
 		{:else}
 			<EmergencyContactsForm
@@ -465,7 +465,7 @@
 			<span class="mb-1 block text-sm font-bold uppercase">Identifiant (UUID)</span>
 			{#if data.rfidUid === undefined}
 				<div class="border border-black bg-gray-100 px-3 py-2 text-sm text-gray-600">
-					Impossible de charger le badge pour le moment, réessayez plus tard.
+					Impossible de charger le badge pour le moment, réessaie plus tard.
 				</div>
 			{:else if data.rfidUid === null}
 				<div class="border border-black bg-gray-100 px-3 py-2 text-sm text-gray-600">

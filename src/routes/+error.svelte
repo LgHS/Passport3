@@ -8,22 +8,22 @@
 		404: {
 			title: 'Page introuvable',
 			description: "Cette page n'existe pas, ou plus.",
-			hint: "Vérifiez l'adresse, ou repartez de l'accueil."
+			hint: "Vérifie l'adresse, ou repars de l'accueil."
 		},
 		403: {
 			title: 'Accès refusé',
-			description: "Vous n'avez pas les droits pour voir cette page.",
-			hint: "Si vous pensez que c'est une erreur, écrivez-nous."
+			description: "Tu n'as pas les droits pour voir cette page.",
+			hint: "Si tu penses que c'est une erreur, écris-nous."
 		},
 		500: {
 			title: 'Erreur interne',
 			description: "Quelque chose s'est mal passé de notre côté.",
-			hint: 'Réessayez dans un instant. Si ça persiste, prévenez-nous.'
+			hint: 'Réessaie dans un instant. Si ça persiste, préviens-nous.'
 		},
 		503: {
 			title: 'Service indisponible',
 			description: "Un service dont Passport dépend ne répond pas pour l'instant.",
-			hint: 'Réessayez dans quelques instants.'
+			hint: 'Réessaie dans quelques instants.'
 		}
 	};
 
@@ -31,7 +31,7 @@
 		CONTENT[page.status] ?? {
 			title: 'Erreur',
 			description: 'Une erreur est survenue.',
-			hint: "Réessayez, ou repartez de l'accueil."
+			hint: "Réessaie, ou repars de l'accueil."
 		}
 	);
 

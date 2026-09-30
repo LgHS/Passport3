@@ -18,9 +18,9 @@
 		contacts: EmergencyContact[];
 		maxContacts: number;
 		form: FormResult;
-		// The intro/disclaimer text says "vous" on the member's own /profile, but that pronoun
+		// The intro/disclaimer text says "tu" on the member's own /profile, but that pronoun
 		// doesn't refer to the right person on /admin/users/[pk] — an admin editing someone else's
-		// contacts needs "le membre", not "vous" (which would read as the admin themselves).
+		// contacts needs "le membre", not "tu" (which would read as the admin themselves).
 		adminView?: boolean;
 	} = $props();
 
@@ -67,12 +67,12 @@
 <p class="mb-4 text-sm text-gray-600">
 	{#if adminView}
 		Les contacts d'urgence permettent aux admins de contacter une personne de confiance en cas de
-		problème (santé, sécurité…) au hackerspace. Indiquez des proches connaissant bien le
+		problème (santé, sécurité…) au hackerspace. Indique des proches connaissant bien le
 		membre ou pouvant facilement le joindre.
 	{:else}
 		Les contacts d'urgence permettent aux admins de contacter une personne de confiance en cas de
-		problème (santé, sécurité…) au hackerspace. Indiquez des proches vous connaissant bien ou
-		pouvant facilement vous joindre.
+		problème (santé, sécurité…) au hackerspace. Indique des proches te connaissant bien ou
+		pouvant facilement te joindre.
 	{/if}
 </p>
 
@@ -157,8 +157,8 @@
 			Ces informations ne sont jamais visibles dans le trombinoscope : seuls ce membre et les
 			admins peuvent les consulter, en cas d'urgence.
 		{:else}
-			Ces informations ne seront jamais visibles dans le trombinoscope : seuls vous-même et les
-			admins peuvent les consulter, en cas d'urgence.
+			Ces informations ne seront jamais visibles dans le trombinoscope : seuls les admins et
+			toi-même pouvez les consulter, en cas d'urgence.
 		{/if}
 	</p>
 

@@ -18,7 +18,7 @@ function resolvePk(locals: App.Locals): number {
 	}
 	const pk = authentikPk(locals.user);
 	if (!pk) {
-		error(500, 'Impossible de résoudre votre identifiant Authentik (sub).');
+		error(500, 'Impossible de résoudre ton identifiant Authentik (sub).');
 	}
 	return pk;
 }
@@ -48,7 +48,7 @@ export const actions: Actions = {
 		try {
 			mutation = await updateTrombinoscopeOptin(pk, optin);
 		} catch {
-			return fail(500, { error: "La sauvegarde a échoué, réessayez." });
+			return fail(500, { error: "La sauvegarde a échoué, réessaie." });
 		}
 
 		await logAuditEvent(

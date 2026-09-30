@@ -91,7 +91,7 @@
 				bind:value={occurredAt}
 				class="w-full border border-black px-3 py-2 text-sm"
 			/>
-			<p class="mt-1 text-xs text-gray-500">Quand l'événement a eu lieu, pas quand vous le déclarez.</p>
+			<p class="mt-1 text-xs text-gray-500">Quand l'événement a eu lieu, pas quand tu le déclares.</p>
 		</div>
 		<div>
 			<label class="mb-1 block text-sm font-bold uppercase" for="equipment">
@@ -111,7 +111,7 @@
 	<div class="mb-4">
 		<label class="mb-1 block text-sm font-bold uppercase" for="people">Personnes impliquées</label>
 		<TagInput id="people" name="people" bind:tags={people} placeholder="Un nom, puis Entrée" />
-		<p class="mt-1 text-xs text-gray-500">Tapez un nom puis Entrée pour l'ajouter.</p>
+		<p class="mt-1 text-xs text-gray-500">Tape un nom puis Entrée pour l'ajouter.</p>
 		<label class="mt-2 flex cursor-pointer items-center gap-2 text-sm">
 			<input type="checkbox" name="visitorInvolved" />
 			Un non-membre ou visiteur a été impliqué
@@ -137,7 +137,7 @@
 			maxlength={DESCRIPTION_MAX_LENGTH}
 			required
 			bind:value={descriptionValue}
-			placeholder="Ce qui s'est passé, dans quelles circonstances, ce qui a été fait ensuite… En cas de blessure, précisez la partie du corps touchée."
+			placeholder="Ce qui s'est passé, dans quelles circonstances, ce qui a été fait ensuite… En cas de blessure, précise la partie du corps touchée."
 			class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-300"
 		></textarea>
 	</div>
