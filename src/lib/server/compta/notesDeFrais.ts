@@ -132,6 +132,44 @@ export async function deciderNoteDeFrais(id: number, decision: { acceptee: boole
 	if (result.count === 0) throw new NoteDeFraisError('Cette note a déjà été traitée.');
 }
 
+// Takes a decision back: the claim waits for a decision again. Not once it's refunded — the
+// refund is a bank movement, and that's what has to be undone first.
+export async function reouvrirNoteDeFrais(id: number): Promise<void> {
+	const sql = await getDb();
+	await sql.begin(async (tx) => {
+		const [note] = await tx<{ statut: NoteStatut }[]>`SELECT statut FROM notes_de_frais WHERE id = ${id} FOR UPDATE`;
+		if (!note) throw new NoteDeFraisError('Note introuvable.');
+		if (note.statut === 'soumise') throw new NoteDeFraisError('Cette note attend déjà une décision.');
+		const [lettre] = await tx`SELECT 1 FROM lettrages WHERE cible_type = 'note_de_frais' AND cible_id = ${id} LIMIT 1`;
+		if (note.statut === 'remboursee' || lettre) {
+			throw new NoteDeFraisError('Cette note est remboursée : retirez d’abord le lettrage sur le mouvement bancaire.');
+		}
+		await tx`UPDATE notes_de_frais SET statut = 'soumise', decision_le = NULL, decision_par = NULL, motif = NULL WHERE id = ${id}`;
+	});
+}
+
+// Corrects what the member typed (a wrong amount against the receipt, a vague label). The amount
+// can't drop under what was already refunded.
+export async function corrigerNoteDeFrais(id: number, input: { date: Date; libelle: string; montant: number }): Promise<void> {
+	if (!input.libelle.trim()) throw new NoteDeFraisError('Le libellé est obligatoire.');
+	if (!(input.montant > 0)) throw new NoteDeFraisError('Le montant doit être positif.');
+	const sql = await getDb();
+	await sql.begin(async (tx) => {
+		const [note] = await tx`SELECT 1 FROM notes_de_frais WHERE id = ${id} FOR UPDATE`;
+		if (!note) throw new NoteDeFraisError('Note introuvable.');
+		const [{ lettre }] = await tx<{ lettre: string }[]>`
+			SELECT COALESCE(sum(montant), 0) AS lettre FROM lettrages WHERE cible_type = 'note_de_frais' AND cible_id = ${id}
+		`;
+		if (input.montant < parseMoney(lettre) - 0.005) {
+			throw new NoteDeFraisError(`${parseMoney(lettre).toFixed(2)} € sont déjà remboursés : le montant ne peut pas être inférieur.`);
+		}
+		await tx`
+			UPDATE notes_de_frais SET date = ${toIsoDate(input.date)}, libelle = ${input.libelle.trim()}, montant = ${input.montant}
+			WHERE id = ${id}
+		`;
+	});
+}
+
 // A member may withdraw a claim while it's still waiting.
 export async function retirerNoteDeFrais(id: number, tiersId: number): Promise<void> {
 	const sql = await getDb();

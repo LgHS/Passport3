@@ -23,6 +23,11 @@
 	// submission so the form reopens on the same claim.
 	// svelte-ignore state_referenced_locally
 	let refusing = $state<number | null>(form?.noteId ?? null);
+	let correcting = $state<number | null>(null);
+	$effect(() => {
+		if (form?.success) correcting = null;
+	});
+	const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 	const aRembourser = $derived(data.notes.filter((n) => n.statut === 'acceptee').reduce((a, n) => a + n.montant, 0));
 </script>
 
@@ -46,63 +51,89 @@
 	</div>
 
 	{#if data.notes.length > 0}
-		<div class="overflow-x-auto">
-			<table class="w-full border-collapse text-sm">
-				<thead>
-					<tr class="bg-black text-white uppercase">
-						<th class="border border-black px-3 py-2 text-left">Date</th>
-						<th class="border border-black px-3 py-2 text-left">Membre</th>
-						<th class="border border-black px-3 py-2 text-left">Dépense</th>
-						<th class="border border-black px-3 py-2 text-right">Montant</th>
-						<th class="border border-black px-3 py-2 text-left">Statut</th>
-						<th class="border border-black px-3 py-2"></th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.notes as n (n.id)}
-						<tr>
-							<td class="border border-black px-3 py-2 whitespace-nowrap">{dateFormat.format(n.date)}</td>
-							<td class="border border-black px-3 py-2">
+		<table class="table-cards w-full border-collapse text-sm">
+			<thead>
+				<tr class="bg-black text-white uppercase">
+					<th class="border border-black px-3 py-2 text-left">Date</th>
+					<th class="border border-black px-3 py-2 text-left">Membre</th>
+					<th class="border border-black px-3 py-2 text-left">Dépense</th>
+					<th class="border border-black px-3 py-2 text-right">Montant</th>
+					<th class="border border-black px-3 py-2 text-left">Statut</th>
+					<th class="border border-black px-3 py-2"></th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each data.notes as n (n.id)}
+					<tr>
+						<td class="border border-black px-3 py-2 whitespace-nowrap" data-label="Date">{dateFormat.format(n.date)}</td>
+						<td class="border border-black px-3 py-2" data-label="Membre">
+							<span>
 								<a href="/compta/tiers/{n.tiersId}">{n.tiersNom}</a>
 								{#if !n.tiersIban}<span class="text-xs text-red-700" title="Pas d'IBAN sur la fiche">· sans IBAN</span>{/if}
-							</td>
-							<td class="border border-black px-3 py-2">
-								{n.libelle}
-								{#if n.hasJustificatif}<a href="/compta/notes-de-frais/{n.id}/justificatif" class="ml-1 text-xs">justificatif</a>{/if}
-								{#if n.motif}<p class="text-xs text-gray-600">Motif : {n.motif}</p>{/if}
-							</td>
-							<td class="border border-black px-3 py-2 text-right">{amountFormat.format(n.montant)}</td>
-							<td class="border border-black px-3 py-2 {CLS[n.statut]}">
+							</span>
+						</td>
+						<td class="border border-black px-3 py-2">
+							{n.libelle}
+							{#if n.hasJustificatif}<a href="/compta/notes-de-frais/{n.id}/justificatif" class="ml-1 text-xs">justificatif</a>{/if}
+							{#if n.motif}<p class="text-xs text-gray-600">Motif : {n.motif}</p>{/if}
+						</td>
+						<td class="border border-black px-3 py-2 sm:text-right" data-label="Montant">{amountFormat.format(n.montant)}</td>
+						<td class="border border-black px-3 py-2 {CLS[n.statut]}" data-label="Statut">
+							<span>
 								{LABEL[n.statut]}
 								{#if n.decisionPar && n.statut !== 'soumise'}<span class="block text-xs text-gray-500">par {n.decisionPar}</span>{/if}
-							</td>
-							<td class="border border-black px-2 py-1 whitespace-nowrap">
-								{#if n.statut === 'soumise'}
-									{#if refusing === n.id}
-										<form method="POST" action="?/decider" class="flex gap-1" use:enhance>
-											<input type="hidden" name="noteId" value={n.id} />
-											<input type="hidden" name="decision" value="refuser" />
-											<input type="text" name="motif" required placeholder="Motif du refus" class="border border-black px-2 py-1 text-xs" />
-											<button type="submit" class={btn}>Refuser</button>
-											<button type="button" onclick={() => (refusing = null)} class={btn}>×</button>
-										</form>
-									{:else}
-										<form method="POST" action="?/decider" class="inline" use:enhance>
-											<input type="hidden" name="noteId" value={n.id} />
-											<input type="hidden" name="decision" value="accepter" />
-											<button type="submit" class={btn}>Accepter</button>
-										</form>
-										<button type="button" onclick={() => (refusing = n.id)} class={btn}>Refuser</button>
+							</span>
+						</td>
+						<td class="border border-black px-2 py-1">
+							{#if correcting === n.id}
+								<form method="POST" action="?/corriger" class="grid gap-1" use:enhance>
+									<input type="hidden" name="noteId" value={n.id} />
+									<input type="date" name="date" required value={isoDate(n.date)} aria-label="Date" class="border border-black px-2 py-1 text-xs" />
+									<input type="text" name="libelle" required value={n.libelle} aria-label="Dépense" class="border border-black px-2 py-1 text-xs" />
+									<input type="text" name="montant" inputmode="decimal" required value={n.montant.toFixed(2)} aria-label="Montant" class="border border-black px-2 py-1 text-xs" />
+									<div class="flex gap-1">
+										<button type="submit" class={btn}>Enregistrer</button>
+										<button type="button" onclick={() => (correcting = null)} class={btn}>×</button>
+									</div>
+								</form>
+							{:else}
+								<div class="flex flex-wrap items-center gap-1">
+									{#if n.statut === 'soumise'}
+										{#if refusing === n.id}
+											<form method="POST" action="?/decider" class="flex gap-1" use:enhance>
+												<input type="hidden" name="noteId" value={n.id} />
+												<input type="hidden" name="decision" value="refuser" />
+												<input type="text" name="motif" required placeholder="Motif du refus" class="border border-black px-2 py-1 text-xs" />
+												<button type="submit" class={btn}>Refuser</button>
+												<button type="button" onclick={() => (refusing = null)} class={btn}>×</button>
+											</form>
+										{:else}
+											<form method="POST" action="?/decider" use:enhance>
+												<input type="hidden" name="noteId" value={n.id} />
+												<input type="hidden" name="decision" value="accepter" />
+												<button type="submit" class={btn}>Accepter</button>
+											</form>
+											<button type="button" onclick={() => (refusing = n.id)} class={btn}>Refuser</button>
+										{/if}
+									{:else if n.statut === 'acceptee'}
+										<a href="/compta/banque" class="text-xs">Lettrer le virement</a>
 									{/if}
-								{:else if n.statut === 'acceptee'}
-									<a href="/compta/banque" class="text-xs">Lettrer le virement</a>
-								{/if}
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+									{#if n.statut === 'acceptee' || n.statut === 'refusee'}
+										<form method="POST" action="?/reouvrir" use:enhance>
+											<input type="hidden" name="noteId" value={n.id} />
+											<button type="submit" class={btn}>Annuler la décision</button>
+										</form>
+									{/if}
+									{#if refusing !== n.id}
+										<button type="button" onclick={() => (correcting = n.id)} class={btn}>Corriger</button>
+									{/if}
+								</div>
+							{/if}
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
 	{:else}
 		<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">Aucune note de frais.</p>
 	{/if}

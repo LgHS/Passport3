@@ -4,11 +4,14 @@ import { requireTresorierUser } from '$lib/server/auth';
 import {
 	createAbonnement,
 	createCotisation,
+	deleteAbonnement,
+	deleteCotisation,
 	getAbonnement,
 	getCotisation,
 	getSituationForTiers,
 	listAbonnements,
 	listCotisations,
+	SuppressionRefuseeError,
 	updateAbonnement,
 	updateCotisation,
 	type CotisationStatut,
@@ -17,6 +20,7 @@ import {
 } from '$lib/server/compta/cotisations';
 import {
 	createLien,
+	deleteLien,
 	getLien,
 	listLiensOfOrganisation,
 	listLiensOfPersonne,
@@ -101,10 +105,17 @@ export const actions: Actions = {
 		return { section: 'tiers', success: 'Tiers enregistré.' };
 	},
 
-	addCotisation: async ({ request, params, locals }) => {
+	// Adds a cotisation, or corrects one (cotisationId posted): every field can change. What ties
+	// it to an invoice or a subscription stays as it is.
+	saveCotisation: async ({ request, params, locals }) => {
 		const tresorier = requireTresorierUser(locals);
 		const tiers = await loadTiers(params);
 		const formData = await request.formData();
+
+		const idRaw = formData.get('cotisationId');
+		const existante = idRaw ? await getCotisation(Number(idRaw)) : null;
+		// Belongs-to check: the id comes from the form, the tiers from the URL — they must agree.
+		if (idRaw && (!existante || existante.tiersId !== tiers.id)) error(404, 'Cotisation introuvable.');
 
 		const type = parseType(formData.get('type'));
 		const debut = parseFormDate(formData.get('debut'));
@@ -126,7 +137,7 @@ export const actions: Actions = {
 		if (sieges === null) return fail(400, { section: 'cotisation', error: 'Nombre de sièges invalide.' });
 		if (formData.get('payeLe') && !payeLe) return fail(400, { section: 'cotisation', error: 'Date de paiement invalide.' });
 
-		const cotisation = await createCotisation({
+		const input = {
 			tiersId: tiers.id,
 			type,
 			debut,
@@ -134,13 +145,45 @@ export const actions: Actions = {
 			montant,
 			sieges,
 			statut,
-			abonnementId: null,
-			factureId: null,
-			payeLe: statut === 'active' ? (payeLe ?? brusselsToday()) : payeLe,
+			abonnementId: existante?.abonnementId ?? null,
+			factureId: existante?.factureId ?? null,
+			payeLe: statut === 'active' ? (payeLe ?? existante?.payeLe ?? brusselsToday()) : payeLe,
 			note
-		});
+		};
+		if (existante) {
+			await updateCotisation(existante.id, input);
+			await audit(tresorier, 'compta.cotisation.update', tiers.id, {
+				cotisationId: existante.id,
+				avant: { debut: existante.debut.toISOString().slice(0, 10), fin: existante.fin.toISOString().slice(0, 10), montant: existante.montant, statut: existante.statut, sieges: existante.sieges },
+				apres: { debut: debut.toISOString().slice(0, 10), fin: finExclusive.toISOString().slice(0, 10), montant, statut, sieges }
+			});
+			return { section: 'cotisation', success: 'Cotisation corrigée.' };
+		}
+		const cotisation = await createCotisation(input);
 		await audit(tresorier, 'compta.cotisation.create', tiers.id, { cotisationId: cotisation.id, type, montant });
 		return { section: 'cotisation', success: 'Cotisation ajoutée.' };
+	},
+
+	deleteCotisation: async ({ request, params, locals }) => {
+		const tresorier = requireTresorierUser(locals);
+		const tiers = await loadTiers(params);
+		const id = Number((await request.formData()).get('cotisationId'));
+		const cotisation = Number.isInteger(id) ? await getCotisation(id) : null;
+		if (!cotisation || cotisation.tiersId !== tiers.id) error(404, 'Cotisation introuvable.');
+		try {
+			await deleteCotisation(cotisation.id);
+		} catch (err) {
+			if (err instanceof SuppressionRefuseeError) return fail(400, { section: 'cotisation', error: err.message });
+			throw err;
+		}
+		await audit(tresorier, 'compta.cotisation.delete', tiers.id, {
+			cotisationId: cotisation.id,
+			type: cotisation.type,
+			debut: cotisation.debut.toISOString().slice(0, 10),
+			fin: cotisation.fin.toISOString().slice(0, 10),
+			montant: cotisation.montant
+		});
+		return { section: 'cotisation', success: 'Cotisation supprimée.' };
 	},
 
 	// Mark paid (attendue → active) or cancel — the two treasury moves on an existing cotisation.
@@ -164,40 +207,94 @@ export const actions: Actions = {
 		return { section: 'cotisation', success: 'Cotisation mise à jour.' };
 	},
 
-	addLien: async ({ request, params, locals }) => {
+	// Creates a link, or corrects one (lienId posted): roles, seat and dates. The two tiers of an
+	// existing link don't change — a link to someone else is another link.
+	saveLien: async ({ request, params, locals }) => {
 		const tresorier = requireTresorierUser(locals);
 		const tiers = await loadTiers(params);
 		const formData = await request.formData();
-		const autreId = Number(formData.get('autreId'));
-		const autre = Number.isInteger(autreId) ? await getTiers(autreId) : null;
-		if (!autre || autre.nature === tiers.nature) {
-			return fail(400, { section: 'lien', error: 'Choisissez un tiers de l’autre nature.' });
-		}
-		const depuis = parseFormDate(formData.get('depuis')) ?? brusselsToday();
-		const [organisation, personne] = tiers.nature === 'personne_morale' ? [tiers, autre] : [autre, tiers];
 
+		const idRaw = formData.get('lienId');
+		const existant = idRaw ? await getLien(Number(idRaw)) : null;
+		if (idRaw && (!existant || (existant.organisationId !== tiers.id && existant.personneId !== tiers.id))) error(404, 'Lien introuvable.');
+
+		let organisationId: number;
+		let personneId: number;
+		if (existant) {
+			organisationId = existant.organisationId;
+			personneId = existant.personneId;
+		} else {
+			const autreId = Number(formData.get('autreId'));
+			const autre = Number.isInteger(autreId) ? await getTiers(autreId) : null;
+			if (!autre || autre.nature === tiers.nature) {
+				return fail(400, { section: 'lien', error: 'Choisissez un tiers de l’autre nature.' });
+			}
+			[organisationId, personneId] = tiers.nature === 'personne_morale' ? [tiers.id, autre.id] : [autre.id, tiers.id];
+		}
+		const depuis = parseFormDate(formData.get('depuis')) ?? existant?.depuis ?? brusselsToday();
+		// The form asks for the last day of the link; `jusqua` is the first day without it.
+		const dernierJour = formData.get('jusqua') ? parseFormDate(formData.get('jusqua')) : null;
+		if (formData.get('jusqua') && !dernierJour) return fail(400, { section: 'lien', error: 'Date de fin invalide.' });
+		const jusqua = dernierJour ? new Date(dernierJour.getTime() + 86_400_000) : null;
+		if (jusqua && jusqua.getTime() <= depuis.getTime()) {
+			return fail(400, { section: 'lien', error: 'La fin doit être postérieure ou égale au début.' });
+		}
+
+		const input = {
+			organisationId,
+			personneId,
+			estEmploye: formData.has('estEmploye'),
+			estAdministrateur: formData.has('estAdministrateur'),
+			estContact: formData.has('estContact'),
+			destinataireFactures: formData.has('destinataireFactures'),
+			heriteAdhesion: formData.has('heriteAdhesion'),
+			depuis,
+			jusqua
+		};
 		try {
-			const lien = await createLien({
-				organisationId: organisation.id,
-				personneId: personne.id,
-				estEmploye: formData.has('estEmploye'),
-				estAdministrateur: formData.has('estAdministrateur'),
-				estContact: formData.has('estContact'),
-				destinataireFactures: formData.has('destinataireFactures'),
-				heriteAdhesion: formData.has('heriteAdhesion'),
-				depuis,
-				jusqua: null
-			});
-			await audit(tresorier, 'compta.lien.create', tiers.id, { lienId: lien.id, organisationId: organisation.id, personneId: personne.id });
+			if (existant) {
+				await updateLien(existant.id, input);
+				await audit(tresorier, 'compta.lien.update', tiers.id, {
+					lienId: existant.id,
+					avant: {
+						administrateur: existant.estAdministrateur,
+						employe: existant.estEmploye,
+						contact: existant.estContact,
+						destinataireFactures: existant.destinataireFactures,
+						heriteAdhesion: existant.heriteAdhesion
+					},
+					apres: {
+						administrateur: input.estAdministrateur,
+						employe: input.estEmploye,
+						contact: input.estContact,
+						destinataireFactures: input.destinataireFactures,
+						heriteAdhesion: input.heriteAdhesion
+					}
+				});
+				return { section: 'lien', success: 'Lien corrigé.' };
+			}
+			const lien = await createLien(input);
+			await audit(tresorier, 'compta.lien.create', tiers.id, { lienId: lien.id, organisationId, personneId });
 			return { section: 'lien', success: 'Lien créé.' };
 		} catch (err) {
 			if (err instanceof SiegesEpuisesError) return fail(400, { section: 'lien', error: err.message });
 			// UNIQUE (organisation_id, personne_id): the pair already exists — edit that one instead.
 			if ((err as { code?: string }).code === '23505') {
-				return fail(400, { section: 'lien', error: 'Ce lien existe déjà.' });
+				return fail(400, { section: 'lien', error: 'Ce lien existe déjà : corrigez-le plutôt.' });
 			}
 			throw err;
 		}
+	},
+
+	deleteLien: async ({ request, params, locals }) => {
+		const tresorier = requireTresorierUser(locals);
+		const tiers = await loadTiers(params);
+		const id = Number((await request.formData()).get('lienId'));
+		const lien = Number.isInteger(id) ? await getLien(id) : null;
+		if (!lien || (lien.organisationId !== tiers.id && lien.personneId !== tiers.id)) error(404, 'Lien introuvable.');
+		await deleteLien(lien.id);
+		await audit(tresorier, 'compta.lien.delete', tiers.id, { lienId: lien.id, organisationId: lien.organisationId, personneId: lien.personneId });
+		return { section: 'lien', success: 'Lien supprimé.' };
 	},
 
 	// Closing dates a link's end rather than deleting it (history stays); reopening clears it.
@@ -224,11 +321,15 @@ export const actions: Actions = {
 		return { section: 'lien', success: reopen ? 'Lien réouvert.' : 'Lien clos.' };
 	},
 
-	addAbonnement: async ({ request, params, locals }) => {
+	saveAbonnement: async ({ request, params, locals }) => {
 		const tresorier = requireTresorierUser(locals);
 		const tiers = await loadTiers(params);
 		if (tiers.nature !== 'personne_morale') error(400, 'Seule une société a un abonnement.');
 		const formData = await request.formData();
+
+		const idRaw = formData.get('abonnementId');
+		const existant = idRaw ? await getAbonnement(Number(idRaw)) : null;
+		if (idRaw && (!existant || existant.tiersId !== tiers.id)) error(404, 'Abonnement introuvable.');
 
 		const libelle = String(formData.get('libelle') ?? '').trim();
 		const prix = parseFormMoney(formData.get('prix'));
@@ -242,9 +343,35 @@ export const actions: Actions = {
 		if (sieges === null) return fail(400, { section: 'abonnement', error: 'Nombre de sièges invalide.' });
 		if (!prochaineEcheance) return fail(400, { section: 'abonnement', error: 'Prochaine échéance invalide.' });
 
-		const abonnement = await createAbonnement({ tiersId: tiers.id, libelle, prix, periodicite, sieges, prochaineEcheance, actif: true });
+		const input = { tiersId: tiers.id, libelle, prix, periodicite, sieges, prochaineEcheance, actif: existant?.actif ?? true };
+		if (existant) {
+			await updateAbonnement(existant.id, input);
+			await audit(tresorier, 'compta.abonnement.update', tiers.id, {
+				abonnementId: existant.id,
+				avant: { prix: existant.prix, periodicite: existant.periodicite, sieges: existant.sieges, prochaineEcheance: existant.prochaineEcheance.toISOString().slice(0, 10) },
+				apres: { prix, periodicite, sieges, prochaineEcheance: prochaineEcheance.toISOString().slice(0, 10) }
+			});
+			return { section: 'abonnement', success: 'Abonnement corrigé.' };
+		}
+		const abonnement = await createAbonnement(input);
 		await audit(tresorier, 'compta.abonnement.create', tiers.id, { abonnementId: abonnement.id, prix, periodicite, sieges });
 		return { section: 'abonnement', success: 'Abonnement créé.' };
+	},
+
+	deleteAbonnement: async ({ request, params, locals }) => {
+		const tresorier = requireTresorierUser(locals);
+		const tiers = await loadTiers(params);
+		const id = Number((await request.formData()).get('abonnementId'));
+		const abonnement = Number.isInteger(id) ? await getAbonnement(id) : null;
+		if (!abonnement || abonnement.tiersId !== tiers.id) error(404, 'Abonnement introuvable.');
+		try {
+			await deleteAbonnement(abonnement.id);
+		} catch (err) {
+			if (err instanceof SuppressionRefuseeError) return fail(400, { section: 'abonnement', error: err.message });
+			throw err;
+		}
+		await audit(tresorier, 'compta.abonnement.delete', tiers.id, { abonnementId: abonnement.id, libelle: abonnement.libelle });
+		return { section: 'abonnement', success: 'Abonnement supprimé.' };
 	},
 
 	toggleAbonnement: async ({ request, params, locals }) => {

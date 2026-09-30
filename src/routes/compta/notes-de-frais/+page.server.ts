@@ -1,7 +1,16 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireTresorierUser } from '$lib/server/auth';
-import { deciderNoteDeFrais, getNoteDeFrais, listNotesDeFrais, NoteDeFraisError, type NoteStatut } from '$lib/server/compta/notesDeFrais';
+import {
+	corrigerNoteDeFrais,
+	deciderNoteDeFrais,
+	getNoteDeFrais,
+	listNotesDeFrais,
+	NoteDeFraisError,
+	reouvrirNoteDeFrais,
+	type NoteStatut
+} from '$lib/server/compta/notesDeFrais';
+import { parseFormDate, parseFormMoney } from '$lib/server/compta/dates';
 import { logAuditEvent } from '$lib/server/auditLog';
 import { displayName } from '$lib/types';
 
@@ -36,5 +45,51 @@ export const actions: Actions = {
 			motif
 		});
 		return { success: acceptee ? 'Note acceptée — à rembourser depuis la banque.' : 'Note refusée.' };
+	},
+
+	// Takes an acceptance or a refusal back.
+	reouvrir: async ({ request, locals }) => {
+		const tresorier = requireTresorierUser(locals);
+		const id = Number((await request.formData()).get('noteId'));
+		const note = Number.isInteger(id) ? await getNoteDeFrais(id) : null;
+		if (!note) error(404, 'Note introuvable.');
+		try {
+			await reouvrirNoteDeFrais(note.id);
+		} catch (err) {
+			if (err instanceof NoteDeFraisError) return fail(400, { error: err.message, noteId: note.id });
+			throw err;
+		}
+		await logAuditEvent({ sub: tresorier.sub, label: displayName(tresorier) }, 'admin', 'compta.noteDeFrais.reouvrir', {}, {
+			noteId: note.id,
+			tiersId: note.tiersId,
+			statutPrecedent: note.statut
+		});
+		return { success: 'Décision annulée : la note attend à nouveau une décision.' };
+	},
+
+	corriger: async ({ request, locals }) => {
+		const tresorier = requireTresorierUser(locals);
+		const formData = await request.formData();
+		const id = Number(formData.get('noteId'));
+		const note = Number.isInteger(id) ? await getNoteDeFrais(id) : null;
+		if (!note) error(404, 'Note introuvable.');
+		const date = parseFormDate(formData.get('date'));
+		const montant = parseFormMoney(formData.get('montant'));
+		const libelle = String(formData.get('libelle') ?? '').trim();
+		if (!date) return fail(400, { error: 'Date invalide.', noteId: note.id });
+		if (montant === null) return fail(400, { error: 'Montant invalide.', noteId: note.id });
+		try {
+			await corrigerNoteDeFrais(note.id, { date, libelle, montant });
+		} catch (err) {
+			if (err instanceof NoteDeFraisError) return fail(400, { error: err.message, noteId: note.id });
+			throw err;
+		}
+		await logAuditEvent({ sub: tresorier.sub, label: displayName(tresorier) }, 'admin', 'compta.noteDeFrais.corriger', {}, {
+			noteId: note.id,
+			tiersId: note.tiersId,
+			avant: { montant: note.montant, libelle: note.libelle },
+			apres: { montant, libelle }
+		});
+		return { success: 'Note corrigée.' };
 	}
 };
