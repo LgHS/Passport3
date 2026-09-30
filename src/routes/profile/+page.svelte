@@ -6,6 +6,13 @@
 		};
 	}
 
+	// Same treatment for an MFA device: destructive, and losing a second factor is worth a question.
+	function confirmDeleteMfaDevice(device: { name: string }) {
+		return ({ cancel }: { cancel: () => void }) => {
+			if (!confirm(`Supprimer l'appareil ${device.name} ? Vous ne pourrez plus l'utiliser pour vous connecter.`)) cancel();
+		};
+	}
+
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -399,9 +406,9 @@
 						<p class="mt-1 text-gray-600">{device.type}</p>
 						<p class="mt-1 text-gray-600">Ajouté le : {formatDate(device.created)}</p>
 						<div class="mt-2">
-							<form method="POST" action="?/deleteMfaDevice" use:enhance>
+							<form method="POST" action="?/deleteMfaDevice" use:enhance={confirmDeleteMfaDevice(device)}>
 								<input type="hidden" name="pk" value={device.pk} />
-								<button type="submit" class="text-xs font-bold uppercase underline">
+								<button type="submit" class="text-xs font-bold text-red-700 uppercase underline">
 									Supprimer
 								</button>
 							</form>
@@ -427,9 +434,9 @@
 								<td class="border border-black px-3 py-2">{device.type}</td>
 								<td class="border border-black px-3 py-2">{formatDate(device.created)}</td>
 								<td class="border border-black px-3 py-2">
-									<form method="POST" action="?/deleteMfaDevice" use:enhance>
+									<form method="POST" action="?/deleteMfaDevice" use:enhance={confirmDeleteMfaDevice(device)}>
 										<input type="hidden" name="pk" value={device.pk} />
-										<button type="submit" class="text-xs font-bold uppercase underline">
+										<button type="submit" class="text-xs font-bold text-red-700 uppercase underline">
 											Supprimer
 										</button>
 									</form>
