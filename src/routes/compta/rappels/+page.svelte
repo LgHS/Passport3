@@ -109,7 +109,7 @@
 									{/if}
 								</span>
 							</td>
-							<td class={td}>
+							<td class="{td} [overflow-wrap:anywhere]">
 								{#if f.to.length === 0}
 									<span class="font-bold text-red-700">Aucune adresse email</span>
 								{:else}
