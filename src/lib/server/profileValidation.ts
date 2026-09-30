@@ -386,7 +386,7 @@ export function validateProfileSubmission(formData: FormData): ProfileValidation
 	if (!/^[1-9]\d{7,14}$/.test(attributes.phoneNumber)) {
 		return {
 			ok: false,
-			error: 'Numéro de téléphone invalide (format attendu: 32470000000, sans "+" ni "0" initial).',
+			error: 'Numéro de téléphone invalide (format attendu : 32470000000, sans "+" ni "0" initial).',
 			firstName,
 			lastName,
 			attributes
@@ -489,7 +489,7 @@ export function validateEmergencyContactsSubmission(formData: FormData): Emergen
 		if (!CONTACT_PHONE_RE.test(contact.phone)) {
 			return {
 				ok: false,
-				error: `Numéro de téléphone invalide pour ${contact.name} (format attendu: 32470000000, sans "+" ni "0" initial).`,
+				error: `Numéro de téléphone invalide pour ${contact.name} (format attendu : 32470000000, sans "+" ni "0" initial).`,
 				contacts
 			};
 		}

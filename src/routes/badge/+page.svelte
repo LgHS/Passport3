@@ -36,7 +36,7 @@
 			hackerspace.
 		</p>
 		<p class="mb-6 text-sm text-gray-600">
-			Vous n'en avez pas encore, générez-le pour pouvoir l'utiliser.
+			Vous n'en avez pas encore : générez-le pour pouvoir l'utiliser.
 		</p>
 		<form
 			method="POST"
@@ -67,7 +67,7 @@
 				hackerspace.
 			</p>
 			<p class="mb-2 text-sm text-gray-600">
-				Cet identifiant est confidentiel et ne doit pas être communiqué à n'importe qui.
+				Cet identifiant est confidentiel et ne doit être communiqué à personne.
 			</p>
 			<p class="mb-6 text-sm text-gray-600">
 				Il est possible de le régénérer en cas de doute, de copie ou de perte.
@@ -115,9 +115,8 @@
 				<div class="p-6">
 					<p class="mb-3 text-sm font-bold uppercase">Attention, action irréversible</p>
 					<p class="mb-4 text-sm text-gray-600">
-						En régénérant votre UUID, votre (vos) badge(s) actuel(s) cessera(ont) de fonctionner
-						immédiatement. Cette opération ne doit être utilisée qu'en cas de perte ou de copie de
-						votre (vos) badge(s).
+						En régénérant votre UUID, tous vos badges actuels cesseront de fonctionner immédiatement.
+						À n'utiliser qu'en cas de perte ou de copie d'un badge.
 					</p>
 					<form
 						method="POST"
@@ -140,7 +139,7 @@
 								bind:checked={understood}
 								class="mt-1"
 							/>
-							J'ai compris que mon (mes) badge(s) actuel(s) ne fonctionnera(ont) plus.
+							J'ai compris que mes badges actuels ne fonctionneront plus.
 						</label>
 						<div class="flex gap-3 pb-1">
 							<button

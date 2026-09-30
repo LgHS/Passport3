@@ -146,7 +146,7 @@
 
 {#if data.mfaDevices.length === 0}
 	<p class="mb-6 border-4 border-black bg-lghs-yellow px-4 py-3 text-sm font-bold">
-		Vous n'avez aucun MFA de configuré.
+		Vous n'avez configuré aucun MFA.
 		<button
 			type="button"
 			onclick={() => (activeTab = 'mfa')}
@@ -175,7 +175,7 @@
 				? 'bg-black text-white'
 				: 'hover:bg-black hover:text-white'}"
 		>
-			Mes Informations
+			Mes informations
 		</button>
 		<button
 			type="button"
@@ -195,7 +195,7 @@
 				? 'bg-black text-white'
 				: 'hover:bg-black hover:text-white'}"
 		>
-			Mes Appareils MFA ({data.mfaDevices.length})
+			Mes appareils MFA ({data.mfaDevices.length})
 		</button>
 		<button
 			type="button"
@@ -215,7 +215,7 @@
 				? 'bg-black text-white'
 				: 'hover:bg-black hover:text-white'}"
 		>
-			Mes Sessions ({data.sessions.length})
+			Mes sessions ({data.sessions.length})
 		</button>
 		<button
 			type="button"
@@ -253,7 +253,7 @@
 				<span class="mb-1 block text-sm font-bold uppercase">Email</span>
 				<p class="border border-black bg-gray-100 px-3 py-2 text-sm">{data.profile.email}</p>
 				<p class="mt-1 text-xs text-gray-500">
-					Ce mail est non éditable. Il sert de clé pour relier certains services. Un changement peut se faire sur demande.
+					Cette adresse email n'est pas modifiable ici : elle sert de clé pour relier certains services. Pour la changer, faites-en la demande.
 				</p>
 			</div>
 

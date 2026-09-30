@@ -95,7 +95,7 @@
 		</div>
 		<div>
 			<label class="mb-1 block text-sm font-bold uppercase" for="equipment">
-				Matériel ou machine impliquée <span class="text-xs font-normal normal-case">(optionnel)</span>
+				Matériel ou machine impliqués <span class="text-xs font-normal normal-case">(optionnel)</span>
 			</label>
 			<input
 				id="equipment"

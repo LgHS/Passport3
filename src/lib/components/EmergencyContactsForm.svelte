@@ -67,12 +67,12 @@
 <p class="mb-4 text-sm text-gray-600">
 	{#if adminView}
 		Les contacts d'urgence permettent aux admins de contacter une personne de confiance en cas de
-		problème (santé, sécurité, ...) au hackerspace. Indiquez des proches connaissant bien le
-		membre ou ayant une facilité à le joindre.
+		problème (santé, sécurité…) au hackerspace. Indiquez des proches connaissant bien le
+		membre ou pouvant facilement le joindre.
 	{:else}
 		Les contacts d'urgence permettent aux admins de contacter une personne de confiance en cas de
-		problème (santé, sécurité, ...) au hackerspace. Indiquez des proches vous connaissant bien ou
-		ayant une facilité à vous joindre.
+		problème (santé, sécurité…) au hackerspace. Indiquez des proches vous connaissant bien ou
+		pouvant facilement vous joindre.
 	{/if}
 </p>
 

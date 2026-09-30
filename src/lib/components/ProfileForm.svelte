@@ -232,7 +232,7 @@
 				<p class="mt-1 text-xs text-gray-500">
 					En changeant votre nom d'utilisateur, vous serez déconnecté·e de toutes vos sessions
 					et services (ex. Mattermost). <strong
-						>Il faudra alors vous connecter avec votre nouveau username.</strong
+						>Il faudra alors vous connecter avec votre nouveau nom d'utilisateur.</strong
 					> Cette action est limitée à une fois tous les 30 jours.
 				</p>
 			{/if}
@@ -268,7 +268,7 @@
 		{@render textField('phoneNumber', {
 			type: 'tel',
 			pattern: '[1-9][0-9]{7,14}',
-			title: 'Format attendu : 32470000000 (sans "+" ni "0" initial)'
+			title: 'Format attendu : 32470000000 (sans « + » ni « 0 » initial)'
 		})}
 	</div>
 
@@ -293,7 +293,7 @@
 				class="flex w-full items-center justify-between px-4 py-3 text-sm font-bold uppercase"
 				aria-expanded={socialsOpen}
 			>
-				Divers (facultatifs)
+				Divers (facultatif)
 				<svg
 					viewBox="0 0 12 8"
 					class="h-2.5 w-2.5 shrink-0 fill-current transition-transform {socialsOpen
@@ -305,7 +305,7 @@
 				</svg>
 			</button>
 		{:else}
-			<p class="border-b border-black px-4 py-3 text-sm font-bold uppercase">Divers (facultatifs)</p>
+			<p class="border-b border-black px-4 py-3 text-sm font-bold uppercase">Divers (facultatif)</p>
 		{/if}
 		{#if socialsOpen}
 			<div class="border-t border-black p-4">
@@ -418,7 +418,7 @@
 							type="text"
 							placeholder="ana"
 							bind:value={matrixLocalpart}
-							title="Pseudo Matrix (avant le ':')"
+							title="Pseudo Matrix (avant le « : »)"
 							class="min-w-0 flex-1 px-2 py-2 text-sm placeholder:text-gray-300"
 						/>
 						<span

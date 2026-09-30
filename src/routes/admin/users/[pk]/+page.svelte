@@ -173,7 +173,7 @@
 			<p><span class="font-bold uppercase">Identifiant :</span> {data.profile.username}</p>
 			<p><span class="font-bold uppercase">Email :</span> {data.profile.email}</p>
 			<p>
-				<span class="font-bold uppercase">Chat :</span>
+				<span class="font-bold uppercase">Mattermost :</span>
 				{#if data.mattermostUnavailable}
 					<span class="text-gray-500">Impossible de vérifier pour le moment</span>
 				{:else if data.mattermostUsername && data.mattermostDmUrl}
@@ -239,7 +239,7 @@
 				<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
 					<label class="flex cursor-not-allowed items-center gap-2 text-sm text-gray-400">
 						<input type="checkbox" checked disabled />
-						Username (obligatoire)
+						Nom d'utilisateur (obligatoire)
 					</label>
 					{#each fieldOptins as field (field.key)}
 						<label class="flex cursor-pointer items-center gap-2 text-sm">
@@ -512,7 +512,7 @@
 			<div class="p-6">
 				<p class="mb-3 text-sm font-bold uppercase">Attention, action irréversible</p>
 				<p class="mb-4 text-sm text-gray-600">
-					En régénérant l'UUID de ce membre, son (ses) badge(s) actuel(s) cessera(ont) de
+					En régénérant l'UUID de ce membre, tous ses badges actuels cesseront de
 					fonctionner immédiatement. À n'utiliser qu'à sa demande explicite (badge perdu ou
 					copié), jamais par précaution.
 				</p>
@@ -535,8 +535,7 @@
 							bind:checked={rfidUnderstood}
 							class="mt-1"
 						/>
-						J'ai confirmé avec le membre que son (ses) badge(s) actuel(s) doit (doivent) être
-						régénéré(s).
+						J'ai confirmé avec le membre que son UUID doit être régénéré.
 					</label>
 					<button
 						type="submit"

@@ -60,6 +60,6 @@
 	</div>
 {:else}
 	<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-		Il y a un petit problème... Aucun groupe associé à votre compte.
+		Il y a un petit problème : aucun groupe n'est associé à votre compte.
 	</p>
 {/if}

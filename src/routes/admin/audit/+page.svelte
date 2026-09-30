@@ -75,7 +75,7 @@
 
 	<p class="mb-4 text-sm text-gray-600">
 		Les 200 actions les plus récentes, admin comme membre (profil, trombinoscope, contacts
-		d'urgence, invitations, GitHub, sessions, cotisation, badge). Cliquez une action pour voir le
+		d'urgence, invitations, GitHub, sessions, cotisation, badge). Cliquez sur une action pour voir le
 		détail. Les contacts d'urgence et le badge RFID eux-mêmes ne sont jamais enregistrés ici.
 		Certaines opérations menées directement dans nos autres outils internes (comme la
 		comptabilité) n'y transitent pas encore.

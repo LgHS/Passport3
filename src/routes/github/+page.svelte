@@ -95,7 +95,7 @@
 
 			{#if data.githubUnavailable}
 				<p class="mt-4 text-sm text-gray-600">
-					Impossible de vérifier votre statut sur l'organisation GitHub pour le moment. Réessayez
+					Impossible de vérifier votre statut dans l'organisation GitHub pour le moment. Réessayez
 					plus tard.
 				</p>
 			{:else if data.membershipStatus === 'pending'}
@@ -174,8 +174,8 @@
 	<div class="mt-8">
 		<p class="mb-2 text-sm font-bold uppercase">Comment ça marche</p>
 		<ol class="list-decimal space-y-1 pl-5 text-sm text-gray-600">
-			<li>Cliquez sur le bouton «Se connecter avec GitHub»,</li>
-			<li>Confirmez sur Github le compte à utiliser,</li>
+			<li>Cliquez sur le bouton « Se connecter avec GitHub »,</li>
+			<li>Confirmez sur GitHub le compte à utiliser,</li>
 			<li>Envoyez la demande d'invitation depuis cette page,</li>
 			<li>
 				GitHub vous envoie une invitation par email et/ou notification GitHub, en attente de

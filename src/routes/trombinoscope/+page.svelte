@@ -271,7 +271,7 @@
 				<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
 					<label class="flex cursor-not-allowed items-center gap-2 text-sm text-gray-400">
 						<input type="checkbox" checked disabled />
-						Username (obligatoire)
+						Nom d'utilisateur (obligatoire)
 					</label>
 					{#each fieldOptins as field (field.key)}
 						<label class="flex cursor-pointer items-center gap-2 text-sm">
@@ -343,7 +343,7 @@
 	<input
 		type="search"
 		bind:value={searchQuery}
-		placeholder="Rechercher un pseudo, un nom, un tag…"
+		placeholder="Rechercher un nom d'utilisateur, un nom, un tag…"
 		class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-400 sm:max-w-xs"
 	/>
 
@@ -708,7 +708,7 @@
 			{/if}
 
 			{#if !fullName(member) && !member.tagExtended && !member.email && !member.phone && !member.mattermostUsername && socialLinks(member).length === 0}
-				<p class="text-gray-500">Ce membre n'a partagé que son pseudo.</p>
+				<p class="text-gray-500">Ce membre n'a partagé que son nom d'utilisateur.</p>
 			{/if}
 		</div>
 		</div>

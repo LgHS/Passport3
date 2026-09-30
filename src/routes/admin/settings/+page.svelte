@@ -244,7 +244,7 @@
 				<p class="text-sm text-gray-600">
 					Passport garde en mémoire la correspondance entre emails et comptes Mattermost, régénérée
 					automatiquement toutes les heures. Ce bouton force une mise à jour immédiate, par exemple
-					juste après qu'un membre ait créé son compte Mattermost.
+					juste après qu'un membre a créé son compte Mattermost.
 				</p>
 				{@render submit(refreshingMattermostCache, 'Régénérer le cache Mattermost', 'Régénération…')}
 			</div>

@@ -34,8 +34,8 @@
 			{
 				href: '/profile?tab=emergency',
 				done: data.checklist.emergencyContactConfigured,
-				doneLabel: 'Contact "d’urgence" renseigné',
-				todoLabel: 'Renseigner au moins un contact "d’urgence"'
+				doneLabel: "Contact d'urgence renseigné",
+				todoLabel: "Renseigner au moins un contact d'urgence"
 			},
 			{
 				href: '/profile',
@@ -53,7 +53,7 @@
 				href: '/badge',
 				done: data.checklist.badgeConfigured,
 				doneLabel: 'Badge RFID généré',
-				todoLabel: 'Générer mon UUID (badge) RFID'
+				todoLabel: 'Générer mon badge RFID'
 			},
 			{
 				href: '/cotisation',

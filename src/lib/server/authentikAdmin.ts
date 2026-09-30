@@ -12,7 +12,7 @@ export type { EmergencyContact, ProfileAttributeField, UserProfile };
 // Whitelist that also acts as the merge boundary for updateUserProfile: only these keys are
 // ever read from or written into the user's Authentik `attributes` blob.
 export const PROFILE_ATTRIBUTE_FIELDS: ProfileAttributeField[] = [
-	{ key: 'phoneNumber', label: 'Téléphone (format: 32470000000)', required: true },
+	{ key: 'phoneNumber', label: 'Téléphone (format : 32470000000)', required: true },
 	{ key: 'street', label: 'Rue & Numéro', required: true },
 	{ key: 'postal_code', label: 'Code postal', required: true },
 	{ key: 'locality', label: 'Localité', required: true },

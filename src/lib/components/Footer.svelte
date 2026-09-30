@@ -23,7 +23,7 @@
 <footer class="mt-14 border-t-4 border-black py-8">
 	<div class="mx-auto max-w-5xl px-4 text-center">
 		<p class="text-sm">
-			<b>Passport</b> — member portal of the
+			<b>Passport</b> — portail des membres du
 			<a href="https://lghs.be" target="_blank" rel="noopener">Liège Hackerspace</a>
 			—
 			<a
@@ -45,7 +45,7 @@
 				BE0649.448.256
 			</a>
 			<br />
-			<b>Mail:</b> <a href="mailto:ping@lghs.be">ping@lghs.be</a>
+			<b>Email :</b> <a href="mailto:ping@lghs.be">ping@lghs.be</a>
 		</p>
 
 		<div class="mt-3 flex flex-wrap items-center justify-center gap-3">

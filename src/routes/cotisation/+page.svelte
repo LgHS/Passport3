@@ -418,7 +418,7 @@
 	</section>
 
 	<section class="w-full md:w-1/3">
-		<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Infos Bancaires</h2>
+		<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Infos bancaires</h2>
 		<p class="mb-6 text-sm text-gray-600">
 			Renseigner vos coordonnées bancaires facilite l'automatisation des tâches de comptabilité.
 		</p>

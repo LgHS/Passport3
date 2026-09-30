@@ -42,8 +42,8 @@
 				Nous n'avons pas trouvé de compte correspondant à votre adresse email dans l'outil de
 				gestion des membres. Cela peut simplement vouloir dire que votre inscription n'a pas
 				encore été synchronisée, ou provenir d'une erreur. Si ça persiste, contactez une personne
-				en charge de la trésorerie ou du registre des membres. Via le canal #support du chat ou
-				par mail <a href="mailto:ping@lghs.be">ping@lghs.be</a>.
+				en charge de la trésorerie ou du registre des membres, via le canal #support du chat ou
+				par email : <a href="mailto:ping@lghs.be">ping@lghs.be</a>.
 			</p>
 		</div>
 	</div>
