@@ -54,7 +54,8 @@
 <p class="mb-1 text-sm text-gray-600">
 	Ce formulaire sert à consigner ce qui s'est passé au hackerspace. Ces déclarations sont
 	obligatoires pour des raisons de législation et d'assurance : merci de les remplir sérieusement
-	et le plus précisément possible.
+	et le plus précisément possible. <em>Plusieurs déclarations peuvent être faites pour un même
+		incident, à la discrétion de chacun.</em>
 </p>
 <p class="mb-6 text-sm text-gray-600">
 	Les informations de cette déclaration sont traitées de manière strictement confidentielle. Seuls
@@ -91,11 +92,11 @@
 				bind:value={occurredAt}
 				class="w-full border border-black px-3 py-2 text-sm"
 			/>
-			<p class="mt-1 text-xs text-gray-500">Quand l'événement a eu lieu, pas quand vous le déclarez.</p>
+			<p class="mt-1 text-xs text-gray-500">Quand l'événement a eu lieu, pas quand tu le déclares.</p>
 		</div>
 		<div>
 			<label class="mb-1 block text-sm font-bold uppercase" for="equipment">
-				Matériel ou machine impliquée <span class="text-xs font-normal normal-case">(optionnel)</span>
+				Matériel ou machine impliqués <span class="text-xs font-normal normal-case">(optionnel)</span>
 			</label>
 			<input
 				id="equipment"
@@ -111,7 +112,7 @@
 	<div class="mb-4">
 		<label class="mb-1 block text-sm font-bold uppercase" for="people">Personnes impliquées</label>
 		<TagInput id="people" name="people" bind:tags={people} placeholder="Un nom, puis Entrée" />
-		<p class="mt-1 text-xs text-gray-500">Tapez un nom puis Entrée pour l'ajouter.</p>
+		<p class="mt-1 text-xs text-gray-500">Tape un nom puis Entrée pour l'ajouter.</p>
 		<label class="mt-2 flex cursor-pointer items-center gap-2 text-sm">
 			<input type="checkbox" name="visitorInvolved" />
 			Un non-membre ou visiteur a été impliqué
@@ -137,7 +138,7 @@
 			maxlength={DESCRIPTION_MAX_LENGTH}
 			required
 			bind:value={descriptionValue}
-			placeholder="Ce qui s'est passé, dans quelles circonstances, ce qui a été fait ensuite… En cas de blessure, précisez la partie du corps touchée."
+			placeholder="Ce qui s'est passé, dans quelles circonstances, ce qui a été fait ensuite… En cas de blessure, précise la partie du corps touchée."
 			class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-300"
 		></textarea>
 	</div>

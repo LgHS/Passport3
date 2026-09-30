@@ -182,7 +182,7 @@
 			</p>
 			<p><span class="font-bold uppercase">Email :</span> {data.profile.email}</p>
 			<p>
-				<span class="font-bold uppercase">Chat :</span>
+				<span class="font-bold uppercase">Mattermost :</span>
 				{#if data.mattermostUnavailable}
 					<span class="text-gray-500">Impossible de vérifier pour le moment</span>
 				{:else if data.mattermostUsername && data.mattermostDmUrl}
@@ -248,7 +248,7 @@
 				<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
 					<label class="flex cursor-not-allowed items-center gap-2 text-sm text-gray-400">
 						<input type="checkbox" checked disabled />
-						Username (obligatoire)
+						Nom d'utilisateur (obligatoire)
 					</label>
 					{#each fieldOptins as field (field.key)}
 						<label class="flex cursor-pointer items-center gap-2 text-sm">
@@ -272,7 +272,7 @@
 							class="w-full border border-black px-3 py-2 text-sm"
 						/>
 						<p class="mt-1 text-xs text-gray-500">
-							Laissez vide pour afficher l'email de compte du membre, ou indiquez une autre
+							Laisse vide pour afficher l'email de compte du membre, ou indique une autre
 							adresse à montrer à la place. Adresse publique, visible par tous les membres.
 						</p>
 					</div>
@@ -284,7 +284,7 @@
 			{/if}
 
 			<p class="mt-4 text-sm text-gray-600">
-				Avant d'activer un nouveau champ, assurez-vous du consentement du membre concerné : ces
+				Avant d'activer un nouveau champ, assure-toi du consentement du membre concerné : ces
 				informations deviennent publiques dans le trombinoscope.
 			</p>
 
@@ -400,7 +400,7 @@
 		</p>
 		{#if data.groups === null}
 			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-				Impossible de charger les groupes pour le moment, réessayez plus tard.
+				Impossible de charger les groupes pour le moment, réessaie plus tard.
 			</p>
 		{:else if data.groups.length > 0}
 			<!-- Mobile: stacked cards, no horizontal scroll. From sm: a real table instead. -->
@@ -456,7 +456,7 @@
 	{#if emergencyContactsSectionOpen}
 		{#if data.emergencyContacts === null}
 			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-				Impossible de charger les contacts d'urgence pour le moment. Réessayez plus tard.
+				Impossible de charger les contacts d'urgence pour le moment. Réessaie plus tard.
 			</p>
 		{:else}
 			<EmergencyContactsForm
@@ -474,7 +474,7 @@
 			<span class="mb-1 block text-sm font-bold uppercase">Identifiant (UUID)</span>
 			{#if data.rfidUid === undefined}
 				<div class="border border-black bg-gray-100 px-3 py-2 text-sm text-gray-600">
-					Impossible de charger le badge pour le moment, réessayez plus tard.
+					Impossible de charger le badge pour le moment, réessaie plus tard.
 				</div>
 			{:else if data.rfidUid === null}
 				<div class="border border-black bg-gray-100 px-3 py-2 text-sm text-gray-600">
@@ -521,7 +521,7 @@
 			<div class="p-6">
 				<p class="mb-3 text-sm font-bold uppercase">Attention, action irréversible</p>
 				<p class="mb-4 text-sm text-gray-600">
-					En régénérant l'UUID de ce membre, son (ses) badge(s) actuel(s) cessera(ont) de
+					En régénérant l'UUID de ce membre, tous ses badges actuels cesseront de
 					fonctionner immédiatement. À n'utiliser qu'à sa demande explicite (badge perdu ou
 					copié), jamais par précaution.
 				</p>
@@ -544,8 +544,7 @@
 							bind:checked={rfidUnderstood}
 							class="mt-1"
 						/>
-						J'ai confirmé avec le membre que son (ses) badge(s) actuel(s) doit (doivent) être
-						régénéré(s).
+						J'ai confirmé avec le membre que son UUID doit être régénéré.
 					</label>
 					<button
 						type="submit"

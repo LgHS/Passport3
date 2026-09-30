@@ -217,7 +217,7 @@
 			{#if nextUsernameChangeAllowedAt}
 				<p class="border border-black bg-gray-100 px-3 py-2 text-sm">{username}</p>
 				<p class="mt-1 text-xs text-gray-500">
-					Vous pourrez le modifier à nouveau à partir du
+					Tu pourras le modifier à nouveau à partir du
 					{new Date(nextUsernameChangeAllowedAt).toLocaleDateString('fr-BE')}.
 				</p>
 			{:else}
@@ -230,9 +230,9 @@
 					class="w-full border border-black px-3 py-2 text-sm"
 				/>
 				<p class="mt-1 text-xs text-gray-500">
-					En changeant votre nom d'utilisateur, vous serez déconnecté·e de toutes vos sessions
+					En changeant ton nom d'utilisateur, tu seras déconnecté·e de toutes tes sessions
 					et services (ex. Mattermost). <strong
-						>Il faudra alors vous connecter avec votre nouveau username.</strong
+						>Il faudra alors te connecter avec ton nouveau nom d'utilisateur.</strong
 					> Cette action est limitée à une fois tous les 30 jours.
 				</p>
 			{/if}
@@ -268,7 +268,7 @@
 		{@render textField('phoneNumber', {
 			type: 'tel',
 			pattern: '[1-9][0-9]{7,14}',
-			title: 'Format attendu : 32470000000 (sans "+" ni "0" initial)'
+			title: 'Format attendu : 32470000000 (sans « + » ni « 0 » initial)'
 		})}
 	</div>
 
@@ -293,7 +293,7 @@
 				class="flex w-full items-center justify-between px-4 py-3 text-sm font-bold uppercase"
 				aria-expanded={socialsOpen}
 			>
-				Divers (facultatifs)
+				Divers (facultatif)
 				<svg
 					viewBox="0 0 12 8"
 					class="h-2.5 w-2.5 shrink-0 fill-current transition-transform {socialsOpen
@@ -305,7 +305,7 @@
 				</svg>
 			</button>
 		{:else}
-			<p class="border-b border-black px-4 py-3 text-sm font-bold uppercase">Divers (facultatifs)</p>
+			<p class="border-b border-black px-4 py-3 text-sm font-bold uppercase">Divers (facultatif)</p>
 		{/if}
 		{#if socialsOpen}
 			<div class="border-t border-black p-4">
@@ -343,7 +343,7 @@
 								maxlength="4"
 								placeholder="Année"
 								bind:value={birthdayYear}
-								title="Facultatif — laissez vide pour ne partager que le jour et le mois"
+								title="Facultatif — laisse vide pour ne partager que le jour et le mois"
 								class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-300"
 							/>
 						</div>
@@ -353,7 +353,7 @@
 								: 'cursor-not-allowed opacity-50'}"
 							title={hasBirthdayDate
 								? ''
-								: 'Renseignez au moins le jour et le mois pour activer cette option'}
+								: 'Renseigne au moins le jour et le mois pour activer cette option'}
 						>
 							<span
 								class="relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors {birthdayAnnounce
@@ -373,11 +373,11 @@
 										: ''}"
 								></span>
 							</span>
-							Souhaitez-moi un bon anniversaire !
+							Souhaite-moi un bon anniversaire !
 						</label>
 					</div>
 					<p class="mt-1 text-xs text-gray-500">
-						Facultative. L'année est elle-même facultative si vous préférez ne partager que le
+						Facultative. L'année est elle-même facultative si tu préfères ne partager que le
 						jour et le mois.
 					</p>
 					<input type="hidden" name="birthday" value={birthdayCombined} />
@@ -418,7 +418,7 @@
 							type="text"
 							placeholder="ana"
 							bind:value={matrixLocalpart}
-							title="Pseudo Matrix (avant le ':')"
+							title="Pseudo Matrix (avant le « : »)"
 							class="min-w-0 flex-1 px-2 py-2 text-sm placeholder:text-gray-300"
 						/>
 						<span

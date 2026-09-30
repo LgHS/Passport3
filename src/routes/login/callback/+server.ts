@@ -27,7 +27,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		await verifyIdToken(tokens.id_token);
 	} catch (err) {
 		if (err instanceof OidcUnavailableError) {
-			error(503, 'La connexion est temporairement indisponible. Réessayez dans quelques instants.');
+			error(503, 'La connexion est temporairement indisponible. Réessaie dans quelques instants.');
 		}
 		throw err;
 	}

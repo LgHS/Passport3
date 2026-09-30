@@ -41,7 +41,7 @@ export function validateBankInfoSubmission(formData: FormData): BankInfoValidati
 	if (ibanPerso && !isValidIban(ibanPerso)) {
 		return {
 			ok: false,
-			error: 'IBAN personnel invalide (vérifiez le numéro).',
+			error: 'IBAN personnel invalide (vérifie le numéro).',
 			ibanPerso,
 			ibanPro
 		};
@@ -49,7 +49,7 @@ export function validateBankInfoSubmission(formData: FormData): BankInfoValidati
 	if (ibanPro && !isValidIban(ibanPro)) {
 		return {
 			ok: false,
-			error: 'IBAN professionnel invalide (vérifiez le numéro).',
+			error: 'IBAN professionnel invalide (vérifie le numéro).',
 			ibanPerso,
 			ibanPro
 		};

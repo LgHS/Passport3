@@ -164,7 +164,7 @@ export const actions: Actions = {
 			await refreshMattermostCache();
 		} catch {
 			return fail(500, {
-				mattermostCacheError: 'La régénération du cache Mattermost a échoué, réessayez.'
+				mattermostCacheError: 'La régénération du cache Mattermost a échoué, réessaie.'
 			});
 		}
 		return { mattermostCacheRefreshed: true };
@@ -176,7 +176,7 @@ export const actions: Actions = {
 		try {
 			result = await pregenerateAvatars(await getAvatarInfoByEmailHash(true));
 		} catch {
-			return fail(500, { avatarsError: 'La génération des avatars a échoué, réessayez.' });
+			return fail(500, { avatarsError: 'La génération des avatars a échoué, réessaie.' });
 		}
 		if (result.generated > 0) {
 			await logAuditEvent({ sub: admin.sub, label: displayName(admin) }, 'admin', 'avatars.pregenerate', {}, {

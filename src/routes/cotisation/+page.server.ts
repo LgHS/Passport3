@@ -18,7 +18,7 @@ import { validateBankInfoSubmission, maskIban, normalizeIban } from '$lib/server
 import { logAuditEvent } from '$lib/server/auditLog';
 import { authentikPk, displayName } from '$lib/types';
 
-const DOLIBARR_UNAVAILABLE_MESSAGE = 'Service temporairement indisponible. Réessayez dans quelques instants.';
+const DOLIBARR_UNAVAILABLE_MESSAGE = 'Service temporairement indisponible. Réessaie dans quelques instants.';
 
 // Auth guard shared by the load and the action below — never trust a client-submitted member/
 // thirdparty id, always re-derive from the authenticated session's email.
@@ -29,7 +29,7 @@ async function resolveOwnMember(locals: App.Locals) {
 
 	const email = locals.user.email;
 	if (!email) {
-		error(500, 'Impossible de résoudre votre adresse email pour interroger Dolibarr.');
+		error(500, 'Impossible de résoudre ton adresse email pour interroger Dolibarr.');
 	}
 
 	return getMemberByEmail(email);
@@ -101,7 +101,7 @@ export const actions: Actions = {
 		try {
 			const member = await resolveOwnMember(locals);
 			if (!member) {
-				error(404, 'Aucun adhérent Dolibarr trouvé pour votre adresse email.');
+				error(404, 'Aucun adhérent Dolibarr trouvé pour ton adresse email.');
 			}
 			const user = locals.user!;
 			// Dolibarr's member.id (used everywhere else in this file) and Authentik's pk are two
@@ -169,7 +169,7 @@ export const actions: Actions = {
 				} catch (err) {
 					if (err instanceof DolibarrUnavailableError) throw err;
 					return fail(500, {
-						error: "La mise à jour de l'IBAN personnel a échoué, réessayez.",
+						error: "La mise à jour de l'IBAN personnel a échoué, réessaie.",
 						ibanPerso: result.ibanPerso,
 						ibanPro: result.ibanPro
 					});
@@ -185,8 +185,8 @@ export const actions: Actions = {
 					if (err instanceof DolibarrUnavailableError) throw err;
 					return fail(500, {
 						error: ibanPersoChanged
-							? "L'IBAN personnel a été enregistré, mais l'IBAN professionnel n'a pas pu être mis à jour. Réessayez avec l'IBAN professionnel."
-							: "La mise à jour de l'IBAN professionnel a échoué, réessayez.",
+							? "L'IBAN personnel a été enregistré, mais l'IBAN professionnel n'a pas pu être mis à jour. Réessaie avec l'IBAN professionnel."
+							: "La mise à jour de l'IBAN professionnel a échoué, réessaie.",
 						ibanPerso: result.ibanPerso,
 						ibanPro: result.ibanPro
 					});

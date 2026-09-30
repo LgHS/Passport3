@@ -56,7 +56,7 @@
 		input.value = '';
 		if (!file) return;
 		if (!file.type.startsWith('image/')) {
-			showToast('error', 'Choisissez un fichier image.');
+			showToast('error', 'Choisis un fichier image.');
 			return;
 		}
 		if (file.size > MAX_SOURCE_BYTES) {
@@ -173,9 +173,9 @@
 		{/if}
 		<div class="text-sm">
 			{#if hasLocalAvatar}
-				<p>Votre photo de profil est affichée partout sur Passport, y compris dans le trombinoscope.</p>
+				<p>Ta photo de profil est affichée partout : sur Passport, dans le trombinoscope et sur les autres services (chat…).</p>
 			{:else}
-				<p>Sans photo envoyée, un avatar est généré à partir de votre nom d'utilisateur. Vous pouvez aussi envoyer votre propre photo.</p>
+				<p>Sans photo envoyée, un avatar est généré à partir de ton nom d'utilisateur. Tu peux aussi envoyer ta propre photo.</p>
 			{/if}
 			<div class="mt-2 flex flex-wrap gap-2">
 				<button type="button" onclick={pickFile} class="btn-primary px-3 py-1.5 text-xs">
@@ -204,7 +204,7 @@
 						method="POST"
 						action="?/deleteAvatar"
 						use:enhance={({ cancel: cancelDelete }) => {
-							if (!confirm('Supprimer votre photo de profil ? Vos initiales seront affichées à la place.')) {
+							if (!confirm('Supprimer ta photo de profil ? Tes initiales seront affichées à la place.')) {
 								cancelDelete();
 								return;
 							}
@@ -260,7 +260,7 @@
 	<div class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4" role="presentation">
 		<div class="w-full max-w-sm border border-black bg-white p-4" role="dialog" aria-modal="true" aria-labelledby="avatar-crop-title">
 			<h2 id="avatar-crop-title" class="mb-3 text-base font-bold uppercase">Recadrer la photo</h2>
-			<p class="mb-3 text-xs text-gray-600">Faites glisser l'image pour la cadrer, et zoomez avec le curseur.</p>
+			<p class="mb-3 text-xs text-gray-600">Fais glisser l'image pour la cadrer, et zoome avec le curseur.</p>
 
 			<!-- A button so it's focusable and keyboard-operable (arrow keys pan the photo). -->
 			<button

@@ -14,8 +14,8 @@
 			showToast(
 				'success',
 				form.optin.visible
-					? 'Votre profil est maintenant visible dans le trombinoscope.'
-					: 'Votre profil est maintenant caché du trombinoscope.'
+					? 'Ton profil est maintenant visible dans le trombinoscope.'
+					: 'Ton profil est maintenant caché du trombinoscope.'
 			);
 		} else if (form?.error) {
 			showToast('error', form.error);
@@ -271,7 +271,7 @@
 				<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
 					<label class="flex cursor-not-allowed items-center gap-2 text-sm text-gray-400">
 						<input type="checkbox" checked disabled />
-						Username (obligatoire)
+						Nom d'utilisateur (obligatoire)
 					</label>
 					{#each fieldOptins as field (field.key)}
 						<label class="flex cursor-pointer items-center gap-2 text-sm">
@@ -295,7 +295,7 @@
 							class="w-full border border-black px-3 py-2 text-sm"
 						/>
 						<p class="mt-1 text-xs text-gray-500">
-							Laissez vide pour afficher votre email de compte, ou indiquez une autre adresse à
+							Laisse vide pour afficher ton email de compte, ou indique une autre adresse à
 							montrer à la place. Adresse publique, visible par tous les membres.
 						</p>
 					</div>
@@ -343,7 +343,7 @@
 	<input
 		type="search"
 		bind:value={searchQuery}
-		placeholder="Rechercher un pseudo, un nom, un tag…"
+		placeholder="Rechercher un nom d'utilisateur, un nom, un tag…"
 		class="w-full border border-black px-3 py-2 text-sm placeholder:text-gray-400 sm:max-w-xs"
 	/>
 
@@ -708,7 +708,7 @@
 			{/if}
 
 			{#if !fullName(member) && !member.tagExtended && !member.email && !member.phone && !member.mattermostUsername && socialLinks(member).length === 0}
-				<p class="text-gray-500">Ce membre n'a partagé que son pseudo.</p>
+				<p class="text-gray-500">Ce membre n'a partagé que son nom d'utilisateur.</p>
 			{/if}
 		</div>
 		</div>

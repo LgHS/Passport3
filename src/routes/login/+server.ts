@@ -16,7 +16,7 @@ export const GET: RequestHandler = async ({ cookies }) => {
 		authorizationUrl = await createAuthorizationUrl(state, codeChallenge);
 	} catch (err) {
 		if (err instanceof OidcUnavailableError) {
-			error(503, 'La connexion est temporairement indisponible. Réessayez dans quelques instants.');
+			error(503, 'La connexion est temporairement indisponible. Réessaie dans quelques instants.');
 		}
 		throw err;
 	}

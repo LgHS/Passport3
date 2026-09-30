@@ -11,7 +11,7 @@ export const GET: RequestHandler = async ({ url, cookies, locals }) => {
 	}
 	const pk = authentikPk(locals.user);
 	if (!pk) {
-		error(500, 'Impossible de résoudre votre identifiant Authentik (sub).');
+		error(500, 'Impossible de résoudre ton identifiant Authentik (sub).');
 	}
 
 	const code = url.searchParams.get('code');
@@ -20,7 +20,7 @@ export const GET: RequestHandler = async ({ url, cookies, locals }) => {
 	clearGithubOAuthStateCookie(cookies);
 
 	if (!code || !state || !expectedState || state !== expectedState) {
-		error(400, 'Tentative de connexion GitHub invalide ou expirée, réessayez.');
+		error(400, 'Tentative de connexion GitHub invalide ou expirée, réessaie.');
 	}
 
 	const accessToken = await exchangeGithubCode(code);

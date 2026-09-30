@@ -12,7 +12,7 @@ export type { EmergencyContact, ProfileAttributeField, UserProfile };
 // Whitelist that also acts as the merge boundary for updateUserProfile: only these keys are
 // ever read from or written into the user's Authentik `attributes` blob.
 export const PROFILE_ATTRIBUTE_FIELDS: ProfileAttributeField[] = [
-	{ key: 'phoneNumber', label: 'Téléphone (format: 32470000000)', required: true },
+	{ key: 'phoneNumber', label: 'Téléphone (format : 32470000000)', required: true },
 	{ key: 'street', label: 'Rue & Numéro', required: true },
 	{ key: 'postal_code', label: 'Code postal', required: true },
 	{ key: 'locality', label: 'Localité', required: true },
@@ -390,7 +390,7 @@ export async function updateUsername(pk: number, username: string): Promise<User
 }
 
 // Called right after a successful username change, matching the warning shown before that change
-// ("vous serez déconnecté de toutes vos sessions et services") — a straight loop over each
+// ("tu seras déconnecté·e de toutes tes sessions et services") — a straight loop over each
 // session's own DELETE, no per-session ownership re-check needed since listSessions() only ever
 // returns sessions belonging to this exact username in the first place.
 export async function revokeAllSessions(username: string): Promise<void> {

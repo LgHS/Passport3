@@ -296,7 +296,7 @@ function validateBirthday(raw: string): { ok: true; value: string } | { ok: fals
 	const withYear = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 	const withoutYear = trimmed.match(/^(\d{2})-(\d{2})$/);
 	if (!withYear && !withoutYear) {
-		return { ok: false, error: 'Date de naissance : jour et mois sont obligatoires si vous la renseignez.' };
+		return { ok: false, error: 'Date de naissance : jour et mois sont obligatoires si tu la renseignes.' };
 	}
 
 	const year = withYear ? Number(withYear[1]) : null;
@@ -386,7 +386,7 @@ export function validateProfileSubmission(formData: FormData): ProfileValidation
 	if (!/^[1-9]\d{7,14}$/.test(attributes.phoneNumber)) {
 		return {
 			ok: false,
-			error: 'Numéro de téléphone invalide (format attendu: 32470000000, sans "+" ni "0" initial).',
+			error: 'Numéro de téléphone invalide (format attendu : 32470000000, sans "+" ni "0" initial).',
 			firstName,
 			lastName,
 			attributes
@@ -489,7 +489,7 @@ export function validateEmergencyContactsSubmission(formData: FormData): Emergen
 		if (!CONTACT_PHONE_RE.test(contact.phone)) {
 			return {
 				ok: false,
-				error: `Numéro de téléphone invalide pour ${contact.name} (format attendu: 32470000000, sans "+" ni "0" initial).`,
+				error: `Numéro de téléphone invalide pour ${contact.name} (format attendu : 32470000000, sans "+" ni "0" initial).`,
 				contacts
 			};
 		}

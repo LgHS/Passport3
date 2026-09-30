@@ -41,7 +41,7 @@ export function validateWishlistItemSubmission(formData: FormData): WishlistVali
 		try {
 			parsedLink = new URL(link);
 		} catch {
-			return { ok: false, error: 'Lien invalide (doit être une URL complète, ex. https://...).' };
+			return { ok: false, error: 'Lien invalide (doit être une URL complète, ex. https://…).' };
 		}
 		// new URL() happily parses javascript:/data:/file: too — this link gets rendered as a plain
 		// <a href> later, so only http(s) is safe to accept.

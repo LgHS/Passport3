@@ -19,15 +19,15 @@
 	function statusExplanation(status: CotisationStatus, datefin: Date | null): string {
 		switch (status) {
 			case 'a_jour':
-				return `Votre cotisation est valide jusqu'au ${formatDate(datefin)}.`;
+				return `Ta cotisation est valide jusqu'au ${formatDate(datefin)}.`;
 			case 'expiree':
 				return datefin
-					? `Votre cotisation a expiré le ${formatDate(datefin)}. Merci de la renouveler. Si vous avez déjà payé ou si vous avez un ordre permanent, comptez quelques jours pour que ce soit traité. Généralement le 1er mercredi du mois si cela ne passe pas automatiquement.`
-					: 'Votre adhésion est résiliée.';
+					? `Ta cotisation a expiré le ${formatDate(datefin)}. Merci de la renouveler. Si tu as déjà payé ou si tu as un ordre permanent, compte quelques jours pour que ce soit traité. Généralement le 1er mercredi du mois si cela ne passe pas automatiquement.`
+					: 'Ton adhésion est résiliée.';
 			case 'en_attente':
-				return "Aucune cotisation n'a encore été enregistrée pour votre compte. Si vous venez de payer, comptez quelques jours pour que ce soit traité. Généralement le 1er mercredi du mois si cela ne passe pas automatiquement.";
+				return "Aucune cotisation n'a encore été enregistrée pour ton compte. Si tu viens de payer, compte quelques jours pour que ce soit traité. Généralement le 1er mercredi du mois si cela ne passe pas automatiquement.";
 			case 'non_applicable':
-				return "En tant que membre d'honneur, vous n'êtes pas soumis·e à cotisation.";
+				return "En tant que membre d'honneur, tu n'es pas soumis·e à cotisation.";
 		}
 	}
 </script>
@@ -39,11 +39,11 @@
 		<div>
 			<p class="text-sm font-bold uppercase">Compte introuvable</p>
 			<p class="text-sm text-gray-600">
-				Nous n'avons pas trouvé de compte correspondant à votre adresse email dans l'outil de
-				gestion des membres. Cela peut simplement vouloir dire que votre inscription n'a pas
-				encore été synchronisée, ou provenir d'une erreur. Si ça persiste, contactez une personne
-				en charge de la trésorerie ou du registre des membres. Via le canal #support du chat ou
-				par mail <a href="mailto:ping@lghs.be">ping@lghs.be</a>.
+				Nous n'avons pas trouvé de compte correspondant à ton adresse email dans l'outil de
+				gestion des membres. Cela peut simplement vouloir dire que ton inscription n'a pas
+				encore été synchronisée, ou provenir d'une erreur. Si ça persiste, contacte une personne
+				en charge de la trésorerie ou du registre des membres, via le canal #support du chat ou
+				par email : <a href="mailto:ping@lghs.be">ping@lghs.be</a>.
 			</p>
 		</div>
 	</div>
@@ -59,7 +59,7 @@
 			<p class="text-sm text-gray-600">{statusExplanation(status, datefin)}</p>
 			{#if isInactive}
 				<p class="mt-2 text-sm font-bold">
-					Après 3 mois sans cotisation, votre compte est considéré comme inactif.
+					Après 3 mois sans cotisation, ton compte est considéré comme inactif.
 				</p>
 			{/if}
 		</div>

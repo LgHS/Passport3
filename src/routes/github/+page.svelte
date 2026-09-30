@@ -26,9 +26,9 @@
 
 	$effect(() => {
 		if (form?.disconnected) {
-			showToast('success', 'Compte GitHub déconnecté. Vous pouvez en connecter un autre.');
+			showToast('success', 'Compte GitHub déconnecté. Tu peux en connecter un autre.');
 		} else if (form?.success) {
-			showToast('success', "Invitation envoyée ! Vérifiez vos emails (ou vos notifications GitHub) pour l'accepter.");
+			showToast('success', "Invitation envoyée ! Vérifie tes emails (ou tes notifications GitHub) pour l'accepter.");
 		} else if (form?.error) {
 			showToast('error', form.error);
 		}
@@ -59,7 +59,7 @@
 	<p class="mb-6 text-sm text-gray-600">
 		Pour rejoindre <a href={data.githubOrgUrl} target="_blank" rel="noopener"
 			>l'organisation GitHub du Liège Hackerspace</a
-		>, connectez votre compte GitHub ci-dessous.
+		>, connecte ton compte GitHub ci-dessous.
 	</p>
 
 	{#if data.githubUsername}
@@ -95,12 +95,12 @@
 
 			{#if data.githubUnavailable}
 				<p class="mt-4 text-sm text-gray-600">
-					Impossible de vérifier votre statut sur l'organisation GitHub pour le moment. Réessayez
+					Impossible de vérifier ton statut dans l'organisation GitHub pour le moment. Réessaie
 					plus tard.
 				</p>
 			{:else if data.membershipStatus === 'pending'}
 				<p class="mt-4 text-sm text-gray-600">
-					Vérifiez vos emails ou vos notifications GitHub pour accepter l'invitation.
+					Vérifie tes emails ou tes notifications GitHub pour accepter l'invitation.
 				</p>
 			{:else if data.membershipStatus === 'none'}
 				<form
@@ -140,7 +140,7 @@
 				<button
 					type="submit"
 					disabled={disconnecting}
-					title="Ça n'annule ni une invitation déjà envoyée, ni votre adhésion à l'organisation : juste le lien enregistré ici. Utile si vous vous êtes trompé·e de compte."
+					title="Ça n'annule ni une invitation déjà envoyée, ni ton adhésion à l'organisation : juste le lien enregistré ici. Utile si tu t'es trompé·e de compte."
 					class="text-sm text-gray-500 underline disabled:opacity-50"
 				>
 					{disconnecting ? 'Déconnexion…' : 'Déconnecter mon compte GitHub'}
@@ -174,15 +174,15 @@
 	<div class="mt-8">
 		<p class="mb-2 text-sm font-bold uppercase">Comment ça marche</p>
 		<ol class="list-decimal space-y-1 pl-5 text-sm text-gray-600">
-			<li>Cliquez sur le bouton «Se connecter avec GitHub»,</li>
-			<li>Confirmez sur Github le compte à utiliser,</li>
-			<li>Envoyez la demande d'invitation depuis cette page,</li>
+			<li>Clique sur le bouton « Se connecter avec GitHub »,</li>
+			<li>Confirme sur GitHub le compte à utiliser,</li>
+			<li>Envoie la demande d'invitation depuis cette page,</li>
 			<li>
-				GitHub vous envoie une invitation par email et/ou notification GitHub, en attente de
-				votre acceptation,
+				GitHub t'envoie une invitation par email et/ou notification GitHub, en attente de
+				ton acceptation,
 			</li>
-			<li>Vous acceptez l'invitation sur GitHub,</li>
-			<li>Vous devenez membre de l'organisation.</li>
+			<li>Tu acceptes l'invitation sur GitHub,</li>
+			<li>Tu deviens membre de l'organisation.</li>
 		</ol>
 	</div>
 </div>

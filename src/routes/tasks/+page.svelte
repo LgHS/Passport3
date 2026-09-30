@@ -138,7 +138,7 @@
 		if (!task || task.status === to) return;
 		if (to === 'blocked') {
 			openTask(task);
-			showToast('success', 'Précisez ce qui bloque la tâche, dans « Signaler un blocage ».');
+			showToast('success', 'Précise ce qui bloque la tâche, dans « Signaler un blocage ».');
 			return;
 		}
 		for (const step of stepsFor(task, to)) {
@@ -348,24 +348,22 @@
 
 <h1 class="mb-2 bg-black px-4 py-3 text-base font-bold text-white uppercase">Tâches</h1>
 <p class="mb-3 text-sm text-gray-600">
-	Les tâches de l'atelier. Participez à une tâche, ou proposez-en une nouvelle.
+	Les tâches de l'atelier. Participe à une tâche, ou proposes-en une nouvelle.
 </p>
 
 <details class="mb-6 border border-black text-sm">
 	<summary class="cursor-pointer px-4 py-2 font-bold uppercase">Comment ça marche ?</summary>
 	<div class="space-y-2 border-t border-black p-4">
 		<p>
-			<strong>Proposer</strong> : tout membre peut ajouter une tâche, visible tout de suite. Vous en
-			êtes alors le <strong>propriétaire</strong>. Sa <strong>priorité</strong> (Bas, Moyen, Normal,
+			<strong>Proposer</strong> : tout membre peut ajouter une tâche, visible tout de suite. Tu en es alors le <strong>propriétaire</strong>. Sa <strong>priorité</strong> (Bas, Moyen, Normal,
 			Élevé, Urgent) décide de sa place dans chaque colonne, les plus urgentes en haut.
 		</p>
 		<p>
-			<strong>Participant</strong> : vous vous portez volontaire avec « Je participe » (ou le « + » en bas de la carte), et pouvez vous
-			retirer quand vous voulez. Plusieurs personnes peuvent participer à la même tâche.
+			<strong>Participant</strong> : tu te portes volontaire avec « Je participe » (ou le « + » en bas de la carte), et peux te retirer quand tu veux. Plusieurs personnes peuvent participer à la même tâche.
 		</p>
 		<p>
-			<strong>Assigné</strong> : quelqu'un vous a mis sur la tâche (un admin, le propriétaire ou le
-			leader). Vous êtes prévenu sur Mattermost et ne pouvez pas vous retirer vous-même.
+			<strong>Assigné</strong> : quelqu'un t'a mis sur la tâche (un admin, le propriétaire ou le
+			leader). Tu es prévenu·e sur Mattermost et ne peux pas te retirer toi-même.
 		</p>
 		<p>
 			<strong>Leader</strong> (★) : la personne qui mène la tâche, choisie parmi les personnes dessus

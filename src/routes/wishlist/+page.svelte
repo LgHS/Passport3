@@ -189,7 +189,7 @@
 	action à faire au sein du hackerspace. Les autres membres peuvent voter pour ou contre.
 </p>
 <p class="mb-6 text-sm text-gray-600">
-	À chaque création, une notification sera envoyée vers Mattermost invitant les membres à voter.
+	Les nouvelles propositions peuvent être annoncées sur Mattermost pour inviter les membres à voter.
 </p>
 
 <div class="mb-6 border border-black">
@@ -632,7 +632,7 @@
 						{/if}
 
 						<p class="mb-3 text-xs text-gray-500">
-							Proposé par <MemberName
+							Proposée par <MemberName
 										username={selectedItem.authorLabel}
 										visibleUsernames={data.visibleUsernames}
 										class={selectedItem.authorLabel === data.myUsername ? 'font-bold text-black' : ''}

@@ -189,7 +189,7 @@ export const actions: Actions = {
 		const task = await taskFrom(await request.formData());
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
 		const me = task.members.find((m) => m.sub === user.sub);
-		if (!me) return fail(400, { error: "Vous n'êtes pas sur cette tâche." });
+		if (!me) return fail(400, { error: "Tu n'es pas sur cette tâche." });
 		if (me.imposed) return fail(403, { error: 'Une tâche assignée par un admin ne peut pas être refusée.' });
 
 		await removeTaskMember(task.id, user.sub);
@@ -208,7 +208,7 @@ export const actions: Actions = {
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
 		if (!canAssign(task, user)) return fail(403, { error: 'Action non autorisée.' });
 		const pks = new Set(formData.getAll('assigneePk').map(Number));
-		if (pks.size === 0) return fail(400, { error: 'Choisissez au moins un membre.' });
+		if (pks.size === 0) return fail(400, { error: 'Choisis au moins un membre.' });
 
 		const chosen = (await listUsers()).filter((u) => u.is_active && pks.has(u.pk));
 		for (const member of chosen) {
@@ -350,7 +350,7 @@ export const actions: Actions = {
 		const kind = String(formData.get('blockedKind') ?? '');
 		const note = String(formData.get('blockedNote') ?? '').trim();
 		if (kind !== 'internal' && kind !== 'external') return fail(400, { error: 'Type de blocage invalide.' });
-		if (!note) return fail(400, { error: 'Précisez ce qui bloque la tâche.' });
+		if (!note) return fail(400, { error: 'Précise ce qui bloque la tâche.' });
 		if (note.length > BLOCKED_NOTE_MAX_LENGTH) {
 			return fail(400, { error: `Note : ${BLOCKED_NOTE_MAX_LENGTH} caractères maximum.` });
 		}
@@ -386,7 +386,7 @@ export const actions: Actions = {
 		const task = await taskFrom(await request.formData());
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
 		if (!canDeleteTask(task, user)) {
-			return fail(403, { error: 'Vous ne pouvez pas supprimer cette tâche.' });
+			return fail(403, { error: 'Tu ne peux pas supprimer cette tâche.' });
 		}
 
 		await deleteTask(task.id);
