@@ -253,7 +253,7 @@
 				<span class="mb-1 block text-sm font-bold uppercase">Email</span>
 				<p class="border border-black bg-gray-100 px-3 py-2 text-sm">{data.profile.email}</p>
 				<p class="mt-1 text-xs text-gray-500">
-					Cette adresse email n'est pas modifiable ici : elle sert de clé pour relier certains services. Pour la changer, faites-en la demande.
+					Cette adresse email n'est pas modifiable ici : elle sert de clé pour relier certains services. Pour la changer, fais-en la demande à <a href="mailto:noc@lghs.be">noc@lghs.be</a>.
 				</p>
 			</div>
 

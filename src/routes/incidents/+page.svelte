@@ -54,7 +54,8 @@
 <p class="mb-1 text-sm text-gray-600">
 	Ce formulaire sert à consigner ce qui s'est passé au hackerspace. Ces déclarations sont
 	obligatoires pour des raisons de législation et d'assurance : merci de les remplir sérieusement
-	et le plus précisément possible.
+	et le plus précisément possible. <em>Plusieurs déclarations peuvent être faites pour un même
+		incident, à la discrétion de chacun.</em>
 </p>
 <p class="mb-6 text-sm text-gray-600">
 	Les informations de cette déclaration sont traitées de manière strictement confidentielle. Seuls

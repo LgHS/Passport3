@@ -173,7 +173,7 @@
 		{/if}
 		<div class="text-sm">
 			{#if hasLocalAvatar}
-				<p>Ta photo de profil est affichée partout sur Passport, y compris dans le trombinoscope.</p>
+				<p>Ta photo de profil est affichée partout : sur Passport, dans le trombinoscope et sur les autres services (chat…).</p>
 			{:else}
 				<p>Sans photo envoyée, un avatar est généré à partir de ton nom d'utilisateur. Tu peux aussi envoyer ta propre photo.</p>
 			{/if}
