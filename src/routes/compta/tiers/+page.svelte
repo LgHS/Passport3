@@ -92,10 +92,10 @@
 				<tbody>
 					{#each filtered as t (t.id)}
 						<tr class="group {t.actif ? '' : 'text-gray-400'}">
-							<td class="border border-black p-0">
+							<td class="border border-black p-0 transition-colors group-hover:bg-black group-hover:text-white">
 								<a
 									href="/compta/tiers/{t.id}"
-									class="no-underline-fx block px-3 py-2 transition-colors group-hover:bg-black group-hover:text-white"
+									class="no-underline-fx block px-3 py-2 group-hover:text-white"
 								>
 									{t.displayName}
 								</a>

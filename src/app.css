@@ -124,7 +124,12 @@
 			display: block;
 			text-align: left;
 		}
-		/* The row's title when it's a link filling its cell on a larger screen. */
+		/* The row's title when it's a link filling its cell on a larger screen: here it spans the
+		   card's width, so its hover background (black) covers a full band, not just the text. */
+		.table-cards td:has(> a.block) {
+			margin: 0 -0.5rem;
+			padding: 0.25rem 0.5rem !important;
+		}
 		.table-cards td > a.block {
 			padding: 0 !important;
 			font-weight: 700;
