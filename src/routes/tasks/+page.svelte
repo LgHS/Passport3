@@ -8,6 +8,7 @@
 	import { renderMiniMarkdown } from '$lib/renderMiniMarkdown';
 	import MemberName from '$lib/components/MemberName.svelte';
 	import { DEFAULT_TASK_PRIORITY, TASK_PRIORITIES, priorityMeta } from '$lib/taskPriority';
+	import * as rules from '$lib/taskRules';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -83,18 +84,18 @@
 		if (selectedId !== null && !selected) closeTask();
 	});
 
-	const isMember = (t: Task) => t.members.some((m) => m.sub === data.mySub);
-	const myMembership = (t: Task) => t.members.find((m) => m.sub === data.mySub);
-	const canEdit = (t: Task) => data.isAdmin || t.authorSub === data.mySub;
-	const isLeader = (t: Task) => t.members.some((m) => m.sub === data.mySub && m.isLeader);
-	// Same rule as the server: the owner, or the leader unless an admin created the task.
-	const canDeleteWithoutAdmin = (t: Task) => t.authorSub === data.mySub || (isLeader(t) && !t.createdByAdmin);
-	const canDelete = (t: Task) => data.isAdmin || canDeleteWithoutAdmin(t);
-	// The task's owner (author) and leader manage it alongside admins: assign members, block/unblock.
-	const isOwnerOrLeader = (t: Task) =>
-		t.authorSub === data.mySub || t.members.some((m) => m.sub === data.mySub && m.isLeader);
-	const canFlagBlocked = (t: Task) => data.isAdmin || isOwnerOrLeader(t);
-	const canAssign = (t: Task) => data.isAdmin || isOwnerOrLeader(t);
+	// The same functions the server enforces with, from $lib/taskRules — not a second copy of the
+	// rules. Bound here to "me" so the markup stays readable.
+	const isMember = (t: Task) => rules.isOnTask(t, data.mySub);
+	const myMembership = (t: Task) => rules.membership(t, data.mySub);
+	const canEdit = (t: Task) => rules.canEditTask(t, data.mySub, data.isAdmin);
+	const canDelete = (t: Task) => rules.canDeleteTask(t, data.mySub, data.isAdmin);
+	const canFlagBlocked = (t: Task) => rules.canFlagBlocked(t, data.mySub, data.isAdmin);
+	const canAssign = (t: Task) => rules.canAssign(t, data.mySub, data.isAdmin);
+	const isOwnerOrLeader = (t: Task) => rules.isOwnerOrLeader(t, data.mySub);
+	// Drives the yellow marker on buttons only an admin's status allows: the very same rule asked
+	// with admin = false, so the two can't drift apart.
+	const canDeleteWithoutAdmin = (t: Task) => rules.canDeleteTask(t, data.mySub, false);
 
 	// --- Drag and drop between the board's columns. A drop runs the same form actions as the
 	// modal's buttons (same permission checks, history and audit), chained when a move needs
@@ -124,13 +125,8 @@
 	}
 
 	function stepsFor(task: Task, to: Status): string[] {
-		const steps: string[] = [];
-		if (task.status === 'done') steps.push('reopen');
-		if (task.blocked) steps.push('unblock');
-		if (to === 'todo' && task.startedAt) steps.push('unstart');
-		if (to === 'in_progress' && !task.startedAt) steps.push('start');
-		if (to === 'done') return ['done'];
-		return steps;
+		// 'blocked' never reaches here: moveTask() opens the task instead, since blocking needs a note.
+		return rules.stepsFor(task, to as Exclude<Status, 'blocked'>);
 	}
 
 	async function moveTask(taskId: number, to: Status) {
@@ -232,7 +228,9 @@
 		const d = event.details ?? {};
 		const who = typeof d.member === 'string' ? `@${d.member}` : 'un membre';
 		switch (event.action) {
-			case 'task.create': return 'a créé la tâche';
+			// A creator is the leader of their own task, so the history says so rather than leaving
+			// the crown in the member list unexplained. An admin's task starts without a leader.
+			case 'task.create': return typeof d.leader === 'string' ? 'a créé la tâche et la mène' : 'a créé la tâche';
 			case 'task.edit': return 'a modifié la tâche';
 			case 'task.join': return 'participe';
 			case 'task.leave': return "s'est retiré·e";
@@ -764,7 +762,7 @@
 							{/if}
 						</div>
 
-						{#if canEdit(task) && task.members.length > 0}
+						{#if rules.canSetLeader(task, data.mySub, data.isAdmin) && task.members.length > 0}
 							<form method="POST" action="?/setLeader" use:enhance class="mt-3 flex gap-2">
 								<input type="hidden" name="taskId" value={task.id} />
 								<select name="leaderSub" class="min-w-0 flex-1 border border-black px-2 py-1 text-xs">
