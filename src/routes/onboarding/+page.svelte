@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { fly, fade } from 'svelte/transition';
+	import { fly, fade, scale } from 'svelte/transition';
 	import { enhance } from '$app/forms';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
@@ -34,6 +34,7 @@
 
 	let index = $state(0);
 	let roiAccepted = $state(false);
+	let preambuleRead = $state(false);
 	let recalculating = $state(false);
 	let direction = $state(1);
 	const step = $derived(STEPS[index]);
@@ -169,10 +170,20 @@
 				<button type="button" onclick={next} class="btn-primary px-5 py-2.5 text-sm">C’est parti →</button>
 			{:else if step.id === 'preambule'}
 				<h2 class="mb-1 text-lg font-bold">📖 Préambule</h2>
-				<p class="mb-4 text-sm text-gray-600">Bienvenue au hackerspace ! Avant d’aller plus loin, deux règles d’or.</p>
+				<p class="mb-4 text-sm text-gray-600">Bienvenue au hackerspace ! Avant d’aller plus loin, l’essentiel en trois points.</p>
 				<div class="mb-5 space-y-4 text-sm text-gray-700">
 					<div class="border-l-4 border-lghs-yellow pl-3">
-						<p class="mb-1 font-bold text-black">1. Soyez excellents les uns envers les autres</p>
+						<p class="mb-1 font-bold text-black">1. Tu es sur Passport</p>
+						<p>
+							Passport, c’est le système central du hackerspace, et il permet beaucoup de choses. Ton
+							compte te donne accès au chat, au wiki et aux autres outils des membres. Ici, tu tiens ton profil à jour, tu retrouves les
+							autres membres dans le trombinoscope, tu proposes des achats dans la wishlist, tu prends
+							des tâches dans la todolist et tu signales un souci à l’atelier. Si tu cherches quelque
+							chose au hackerspace, commence par ici.
+						</p>
+					</div>
+					<div class="border-l-4 border-lghs-yellow pl-3">
+						<p class="mb-1 font-bold text-black">2. Soyez excellents les uns envers les autres</p>
 						<p>
 							Respect, bienveillance et patience. On vient tous d’horizons différents, avec des niveaux
 							différents, et tout le monde a été débutant·e un jour. Une question n’est jamais bête, et
@@ -180,7 +191,7 @@
 						</p>
 					</div>
 					<div class="border-l-4 border-lghs-yellow pl-3">
-						<p class="mb-1 font-bold text-black">2. Appliquez la règle des 110 %</p>
+						<p class="mb-1 font-bold text-black">3. Appliquez la règle des 110 %</p>
 						<p>
 							Fais ta part, et un peu plus. Il n’y a aucun employé au hackerspace : tout est géré par
 							les membres, pour les membres. Une poubelle pleine, un outil qui traîne, une machine à
@@ -193,7 +204,27 @@
 						demande quand tu ne sais pas, et laisse l’atelier un peu mieux que tu ne l’as trouvé.
 					</p>
 				</div>
-				<button type="button" onclick={next} class="btn-primary px-5 py-2.5 text-sm">J’ai compris →</button>
+				<!-- A big, friendly tick box: the button only wakes up once it's ticked. -->
+				<label class="group mb-5 flex w-fit cursor-pointer items-center gap-3 text-sm font-bold select-none">
+					<input type="checkbox" bind:checked={preambuleRead} class="peer sr-only" />
+					<span
+						class="flex h-7 w-7 shrink-0 items-center justify-center border-2 border-black text-lg leading-none transition-all duration-200 peer-focus-visible:ring-2 peer-focus-visible:ring-black peer-focus-visible:ring-offset-2 {preambuleRead
+							? 'scale-110 bg-lghs-yellow'
+							: 'bg-white group-hover:bg-gray-100'}"
+						aria-hidden="true"
+					>
+						{#if preambuleRead}<span in:scale={{ duration: 200, start: 0.3 }}>✓</span>{/if}
+					</span>
+					J’ai lu et compris
+				</label>
+				<button
+					type="button"
+					onclick={next}
+					disabled={!preambuleRead}
+					class="btn-primary px-5 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+				>
+					Continuer →
+				</button>
 			{:else if step.id === 'infos'}
 				<h2 class="mb-1 text-lg font-bold">🪪 Mon profil</h2>
 				<p class="mb-4 text-sm text-gray-600">Vérifie et complète tes informations : elles servent au hackerspace pour te joindre.</p>
