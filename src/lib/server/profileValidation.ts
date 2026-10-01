@@ -16,7 +16,7 @@ const REQUIRED_MESSAGES: Record<string, string> = {
 // - discriminateur : 2-9 chiffres, pas de zéro en tête sauf 01-09
 // Décomposé en étapes (plutôt qu'un seul regex + erreur générique) pour pouvoir pointer
 // précisément ce qui cloche — le champ est optionnel, donc une valeur vide est toujours valide.
-function validateSignalUsername(raw: string): { ok: true; value: string } | { ok: false; error: string } {
+export function validateSignalUsername(raw: string): { ok: true; value: string } | { ok: false; error: string } {
 	const trimmed = raw.trim();
 	if (!trimmed) return { ok: true, value: '' };
 
@@ -70,7 +70,7 @@ function validateSignalUsername(raw: string): { ok: true; value: string } | { ok
 // Règles officielles Telegram : pseudo (avec ou sans "@" collé devant), 5-32 caractères,
 // commence par une lettre, uniquement lettres/chiffres/underscore, jamais un underscore final,
 // jamais deux underscores consécutifs.
-function validateTelegramUsername(raw: string): { ok: true; value: string } | { ok: false; error: string } {
+export function validateTelegramUsername(raw: string): { ok: true; value: string } | { ok: false; error: string } {
 	const trimmed = raw.trim().replace(/^@/, '');
 	if (!trimmed) return { ok: true, value: '' };
 
@@ -103,7 +103,7 @@ function validateTelegramUsername(raw: string): { ok: true; value: string } | { 
 // Règles officielles Discord (nouveau système de pseudo, sans discriminateur "#0000" — abandonné
 // depuis 2023 pour la quasi-totalité des comptes) : 2-32 caractères, minuscules, chiffres,
 // underscore et point, jamais de point en tête/fin, jamais deux points consécutifs.
-function validateDiscordUsername(raw: string): { ok: true; value: string } | { ok: false; error: string } {
+export function validateDiscordUsername(raw: string): { ok: true; value: string } | { ok: false; error: string } {
 	const trimmed = raw.trim().replace(/^@/, '');
 	if (!trimmed) return { ok: true, value: '' };
 
@@ -135,7 +135,7 @@ function validateDiscordUsername(raw: string): { ok: true; value: string } | { o
 // espace de noms unique), donc deux parties à valider séparément.
 // - localpart : recommandation officielle Matrix = uniquement [a-z0-9._=/-]
 // - domaine : nom d'hôte du homeserver, port optionnel (ex. matrix.org, ou matrix.example.com:8448)
-function validateMatrixId(raw: string): { ok: true; value: string } | { ok: false; error: string } {
+export function validateMatrixId(raw: string): { ok: true; value: string } | { ok: false; error: string } {
 	const trimmed = raw.trim();
 	if (!trimmed) return { ok: true, value: '' };
 
@@ -194,7 +194,7 @@ function validateMatrixId(raw: string): { ok: true; value: string } | { ok: fals
 //   Mastodon ignore la casse, on garde celle saisie
 // - instance : nom de domaine du serveur (ex. mastodon.social), mis en minuscules
 // Accepte aussi l'URL du profil (https://mastodon.social/@ana), convertie en @ana@mastodon.social.
-function validateMastodonHandle(raw: string): { ok: true; value: string } | { ok: false; error: string } {
+export function validateMastodonHandle(raw: string): { ok: true; value: string } | { ok: false; error: string } {
 	const trimmed = raw.trim();
 	if (!trimmed) return { ok: true, value: '' };
 
@@ -289,7 +289,7 @@ function daysInMonth(month: number, year: number | null): number {
 	return [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
 }
 
-function validateBirthday(raw: string): { ok: true; value: string } | { ok: false; error: string } {
+export function validateBirthday(raw: string): { ok: true; value: string } | { ok: false; error: string } {
 	const trimmed = raw.trim();
 	if (!trimmed) return { ok: true, value: '' };
 
