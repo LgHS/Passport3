@@ -42,6 +42,11 @@ jobs:
       - name: Type-check
         run: pnpm check
 
+      # Vitest suite under tests/ — pure logic and access rules, no database or external service
+      # needed, so it runs with the same empty environment as the build below.
+      - name: Unit tests
+        run: pnpm test
+
       # Catches what type-check alone can't: server-only code leaking into the client bundle,
       # build-time env vars ($env/static/*), or anything else that only breaks at actual
       # compilation. No secrets needed — verified locally that `pnpm build` succeeds with an
