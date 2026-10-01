@@ -25,7 +25,7 @@ import {
 	validateEmergencyContactsSubmission,
 	validateTrombiEmail
 } from '$lib/server/profileValidation';
-import { requireAdminUser } from '$lib/server/auth';
+import { requireAdmin, requireAdminUser } from '$lib/server/auth';
 import { deleteAvatar, hasUploadedAvatar } from '$lib/server/avatars';
 import { logAuditEvent } from '$lib/server/auditLog';
 import { displayName } from '$lib/types';
@@ -38,7 +38,8 @@ function resolvePk(paramPk: string): number {
 	return pk;
 }
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
+	requireAdmin(locals);
 	const pk = resolvePk(params.pk);
 
 	const [profile, optin, tag, groups, emergencyContacts, rfidUid, mfaDevices] = await Promise.all([
