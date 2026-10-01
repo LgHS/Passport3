@@ -33,7 +33,9 @@ import {
 	canFlagBlocked,
 	canLeave,
 	canProgress,
+	canSetLeader,
 	isOnTask,
+	isValidLeader,
 	isOwnerOrLeader
 } from '$lib/taskRules';
 
@@ -273,9 +275,9 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const task = await taskFrom(formData);
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
-		if (!isAdmin(user) && task.authorSub !== user.sub) return fail(403, { error: 'Action non autorisée.' });
+		if (!canSetLeader(task, user.sub, isAdmin(user))) return fail(403, { error: 'Action non autorisée.' });
 		const leaderSub = String(formData.get('leaderSub') ?? '') || null;
-		if (leaderSub && !isOnTask(task, leaderSub)) {
+		if (!isValidLeader(task, leaderSub)) {
 			return fail(400, { error: 'Le leader doit faire partie des personnes sur la tâche.' });
 		}
 

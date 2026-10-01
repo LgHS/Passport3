@@ -52,6 +52,15 @@ export const isOwnerOrLeader = (task: Pick<Task, 'authorSub' | 'members'>, sub: 
 export const canEditTask = (task: Pick<Task, 'authorSub'>, sub: string, admin: boolean): boolean =>
 	admin || task.authorSub === sub;
 
+// Choosing the leader: admins, or whoever created the task — the same people as for editing it. A
+// leader can't hand the role over themselves.
+export const canSetLeader = (task: Pick<Task, 'authorSub'>, sub: string, admin: boolean): boolean =>
+	admin || task.authorSub === sub;
+
+// The leader is picked among the people on the task; null takes the role away.
+export const isValidLeader = (task: Pick<Task, 'members'>, leaderSub: string | null): boolean =>
+	leaderSub === null || isOnTask(task, leaderSub);
+
 // Putting people on a task, and taking them off: admins, the owner or the leader.
 export const canAssign = (
 	task: Pick<Task, 'authorSub' | 'members'>,

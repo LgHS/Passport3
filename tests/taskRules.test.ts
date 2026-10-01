@@ -7,9 +7,11 @@ import {
 	canFlagBlocked,
 	canLeave,
 	canProgress,
+	canSetLeader,
 	deriveStatus,
 	isLeader,
 	isOnTask,
+	isValidLeader,
 	isOwnerOrLeader,
 	isoDay,
 	membership,
@@ -142,6 +144,37 @@ describe('canEditTask', () => {
 		['un tiers', STRANGER, false, false]
 	])('%s : %s', (_who, sub, admin, expected) => {
 		expect(canEditTask(task(), sub, admin)).toBe(expected);
+	});
+});
+
+describe('canSetLeader', () => {
+	// Choisir le leader revient à l'auteur (ou à un admin) : le leader ne se passe pas le rôle
+	// lui-même, et un volontaire ne s'en empare pas.
+	it.each([
+		['un admin', ADMIN, true, true],
+		['l’auteur', AUTHOR, false, true],
+		['le leader', LEADER, false, false],
+		['un volontaire', VOLUNTEER, false, false],
+		['un membre imposé', IMPOSED, false, false],
+		['un tiers', STRANGER, false, false]
+	])('%s : %s', (_who, sub, admin, expected) => {
+		expect(canSetLeader(task(), sub, admin)).toBe(expected);
+	});
+});
+
+describe('isValidLeader', () => {
+	it('accepte une personne sur la tâche', () => {
+		expect(isValidLeader(task(), VOLUNTEER)).toBe(true);
+		expect(isValidLeader(task(), IMPOSED)).toBe(true);
+	});
+
+	it('accepte de retirer le leader', () => {
+		expect(isValidLeader(task(), null)).toBe(true);
+	});
+
+	it('refuse quelqu’un qui n’est pas sur la tâche, même l’auteur', () => {
+		expect(isValidLeader(task(), STRANGER)).toBe(false);
+		expect(isValidLeader(task({ members: [] }), AUTHOR)).toBe(false);
 	});
 });
 

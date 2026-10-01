@@ -762,7 +762,7 @@
 							{/if}
 						</div>
 
-						{#if canEdit(task) && task.members.length > 0}
+						{#if rules.canSetLeader(task, data.mySub, data.isAdmin) && task.members.length > 0}
 							<form method="POST" action="?/setLeader" use:enhance class="mt-3 flex gap-2">
 								<input type="hidden" name="taskId" value={task.id} />
 								<select name="leaderSub" class="min-w-0 flex-1 border border-black px-2 py-1 text-xs">
