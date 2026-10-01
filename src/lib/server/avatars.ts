@@ -67,7 +67,7 @@ export function avatarUrlFor(email: string | null | undefined, variant = 0): str
 
 // Walks the JPEG markers up to the first SOF (start of frame) segment, which carries the image
 // dimensions. Returns null for anything that isn't a well-formed baseline/progressive JPEG.
-function jpegDimensions(bytes: Uint8Array): { width: number; height: number } | null {
+export function jpegDimensions(bytes: Uint8Array): { width: number; height: number } | null {
 	if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
 	let offset = 2;
 	while (offset + 9 < bytes.length) {

@@ -38,3 +38,10 @@ export const WITNESSES_MAX_LENGTH = 500;
 export const EQUIPMENT_MAX_LENGTH = 300;
 export const DESCRIPTION_MAX_LENGTH = 2000;
 export const DETAILS_MAX_LENGTH = 300;
+
+// Photos attached to a declaration. The browser re-encodes each one as a JPEG (which also strips
+// EXIF data such as GPS position) small enough that three of them, plus the rest of the form, fit
+// in adapter-node's default 512 KB request body limit.
+export const INCIDENT_MAX_PHOTOS = 3;
+export const INCIDENT_PHOTO_MAX_BYTES = 160 * 1024;
+export const INCIDENT_PHOTO_MAX_SIDE = 1280;

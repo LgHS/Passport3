@@ -8,6 +8,9 @@
 		EQUIPMENT_MAX_LENGTH,
 		DESCRIPTION_MAX_LENGTH,
 		DETAILS_MAX_LENGTH,
+		INCIDENT_MAX_PHOTOS,
+		INCIDENT_PHOTO_MAX_BYTES,
+		INCIDENT_PHOTO_MAX_SIDE,
 		type IncidentKind
 	} from '$lib/incidentDisplay';
 	import type { ActionData, PageData } from './$types';
@@ -27,6 +30,68 @@
 	let fireDeviceUsed = $state(false);
 	let certified = $state(false);
 
+	// Photos, re-encoded in the browser before upload: a JPEG of at most INCIDENT_PHOTO_MAX_SIDE px
+	// and INCIDENT_PHOTO_MAX_BYTES, which also drops EXIF data (GPS position, device…). The preview
+	// is a data: URL rather than a blob: one, which the CSP's img-src doesn't allow.
+	let photos = $state<{ id: number; blob: Blob; preview: string }[]>([]);
+	let nextPhotoId = 0;
+	let processingPhotos = $state(false);
+
+	function toJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob | null> {
+		return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+	}
+
+	async function compress(file: File): Promise<Blob | null> {
+		const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+		try {
+			// Smaller and smaller until it fits: first the quality, then the size.
+			for (const scale of [1, 0.75, 0.5]) {
+				const ratio = Math.min(1, INCIDENT_PHOTO_MAX_SIDE / Math.max(bitmap.width, bitmap.height)) * scale;
+				const canvas = document.createElement('canvas');
+				canvas.width = Math.max(1, Math.round(bitmap.width * ratio));
+				canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
+				canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+				for (const quality of [0.8, 0.7, 0.6, 0.5]) {
+					const blob = await toJpeg(canvas, quality);
+					if (blob && blob.size <= INCIDENT_PHOTO_MAX_BYTES) return blob;
+				}
+			}
+			return null;
+		} finally {
+			bitmap.close();
+		}
+	}
+
+	function dataUrl(blob: Blob): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(reader.result as string);
+			reader.onerror = () => reject(reader.error);
+			reader.readAsDataURL(blob);
+		});
+	}
+
+	async function addPhotos(event: Event & { currentTarget: HTMLInputElement }) {
+		const input = event.currentTarget;
+		const files = [...(input.files ?? [])];
+		input.value = '';
+		const room = INCIDENT_MAX_PHOTOS - photos.length;
+		if (files.length > room) showToast('error', `${INCIDENT_MAX_PHOTOS} photos maximum.`);
+		processingPhotos = true;
+		try {
+			for (const file of files.slice(0, room)) {
+				const blob = await compress(file).catch(() => null);
+				if (!blob) {
+					showToast('error', `Impossible de lire « ${file.name} ».`);
+					continue;
+				}
+				photos = [...photos, { id: nextPhotoId++, blob, preview: await dataUrl(blob) }];
+			}
+		} finally {
+			processingPhotos = false;
+		}
+	}
+
 	$effect(() => {
 		if (form?.created) {
 			showToast('success', 'Déclaration enregistrée.');
@@ -40,6 +105,10 @@
 			firstAidUsed = false;
 			fireDeviceUsed = false;
 			certified = false;
+			photos = [];
+			if (form.photosSaved === false) {
+				showToast('error', "Les photos n'ont pas pu être enregistrées : envoie-les à admin@lghs.be.");
+			}
 		} else if (form?.error) {
 			showToast('error', form.error);
 		}
@@ -65,7 +134,15 @@
 	<a href="mailto:admin@lghs.be">admin@lghs.be</a>.
 </p>
 
-<form method="POST" action="?/create" use:enhance class="mb-8 border border-black p-4">
+<form
+	method="POST"
+	action="?/create"
+	enctype="multipart/form-data"
+	use:enhance={({ formData }) => {
+		for (const [i, photo] of photos.entries()) formData.append('photos', photo.blob, `photo-${i + 1}.jpg`);
+	}}
+	class="mb-8 border border-black p-4"
+>
 	<fieldset class="mb-4">
 		<legend class="mb-1 block text-sm font-bold uppercase">Type de déclaration</legend>
 		<div class="flex flex-col gap-2">
@@ -194,13 +271,46 @@
 		{/if}
 	</div>
 
+	<div class="mb-4">
+		<span class="mb-1 block text-sm font-bold uppercase">
+			Photos <span class="text-xs font-normal normal-case">(optionnel, {INCIDENT_MAX_PHOTOS} maximum)</span>
+		</span>
+		<div class="flex flex-wrap items-center gap-2">
+			{#each photos as photo, i (photo.id)}
+				<div class="relative h-24 w-24 border border-black">
+					<img src={photo.preview} alt="Photo {i + 1}" class="h-full w-full object-cover" />
+					<button
+						type="button"
+						onclick={() => (photos = photos.filter((_, j) => j !== i))}
+						aria-label="Retirer la photo {i + 1}"
+						class="absolute top-0 right-0 bg-white px-1.5 leading-tight font-bold hover:bg-red-700 hover:text-white"
+					>
+						×
+					</button>
+				</div>
+			{/each}
+			{#if photos.length < INCIDENT_MAX_PHOTOS}
+				<label
+					class="flex h-24 w-24 cursor-pointer items-center justify-center border border-dashed border-black text-center text-xs hover:bg-gray-100"
+				>
+					{processingPhotos ? 'Préparation…' : '+ Ajouter'}
+					<input type="file" accept="image/*" multiple class="sr-only" onchange={addPhotos} disabled={processingPhotos} />
+				</label>
+			{/if}
+		</div>
+		<p class="mt-1 text-xs text-gray-500">
+			Les photos sont réduites avant l'envoi, et leurs métadonnées (dont la position GPS) retirées.
+			Comme le reste de la déclaration, seuls les admins peuvent les voir.
+		</p>
+	</div>
+
 	<label class="mb-4 flex cursor-pointer items-start gap-2 border-t border-black pt-4 text-sm">
 		<input type="checkbox" name="certified" bind:checked={certified} required class="mt-1" />
 		Je certifie sur l'honneur que cette déclaration est sincère et, à ma connaissance, exacte et
 		complète.
 	</label>
 
-	<button type="submit" disabled={!certified} class="btn-primary px-4 py-2 text-sm disabled:opacity-50">
+	<button type="submit" disabled={!certified || processingPhotos} class="btn-primary px-4 py-2 text-sm disabled:opacity-50">
 		Déclarer
 	</button>
 </form>
