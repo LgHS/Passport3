@@ -169,17 +169,29 @@
 				<button type="button" onclick={next} class="btn-primary px-5 py-2.5 text-sm">C’est parti →</button>
 			{:else if step.id === 'preambule'}
 				<h2 class="mb-1 text-lg font-bold">📖 Préambule</h2>
-				<p class="mb-3 inline-block bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Texte provisoire, à rédiger</p>
-				<div class="mb-5 space-y-3 text-sm text-gray-700">
+				<p class="mb-4 text-sm text-gray-600">Bienvenue au hackerspace ! Avant d’aller plus loin, deux règles d’or.</p>
+				<div class="mb-5 space-y-4 text-sm text-gray-700">
+					<div class="border-l-4 border-lghs-yellow pl-3">
+						<p class="mb-1 font-bold text-black">1. Sois excellent·e envers les autres</p>
+						<p>
+							Respect, bienveillance et patience. On vient tous d’horizons différents, avec des niveaux
+							différents, et tout le monde a été débutant·e un jour. Une question n’est jamais bête, et
+							une explication donnée avec le sourire vaut mieux qu’une remarque sèche.
+						</p>
+					</div>
+					<div class="border-l-4 border-lghs-yellow pl-3">
+						<p class="mb-1 font-bold text-black">2. La règle des 110 %</p>
+						<p>
+							Fais ta part, et un peu plus. Il n’y a aucun employé au hackerspace : tout est géré par
+							les membres, pour les membres. Une poubelle pleine, un outil qui traîne, une machine à
+							nettoyer, quelqu’un qui cherche son chemin ? Pas besoin d’attendre que quelqu’un d’autre
+							s’en occupe : c’est à toi de jouer.
+						</p>
+					</div>
 					<p>
-						Le Liège Hackerspace est un lieu ouvert, géré par ses membres : chacun·e y apporte son
-						temps, ses idées et ses compétences.
+						Le hackerspace, c’est ce qu’on en fait ensemble : propose tes idées, partage ce que tu sais,
+						demande quand tu ne sais pas, et laisse l’atelier un peu mieux que tu ne l’as trouvé.
 					</p>
-					<p>
-						Ici, on apprend en faisant, on partage ce qu’on sait et on prend soin du lieu, du matériel
-						et des autres.
-					</p>
-					<p>Ce parcours t’aide à préparer ton compte pour que les autres puissent te connaître et te joindre.</p>
 				</div>
 				<button type="button" onclick={next} class="btn-primary px-5 py-2.5 text-sm">J’ai compris →</button>
 			{:else if step.id === 'infos'}
