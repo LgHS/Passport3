@@ -10,6 +10,7 @@ export const ACTION_LABELS: Record<string, string> = {
 	'trombinoscope.optin.update': 'Visibilité trombinoscope modifiée',
 	'trombinoscope.tag.update': 'Tag trombinoscope modifié',
 	'emergencyContacts.update': "Contacts d'urgence modifiés",
+	'onboarding.complete': "Parcours d'accueil terminé",
 	'github.invite': 'Invitation GitHub envoyée',
 	'github.disconnect': 'Compte GitHub déconnecté',
 	'session.revoke': 'Session révoquée',

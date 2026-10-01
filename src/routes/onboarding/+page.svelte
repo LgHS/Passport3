@@ -8,7 +8,8 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	// PROTOTYPE — profile, photo and emergency contacts really save; the journey itself is not remembered yet.
+	// PROTOTYPE — profile, photo and emergency contacts really save, and finishing sets the `onboarding`
+	// flag in Authentik; nothing redirects here yet.
 	const STEPS = [
 		{ id: 'depart', label: 'Départ', icon: '🏁', eta: 4 },
 		{ id: 'preambule', label: 'Préambule', icon: '📖', eta: 4 },
@@ -81,6 +82,7 @@
 				: `${pad2(birthdayMonth)}-${pad2(birthdayDay.trim())}`
 	);
 	let savingProfile = $state(false);
+	let completing = $state(false);
 
 	// A successful save moves the journey on; an error stays on the step, with its message.
 	function afterSave(savingFlag: (v: boolean) => void, okKey: string, errorKey: string) {
@@ -117,7 +119,13 @@
 </svelte:head>
 
 <section class="mx-auto max-w-4xl">
-	<p class="mb-3 inline-block bg-lghs-yellow px-2 py-0.5 text-xs font-bold uppercase">Prototype · le parcours n'est pas encore mémorisé</p>
+	<p class="mb-3 inline-block bg-lghs-yellow px-2 py-0.5 text-xs font-bold uppercase">Prototype · rien ne redirige encore ici</p>
+	{#if data.onboardingCompletedAt}
+		<p class="mb-3 text-xs text-gray-500">
+			Tu as déjà terminé ce parcours le
+			{new Date(data.onboardingCompletedAt).toLocaleDateString('fr-BE', { timeZone: 'Europe/Brussels', day: 'numeric', month: 'long', year: 'numeric' })}.
+		</p>
+	{/if}
 
 	<!-- The route: every stop of the journey, the marker on the current one. -->
 	<div class="relative mb-6 px-8 pt-8 pb-2" aria-label="Progression du parcours">
@@ -338,14 +346,17 @@
 					<p>Art. 4 — Signale tout incident ou accident via Passport.</p>
 				</div>
 				{@render tickBox(roiAccepted, (v) => (roiAccepted = v), 'J’ai lu et j’accepte le règlement d’ordre intérieur')}
-				<button
-					type="button"
-					onclick={next}
-					disabled={!roiAccepted}
-					class="btn-primary px-5 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-				>
-					Accepter et terminer →
-				</button>
+				<!-- Finishing sets the `onboarding` flag in Authentik; the arrival only shows once it's saved. -->
+				<form method="POST" action="?/complete" use:enhance={afterSave((v) => (completing = v), 'onboardingCompleted', 'onboardingError')}>
+					<input type="hidden" name="roiAccepted" value={roiAccepted ? 'on' : ''} />
+					<button
+						type="submit"
+						disabled={!roiAccepted || completing}
+						class="btn-primary px-5 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+					>
+						{completing ? 'Enregistrement…' : 'Accepter et terminer →'}
+					</button>
+				</form>
 			{:else}
 				<div class="text-center">
 					<p class="mb-2 text-5xl" aria-hidden="true">🏠</p>

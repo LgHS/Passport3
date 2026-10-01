@@ -574,6 +574,53 @@ export async function updateNotificationPreferences(
 	});
 }
 
+// Own attribute: whether the member finished the first-login journey (/onboarding). Only ever
+// written by Passport when the journey ends, never hand-typed. Kept as an object so later fields
+// (e.g. the accepted ROI version) can join it; Authentik application policies can read
+// `attributes.onboarding.completedAt` to hold other apps until the journey is done.
+const ONBOARDING_ATTRIBUTE = 'onboarding';
+
+export interface OnboardingStatus {
+	// ISO timestamp of the last time the journey was finished, null if never.
+	completedAt: string | null;
+}
+
+// Strict read: anything that isn't an object with a valid date string counts as "not done".
+export function pickOnboardingStatus(raw: unknown): OnboardingStatus {
+	const value = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>).completedAt : undefined;
+	return { completedAt: typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : null };
+}
+
+export async function getOnboardingStatus(pk: number): Promise<OnboardingStatus> {
+	const res = await authentikApiFetch(`core/users/${pk}/`);
+	const user = (await res.json()) as AuthentikUserRecord;
+	return pickOnboardingStatus(user.attributes[ONBOARDING_ATTRIBUTE]);
+}
+
+// Read-merge-write, same reasoning as updateTrombinoscopeOptin: the rest of `attributes`, and any
+// other key inside `onboarding`, are kept.
+export async function markOnboardingCompleted(pk: number): Promise<string> {
+	const current = await authentikApiFetch(`core/users/${pk}/`);
+	const currentUser = (await current.json()) as AuthentikUserRecord;
+	const currentOnboarding = currentUser.attributes[ONBOARDING_ATTRIBUTE];
+	const completedAt = new Date().toISOString();
+
+	await authentikApiFetch(`core/users/${pk}/`, {
+		method: 'PATCH',
+		body: JSON.stringify({
+			attributes: {
+				...currentUser.attributes,
+				[ONBOARDING_ATTRIBUTE]: {
+					...(typeof currentOnboarding === 'object' && currentOnboarding !== null ? currentOnboarding : {}),
+					completedAt
+				}
+			}
+		})
+	});
+
+	return completedAt;
+}
+
 // `tag`/`tagc` — an admin-assigned role label (e.g. "Prés. CA") and its badge color — live in the
 // same `trombinoscope` attribute as TrombinoscopeOptin, but are kept in a separate type: they're
 // admin-only fields, never part of what the member-facing /trombinoscope form reads or submits.
