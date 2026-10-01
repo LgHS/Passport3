@@ -232,7 +232,9 @@
 		const d = event.details ?? {};
 		const who = typeof d.member === 'string' ? `@${d.member}` : 'un membre';
 		switch (event.action) {
-			case 'task.create': return 'a créé la tâche';
+			// A creator is the leader of their own task, so the history says so rather than leaving
+			// the crown in the member list unexplained. An admin's task starts without a leader.
+			case 'task.create': return typeof d.leader === 'string' ? 'a créé la tâche et la mène' : 'a créé la tâche';
 			case 'task.edit': return 'a modifié la tâche';
 			case 'task.join': return 'participe';
 			case 'task.leave': return "s'est retiré·e";

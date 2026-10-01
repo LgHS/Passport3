@@ -124,14 +124,28 @@ export async function getTask(id: number): Promise<Task | null> {
 	return toTask(row, members);
 }
 
+// Whoever creates a task leads it, so it never starts with nobody responsible for it — except
+// when an admin creates it: an admin filing tasks on everyone's behalf would end up leading all of
+// them, so those stay unled until someone takes them. The two inserts are one transaction: a task
+// whose author is its leader must never exist half-created, with the row but not its leader.
 export async function createTask(author: Person, input: TaskInput, byAdmin: boolean): Promise<number> {
 	const sql = await getDb();
-	const [row] = await sql<{ id: number }[]>`
-		INSERT INTO tasks (author_sub, author_label, title, description, due_date, priority, created_by_admin)
-		VALUES (${author.sub}, ${author.label}, ${input.title}, ${input.description}, ${input.dueDate}, ${input.priority}, ${byAdmin})
-		RETURNING id
-	`;
-	return row.id;
+	return await sql.begin(async (tx) => {
+		const [row] = await tx<{ id: number }[]>`
+			INSERT INTO tasks (author_sub, author_label, title, description, due_date, priority, created_by_admin)
+			VALUES (${author.sub}, ${author.label}, ${input.title}, ${input.description}, ${input.dueDate}, ${input.priority}, ${byAdmin})
+			RETURNING id
+		`;
+		if (!byAdmin) {
+			// `assigned_by_sub` null: they put themselves on it, like any volunteer — nothing was
+			// imposed, so they can still leave, which clears the leader with the row.
+			await tx`
+				INSERT INTO task_members (task_id, member_sub, member_label, assigned_by_sub, is_leader)
+				VALUES (${row.id}, ${author.sub}, ${author.label}, ${null}, true)
+			`;
+		}
+		return row.id;
+	});
 }
 
 export async function updateTask(id: number, input: TaskInput): Promise<void> {

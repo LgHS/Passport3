@@ -137,12 +137,23 @@ export const actions: Actions = {
 		const result = validateTaskInput(await request.formData());
 		if (!result.ok) return fail(400, { error: result.error });
 
-		const taskId = await createTask({ sub: user.sub, label: usernameLabel(user) }, result.input, isAdmin(user));
+		const author = { sub: user.sub, label: usernameLabel(user) };
+		const byAdmin = isAdmin(user);
+		const taskId = await createTask(author, result.input, byAdmin);
 		await record(user, 'user', 'task.create', targetFromSub(user.sub), taskId, {
-			title: result.input.title
+			title: result.input.title,
+			// Only when there is one, so an admin-created task doesn't record `leader: null` —
+			// the audit's detail panel prints every key it's given, including that.
+			...(byAdmin ? {} : { leader: author.label })
 		});
-		// An urgent task gets the urgent announcement rather than both.
-		const newTask = { id: taskId, title: result.input.title, members: [] };
+		// An urgent task gets the urgent announcement rather than both. The members the task was
+		// just created with, so the urgent message names its leader instead of claiming nobody is
+		// on it — createTask puts a non-admin author on their own task.
+		const newTask = {
+			id: taskId,
+			title: result.input.title,
+			members: byAdmin ? [] : [{ ...author, imposed: false, isLeader: true }]
+		};
 		await announceTask(result.input.priority === URGENT_PRIORITY ? 'urgent' : 'created', newTask, usernameLabel(user));
 		return { created: true };
 	},
