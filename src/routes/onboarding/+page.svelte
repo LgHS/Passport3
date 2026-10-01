@@ -97,7 +97,7 @@
 	<title>Bienvenue — Passport</title>
 </svelte:head>
 
-<section class="mx-auto max-w-2xl">
+<section class="mx-auto max-w-4xl">
 	<p class="mb-3 inline-block bg-lghs-yellow px-2 py-0.5 text-xs font-bold uppercase">Prototype · le parcours n'est pas encore mémorisé</p>
 
 	<!-- The route: every stop of the journey, the marker on the current one. -->
