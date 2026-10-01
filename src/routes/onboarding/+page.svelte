@@ -96,6 +96,22 @@
 	}
 </script>
 
+<!-- A big, friendly tick box: the step's button only wakes up once it's ticked. -->
+{#snippet tickBox(checked: boolean, onchange: (v: boolean) => void, label: string)}
+	<label class="group mb-5 flex w-fit cursor-pointer items-center gap-3 text-sm font-bold select-none">
+		<input type="checkbox" {checked} onchange={(e) => onchange(e.currentTarget.checked)} class="peer sr-only" />
+		<span
+			class="flex h-7 w-7 shrink-0 items-center justify-center border-2 border-black text-lg leading-none transition-all duration-200 peer-focus-visible:ring-2 peer-focus-visible:ring-black peer-focus-visible:ring-offset-2 {checked
+				? 'scale-110 bg-lghs-yellow'
+				: 'bg-white group-hover:bg-gray-100'}"
+			aria-hidden="true"
+		>
+			{#if checked}<span in:scale={{ duration: 200, start: 0.3 }}>✓</span>{/if}
+		</span>
+		{label}
+	</label>
+{/snippet}
+
 <svelte:head>
 	<title>Bienvenue — Passport</title>
 </svelte:head>
@@ -204,19 +220,7 @@
 						demande quand tu ne sais pas, et laisse l’atelier un peu mieux que tu ne l’as trouvé.
 					</p>
 				</div>
-				<!-- A big, friendly tick box: the button only wakes up once it's ticked. -->
-				<label class="group mb-5 flex w-fit cursor-pointer items-center gap-3 text-sm font-bold select-none">
-					<input type="checkbox" bind:checked={preambuleRead} class="peer sr-only" />
-					<span
-						class="flex h-7 w-7 shrink-0 items-center justify-center border-2 border-black text-lg leading-none transition-all duration-200 peer-focus-visible:ring-2 peer-focus-visible:ring-black peer-focus-visible:ring-offset-2 {preambuleRead
-							? 'scale-110 bg-lghs-yellow'
-							: 'bg-white group-hover:bg-gray-100'}"
-						aria-hidden="true"
-					>
-						{#if preambuleRead}<span in:scale={{ duration: 200, start: 0.3 }}>✓</span>{/if}
-					</span>
-					J’ai lu et compris
-				</label>
+				{@render tickBox(preambuleRead, (v) => (preambuleRead = v), 'J’ai lu et compris')}
 				<button
 					type="button"
 					onclick={next}
@@ -333,15 +337,12 @@
 					<p class="mb-2">Art. 3 — Range et nettoie ton poste avant de partir.</p>
 					<p>Art. 4 — Signale tout incident ou accident via Passport.</p>
 				</div>
-				<label class="mb-5 flex cursor-pointer items-start gap-2 text-sm">
-					<input type="checkbox" bind:checked={roiAccepted} class="mt-1" />
-					J’ai lu et j’accepte le règlement d’ordre intérieur.
-				</label>
+				{@render tickBox(roiAccepted, (v) => (roiAccepted = v), 'J’ai lu et j’accepte le règlement d’ordre intérieur')}
 				<button
 					type="button"
 					onclick={next}
 					disabled={!roiAccepted}
-					class="btn-primary px-5 py-2.5 text-sm disabled:opacity-50"
+					class="btn-primary px-5 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
 				>
 					Accepter et terminer →
 				</button>
@@ -358,13 +359,13 @@
 		</div>
 	{/key}
 
-	<!-- Arrival: confetti over the whole page, in the hackerspace's colours. -->
+	<!-- Arrival: about ten seconds of confetti over the whole page, in the hackerspace's colours. -->
 	{#if step.id === 'arrivee'}
 		<div class="pointer-events-none fixed inset-0 z-50 overflow-hidden" aria-hidden="true">
-			{#each Array.from({ length: 70 }, (_, i) => i) as i (i)}
+			{#each Array.from({ length: 150 }, (_, i) => i) as i (i)}
 				<span
 					class="confetti absolute -top-4 {i % 3 === 0 ? 'h-3 w-1.5' : 'h-2 w-2'} {i % 2 ? 'bg-lghs-yellow' : 'bg-black'}"
-					style="left: {(i * 37) % 100}%; animation-delay: {((i * 7) % 20) / 10}s; animation-duration: {2.2 + (i % 5) * 0.35}s"
+					style="left: {(i * 37.3) % 100}%; animation-delay: {((i * 13) % 60) / 10}s; animation-duration: {2.8 + (i % 5) * 0.4}s"
 				></span>
 			{/each}
 		</div>
