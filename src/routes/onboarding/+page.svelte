@@ -10,7 +10,8 @@
 
 	// PROTOTYPE — profile, photo and emergency contacts really save; the journey itself is not remembered yet.
 	const STEPS = [
-		{ id: 'depart', label: 'Départ', icon: '🏁', eta: 3 },
+		{ id: 'depart', label: 'Départ', icon: '🏁', eta: 4 },
+		{ id: 'preambule', label: 'Préambule', icon: '📖', eta: 4 },
 		{ id: 'infos', label: 'Mon profil', icon: '🪪', eta: 3 },
 		{ id: 'photo', label: 'Photo', icon: '📷', eta: 2 },
 		{ id: 'urgence', label: 'Urgence', icon: '🆘', eta: 2 },
@@ -22,6 +23,7 @@
 	// GPS-style instruction shown above each step.
 	const DIRECTIONS: Record<(typeof STEPS)[number]['id'], string> = {
 		depart: 'Itinéraire calculé vers le Liège Hackerspace',
+		preambule: 'Avant de démarrer, un mot sur le hackerspace',
 		infos: 'Dans 200 m, vérifie ton profil',
 		photo: 'Au rond-point, prends la sortie « photo de profil »',
 		urgence: 'Reste sur la file de droite : contacts d’urgence',
@@ -161,10 +163,25 @@
 				<p class="mb-1 text-4xl" aria-hidden="true">🏁</p>
 				<h1 class="mb-2 text-xl font-bold">Bienvenue au Liège Hackerspace, {data.firstName} !</h1>
 				<p class="mb-5 text-sm text-gray-600">
-					On t’emmène faire le tour de ton compte : tes infos, ta photo, tes contacts d’urgence et
-					le règlement. Ça prend environ 3 minutes, et tu peux passer ce qui ne te concerne pas.
+					On t’emmène faire le tour de ton compte : un mot sur le hackerspace, tes infos, ta photo, tes contacts d’urgence et
+					le règlement. Ça prend environ 4 minutes, et tu peux passer ce qui ne te concerne pas.
 				</p>
 				<button type="button" onclick={next} class="btn-primary px-5 py-2.5 text-sm">C’est parti →</button>
+			{:else if step.id === 'preambule'}
+				<h2 class="mb-1 text-lg font-bold">📖 Préambule</h2>
+				<p class="mb-3 inline-block bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Texte provisoire, à rédiger</p>
+				<div class="mb-5 space-y-3 text-sm text-gray-700">
+					<p>
+						Le Liège Hackerspace est un lieu ouvert, géré par ses membres : chacun·e y apporte son
+						temps, ses idées et ses compétences.
+					</p>
+					<p>
+						Ici, on apprend en faisant, on partage ce qu’on sait et on prend soin du lieu, du matériel
+						et des autres.
+					</p>
+					<p>Ce parcours t’aide à préparer ton compte pour que les autres puissent te connaître et te joindre.</p>
+				</div>
+				<button type="button" onclick={next} class="btn-primary px-5 py-2.5 text-sm">J’ai compris →</button>
 			{:else if step.id === 'infos'}
 				<h2 class="mb-1 text-lg font-bold">🪪 Mon profil</h2>
 				<p class="mb-4 text-sm text-gray-600">Vérifie et complète tes informations : elles servent au hackerspace pour te joindre.</p>
