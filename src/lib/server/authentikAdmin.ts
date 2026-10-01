@@ -449,7 +449,7 @@ const BOOLEAN_OPTIN_KEYS = [
 	'showPhone'
 ] as const satisfies readonly (keyof TrombinoscopeOptin)[];
 
-function pickTrombinoscopeOptin(raw: unknown): TrombinoscopeOptin {
+export function pickTrombinoscopeOptin(raw: unknown): TrombinoscopeOptin {
 	const source = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
 	const optin = { ...TROMBINOSCOPE_DEFAULTS };
 	for (const key of BOOLEAN_OPTIN_KEYS) {
@@ -951,6 +951,53 @@ function splitName(name: string): { firstName: string; lastName: string } {
 // set `visible` is excluded entirely, and only the fields they've individually consented to show
 // are ever put on the returned object — filtering happens here, server-side, so a field a member
 // chose not to share never reaches the browser in the first place (not just hidden in the UI).
+// What the trombinoscope shows of one member, given their opt-in. Separate from the Authentik and
+// Mattermost lookups around it so tests/directoryMember.test.ts can cover exactly what each
+// setting reveals. Never anything private beyond what the opt-in allows: no birthday, address,
+// RFID UUID or emergency contacts, whatever the record carries.
+export function toDirectoryMember(
+	u: AuthentikUserRecord,
+	optin: TrombinoscopeOptin,
+	mattermostUsername: string | null
+): DirectoryMember {
+	const raw = u.attributes[TROMBINOSCOPE_ATTRIBUTE];
+	const { firstName, lastName } = splitName(u.name);
+	const rawTrombi = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+	const tagValue = rawTrombi.tag;
+	const tagColorValue = rawTrombi.tagc;
+
+	return {
+		pk: u.pk,
+		username: u.username,
+		firstName: optin.showFirstname ? firstName : null,
+		lastName: optin.showLastname ? lastName : null,
+		// An override takes precedence over the account's real email when set — same rule
+		// applied server-side here as on the opt-in forms, so the trombinoscope grid itself
+		// needs no special handling: it's still just "one email, or none".
+		email: optin.showMail ? optin.trombiEmail || u.email : null,
+		phone:
+			optin.showPhone && typeof u.attributes.phoneNumber === 'string'
+				? u.attributes.phoneNumber
+				: null,
+		// No opt-in gate: the avatar is already public on its own at /avatars/<hash>.jpg,
+		// with no auth — hiding it here specifically gave no real privacy.
+		avatar: avatarUrlFor(u.email, avatarVariantOf(u.attributes)),
+		tag: typeof tagValue === 'string' && tagValue.trim() ? tagValue : null,
+		tagExtended: nonEmptyString(rawTrombi.tagx),
+		tagColor:
+			typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue)
+				? tagColorValue
+				: null,
+		signal: stringAttr(u.attributes, 'signal'),
+		telegram: stringAttr(u.attributes, 'telegram'),
+		discord: stringAttr(u.attributes, 'discord'),
+		matrix: stringAttr(u.attributes, 'matrix'),
+		mastodon: stringAttr(u.attributes, 'mastodon'),
+		mattermostUsername,
+		mattermostDmUrl: mattermostUsername ? buildMattermostDmUrl(mattermostUsername) : null
+	};
+}
+
 export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 	const res = await authentikApiFetch('core/users/?page_size=500');
 	const data = (await res.json()) as {
@@ -963,18 +1010,8 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 				(u) => u.is_active && !EXCLUDED_USERNAMES.has(u.username) && !EXCLUDED_TYPES.has(u.type)
 			)
 			.map(async (u): Promise<DirectoryMember | null> => {
-				const raw = u.attributes[TROMBINOSCOPE_ATTRIBUTE];
-				const optin: TrombinoscopeOptin =
-					typeof raw === 'object' && raw !== null
-						? { ...TROMBINOSCOPE_DEFAULTS, ...(raw as Partial<TrombinoscopeOptin>) }
-						: TROMBINOSCOPE_DEFAULTS;
+				const optin = pickTrombinoscopeOptin(u.attributes[TROMBINOSCOPE_ATTRIBUTE]);
 				if (!optin.visible) return null;
-
-				const { firstName, lastName } = splitName(u.name);
-				const rawTrombi = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
-				const tagValue = rawTrombi.tag;
-				const tagColorValue = rawTrombi.tagc;
-
 				// Same rationale as the .catch() calls around Authentik/Dolibarr in +layout.server.ts:
 				// a transient Mattermost hiccup on a cache-miss shouldn't 500 the entire directory
 				// just because one member has "Pseudo Chat" enabled — that member's chat link is
@@ -984,36 +1021,7 @@ export async function listDirectoryMembers(): Promise<DirectoryMember[]> {
 						? await getMattermostUsername(u.email).catch(() => null)
 						: null;
 
-				return {
-					pk: u.pk,
-					username: u.username,
-					firstName: optin.showFirstname ? firstName : null,
-					lastName: optin.showLastname ? lastName : null,
-					// An override takes precedence over the account's real email when set — same rule
-					// applied server-side here as on the opt-in forms, so the trombinoscope grid itself
-					// needs no special handling: it's still just "one email, or none".
-					email: optin.showMail ? optin.trombiEmail || u.email : null,
-					phone:
-						optin.showPhone && typeof u.attributes.phoneNumber === 'string'
-							? u.attributes.phoneNumber
-							: null,
-					// No opt-in gate: the avatar is already public on its own at /avatars/<hash>.jpg,
-					// with no auth — hiding it here specifically gave no real privacy.
-					avatar: avatarUrlFor(u.email, avatarVariantOf(u.attributes)),
-					tag: typeof tagValue === 'string' && tagValue.trim() ? tagValue : null,
-					tagExtended: nonEmptyString(rawTrombi.tagx),
-					tagColor:
-						typeof tagColorValue === 'string' && HEX_COLOR_RE.test(tagColorValue)
-							? tagColorValue
-							: null,
-					signal: stringAttr(u.attributes, 'signal'),
-					telegram: stringAttr(u.attributes, 'telegram'),
-					discord: stringAttr(u.attributes, 'discord'),
-					matrix: stringAttr(u.attributes, 'matrix'),
-					mastodon: stringAttr(u.attributes, 'mastodon'),
-					mattermostUsername,
-					mattermostDmUrl: mattermostUsername ? buildMattermostDmUrl(mattermostUsername) : null
-				};
+				return toDirectoryMember(u, optin, mattermostUsername);
 			})
 	);
 
