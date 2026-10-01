@@ -17,6 +17,7 @@ import { typeMeta } from '$lib/wishlistDisplay';
 import { env } from '$env/dynamic/private';
 import { listTrombinoscopeUsernames } from '$lib/server/authentikAdmin';
 import { displayName, isAdmin, type AppUser } from '$lib/types';
+import { canDeleteItem, canEditItem, canVote, isResolveStatus, shouldAnnounceResolution } from '$lib/wishlistRules';
 
 function requireUser(locals: App.Locals): AppUser {
 	if (!locals.user) {
@@ -80,11 +81,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// Swap the raw authorSub for two precomputed decisions — the client only ever needs "can I
 	// edit/delete this", not the Authentik subject id behind it.
 	const items = (await listWishlistItems(user.sub)).map(({ authorSub, ...item }) => {
-		const isOwnPendingItem = item.status === 'pending' && authorSub === user.sub;
+		const rules = { status: item.status, authorSub, voteCount: item.upVoters.length + item.downVoters.length };
 		return {
 			...item,
-			canDelete: admin || isOwnPendingItem,
-			canEdit: admin || (isOwnPendingItem && item.upVoters.length + item.downVoters.length === 0)
+			canDelete: canDeleteItem(rules, user.sub, admin),
+			canEdit: canEditItem(rules, user.sub, admin)
 		};
 	});
 
@@ -133,8 +134,7 @@ export const actions: Actions = {
 		}
 
 		const admin = isAdmin(user);
-		const isOwnPendingItem = item.status === 'pending' && item.authorSub === user.sub;
-		if (!admin && !(isOwnPendingItem && item.voteCount === 0)) {
+		if (!canEditItem(item, user.sub, admin)) {
 			return fail(403, {
 				error: admin
 					? "Tu n'as pas le droit de modifier cette proposition."
@@ -187,7 +187,7 @@ export const actions: Actions = {
 		if (!item) {
 			return fail(404, { error: 'Proposition introuvable.' });
 		}
-		if (item.status !== 'pending') {
+		if (!canVote(item)) {
 			return fail(403, { error: 'Cette proposition a déjà été tranchée, le vote est clos.' });
 		}
 
@@ -211,9 +211,7 @@ export const actions: Actions = {
 			return fail(404, { error: 'Proposition introuvable.' });
 		}
 
-		const admin = isAdmin(user);
-		const isOwnPendingItem = item.status === 'pending' && item.authorSub === user.sub;
-		if (!admin && !isOwnPendingItem) {
+		if (!canDeleteItem(item, user.sub, isAdmin(user))) {
 			return fail(403, { error: "Tu n'as pas le droit de supprimer cette proposition." });
 		}
 
@@ -241,7 +239,7 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const itemId = Number(formData.get('itemId'));
 		const status = String(formData.get('status') ?? '');
-		if (!Number.isInteger(itemId) || (status !== 'exauce' && status !== 'rejete' && status !== 'pending')) {
+		if (!Number.isInteger(itemId) || !isResolveStatus(status)) {
 			return fail(400, { error: 'Requête invalide.' });
 		}
 
@@ -261,7 +259,7 @@ export const actions: Actions = {
 		);
 
 		// Only a fresh decision is announced, not a revert to pending nor a repeat of the same status.
-		if (status !== 'pending' && status !== item.status) {
+		if (shouldAnnounceResolution(item.status, status)) {
 			await announceWishlist(status, itemId, item.title, item.type, item.authorLabel);
 		}
 
