@@ -135,10 +135,13 @@ export const actions: Actions = {
 
 		const admin = isAdmin(user);
 		if (!canEditItem(item, user.sub, admin)) {
+			// Its author is only stopped once it's been voted on or decided; anyone else never had the
+			// right in the first place.
 			return fail(403, {
-				error: admin
-					? "Tu n'as pas le droit de modifier cette proposition."
-					: 'Cette proposition ne peut plus être modifiée (déjà votée ou déjà tranchée).'
+				error:
+					item.authorSub === user.sub
+						? 'Cette proposition ne peut plus être modifiée (déjà votée ou déjà tranchée).'
+						: "Tu n'as pas le droit de modifier cette proposition."
 			});
 		}
 
