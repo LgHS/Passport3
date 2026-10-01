@@ -86,6 +86,27 @@
 					{/if}
 				</dl>
 
+				{#if incident.photos.length > 0}
+					<div class="mt-3 flex flex-wrap gap-2">
+						{#each incident.photos as n (n)}
+							<a
+								href="/admin/incidents/{incident.id}/photos/{n}"
+								target="_blank"
+								rel="noopener"
+								class="no-underline-fx block border border-black"
+								title="Ouvrir la photo {n}"
+							>
+								<img
+									src="/admin/incidents/{incident.id}/photos/{n}"
+									alt="Photo {n} de la déclaration"
+									loading="lazy"
+									class="h-24 w-24 object-cover"
+								/>
+							</a>
+						{/each}
+					</div>
+				{/if}
+
 				<p class="mt-3 text-xs text-gray-500">
 					Déclaré par {incident.authorLabel} le {formatDateTime(incident.createdAt)}
 				</p>
