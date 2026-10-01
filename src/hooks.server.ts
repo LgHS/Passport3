@@ -5,6 +5,7 @@ import { clearSessionCookie, SESSION_COOKIE } from '$lib/server/session';
 import { startBirthdayScheduler } from '$lib/server/birthdayScheduler';
 import { startTaskReminderScheduler } from '$lib/server/taskReminders';
 import { DATABASE_UNAVAILABLE_MESSAGE, isDatabaseUnavailable } from '$lib/server/db';
+import { requireAdmin } from '$lib/server/auth';
 
 // Module scope, not inside `handle` below — runs exactly once per server process, unlike `handle`
 // which runs on every request.
@@ -32,10 +33,20 @@ export const handle: Handle = async ({ event, resolve }) => {
 		event.locals.user = null;
 	}
 
+	// Every /admin request — pages, form actions, endpoints, and the __data.json requests behind
+	// client-side navigation — is checked here, before any of its code runs. admin/+layout.server.ts
+	// alone isn't enough: SvelteKit only re-runs the loads a client says are invalidated, so a
+	// request asking for the page's data alone skips the layout's check entirely.
+	if (isAdminPath(event.url.pathname)) requireAdmin(event.locals);
+
 	const response = await resolve(event);
 	setSecurityHeaders(response.headers);
 	return response;
 };
+
+export function isAdminPath(pathname: string): boolean {
+	return pathname === '/admin' || pathname.startsWith('/admin/');
+}
 
 // One place for a Postgres outage, whichever page or action hit it: the pages that need the
 // database (wishlist, audit log, birthday settings) show a clear "database unavailable" message

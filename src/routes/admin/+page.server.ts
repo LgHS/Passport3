@@ -1,10 +1,12 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { listUsers, listUserPksWithMfa, AuthentikUnavailableError } from '$lib/server/authentikAdmin';
+import { requireAdmin } from '$lib/server/auth';
 
 const AUTHENTIK_UNAVAILABLE_MESSAGE = 'Service temporairement indisponible. Réessaie dans quelques instants.';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+	requireAdmin(locals);
 	try {
 		const [users, mfaPks] = await Promise.all([
 			listUsers(),
