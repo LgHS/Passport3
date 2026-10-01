@@ -331,7 +331,7 @@
 	{#if index > 0 && index < STEPS.length - 1}
 		<div class="mt-3 flex items-center justify-between text-sm">
 			<button type="button" onclick={back} class="font-bold text-gray-600 hover:text-black">← Étape précédente</button>
-			{#if step.id !== 'roi'}
+			{#if step.id !== 'roi' && step.id !== 'preambule'}
 				<button type="button" onclick={skip} disabled={recalculating} class="font-bold text-gray-600 underline hover:text-black">
 					Passer cette étape
 				</button>
