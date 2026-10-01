@@ -13,7 +13,9 @@
 		contacts,
 		maxContacts,
 		form,
-		adminView = false
+		adminView = false,
+		submitLabel = 'Enregistrer',
+		onSaved
 	}: {
 		contacts: EmergencyContact[];
 		maxContacts: number;
@@ -22,6 +24,9 @@
 		// doesn't refer to the right person on /admin/users/[pk] — an admin editing someone else's
 		// contacts needs "le membre", not "tu" (which would read as the admin themselves).
 		adminView?: boolean;
+		submitLabel?: string;
+		// Called after a successful save, e.g. to move the onboarding journey on.
+		onSaved?: () => void;
 	} = $props();
 
 	function emptyRow(): EmergencyContact {
@@ -81,9 +86,10 @@
 	action="?/updateEmergencyContacts"
 	use:enhance={() => {
 		submitting = true;
-		return async ({ update }) => {
+		return async ({ result, update }) => {
 			await update({ reset: false });
 			submitting = false;
+			if (result.type === 'success') onSaved?.();
 		};
 	}}
 >
@@ -167,6 +173,6 @@
 		disabled={submitting}
 		class="btn-primary mt-4 px-4 py-2 text-sm disabled:opacity-50"
 	>
-		{submitting ? 'Enregistrement…' : 'Enregistrer'}
+		{submitting ? 'Enregistrement…' : submitLabel}
 	</button>
 </form>

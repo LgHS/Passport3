@@ -8,7 +8,7 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	// PROTOTYPE — the journey's look and flow only. Nothing is saved: "Continuer" just moves on.
+	// PROTOTYPE — profile, photo and emergency contacts really save; the journey itself is not remembered yet.
 	const STEPS = [
 		{ id: 'depart', label: 'Départ', icon: '🏁', eta: 3 },
 		{ id: 'infos', label: 'Mon profil', icon: '🪪', eta: 3 },
@@ -244,10 +244,13 @@
 				<p class="mb-4 text-sm text-gray-600">
 					Une personne à prévenir si quelque chose t’arrive au hackerspace.
 				</p>
-				<div class="mb-5">
-					<EmergencyContactsForm contacts={data.emergencyContacts} maxContacts={data.maxEmergencyContacts} {form} />
-				</div>
-				<button type="button" onclick={next} class="btn-primary px-5 py-2.5 text-sm">Continuer →</button>
+				<EmergencyContactsForm
+					contacts={data.emergencyContacts}
+					maxContacts={data.maxEmergencyContacts}
+					{form}
+					submitLabel="Enregistrer et continuer →"
+					onSaved={next}
+				/>
 			{:else if step.id === 'competences'}
 				<h2 class="mb-1 text-lg font-bold">🛠️ Ce que tu sais faire</h2>
 				<p class="mb-4 text-sm text-gray-600">
