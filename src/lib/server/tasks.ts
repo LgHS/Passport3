@@ -1,49 +1,26 @@
 import { getDb } from '$lib/server/db';
+import { deriveStatus, isoDay, sortMembers } from '$lib/taskRules';
 
 // Workshop to-do board — see migrations.ts's migration 10. One-off tasks only for now (no
 // recurrence/rotation yet). A task can have several people on it, one of them its leader.
+//
+// The shapes live in $lib/taskTypes and the rules in $lib/taskRules, both importable by the page;
+// this module is only the database access. Re-exported so existing
+// `import type { Task } from '$lib/server/tasks'` keeps working.
 
-export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done';
-export type BlockedKind = 'internal' | 'external';
+export type {
+	BlockedKind,
+	Person,
+	Task,
+	TaskInput,
+	TaskMember,
+	TaskStatus
+} from '$lib/taskTypes';
+import type { BlockedKind, Person, Task, TaskInput } from '$lib/taskTypes';
+export { publicTaskUrl } from '$lib/taskRules';
 
-export interface Person {
-	sub: string;
-	label: string;
-}
-
-export interface TaskMember extends Person {
-	// True when an admin put them on the task rather than them volunteering.
-	imposed: boolean;
-	isLeader: boolean;
-}
-
-export interface Task {
-	id: number;
-	createdAt: string;
-	authorSub: string;
-	authorLabel: string;
-	createdByAdmin: boolean;
-	priority: number;
-	title: string;
-	description: string | null;
-	dueDate: string | null;
-	// Derived: done when marked so, else blocked when flagged, else "en cours" once someone
-	// explicitly started it — people being on it isn't enough.
-	status: TaskStatus;
-	startedAt: string | null;
-	blocked: { kind: BlockedKind; note: string } | null;
-	members: TaskMember[];
-	doneAt: string | null;
-}
-
-export interface TaskInput {
-	title: string;
-	description: string | null;
-	dueDate: string | null;
-	priority: number;
-}
-
-interface TaskRow {
+// Exported so the tests can build rows the way Postgres hands them over.
+export interface TaskRow {
 	id: number;
 	created_at: Date;
 	author_sub: string;
@@ -59,7 +36,7 @@ interface TaskRow {
 	blocked_note: string | null;
 }
 
-interface MemberRow {
+export interface MemberRow {
 	task_id: number;
 	member_sub: string;
 	member_label: string;
@@ -67,18 +44,19 @@ interface MemberRow {
 	is_leader: boolean;
 }
 
-// DATE comes back as a Date at local midnight; keep only its calendar day.
-function isoDay(date: Date): string {
-	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function toTask(r: TaskRow, memberRows: MemberRow[]): Task {
+// Exported for tests/taskRules.test.ts: the mapping from rows to a Task is where the derived
+// fields (`status`, `imposed`, the member order) are actually produced, so it is worth covering.
+export function toTask(r: TaskRow, memberRows: MemberRow[]): Task {
 	const members = memberRows.map((m) => ({
 		sub: m.member_sub,
 		label: m.member_label,
+		// A row carrying who assigned them is a member an admin put there, not a volunteer.
 		imposed: m.assigned_by_sub !== null,
 		isLeader: m.is_leader
 	}));
+	const blocked = r.blocked_kind
+		? { kind: r.blocked_kind as BlockedKind, note: r.blocked_note ?? '' }
+		: null;
 	return {
 		id: r.id,
 		createdAt: r.created_at.toISOString(),
@@ -89,13 +67,14 @@ function toTask(r: TaskRow, memberRows: MemberRow[]): Task {
 		title: r.title,
 		description: r.description,
 		dueDate: r.due_date ? isoDay(r.due_date) : null,
-		status: r.done_at ? 'done' : r.blocked_kind ? 'blocked' : r.started_at ? 'in_progress' : 'todo',
+		status: deriveStatus({
+			doneAt: r.done_at ? r.done_at.toISOString() : null,
+			blocked,
+			startedAt: r.started_at ? r.started_at.toISOString() : null
+		}),
 		startedAt: r.started_at ? r.started_at.toISOString() : null,
-		blocked: r.blocked_kind
-			? { kind: r.blocked_kind as BlockedKind, note: r.blocked_note ?? '' }
-			: null,
-		// Leader first, then in the order people joined.
-		members: members.sort((a, b) => Number(b.isLeader) - Number(a.isLeader)),
+		blocked,
+		members: sortMembers(members),
 		doneAt: r.done_at ? r.done_at.toISOString() : null
 	};
 }
@@ -254,15 +233,6 @@ export async function listTaskEvents(taskId: number): Promise<TaskEvent[]> {
 	});
 }
 
-// Passport's public address, for links in Mattermost messages. There's no dedicated setting: the
-// OIDC redirect URI always points at Passport itself. null if it isn't configured.
-export function publicTaskUrl(taskId: number, redirectUri: string | undefined): string | null {
-	try {
-		return redirectUri ? `${new URL(redirectUri).origin}/tasks?task=${taskId}` : null;
-	} catch {
-		return null;
-	}
-}
 
 // Dashboard's "Mes tâches": tasks not done that the member is on.
 export async function listOpenTasksForMember(memberSub: string): Promise<Task[]> {

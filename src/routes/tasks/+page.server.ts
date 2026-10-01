@@ -25,6 +25,17 @@ import { announceTask } from '$lib/server/taskAnnouncements';
 import { env } from '$env/dynamic/private';
 import { displayName, isAdmin, type AppUser } from '$lib/types';
 import { DEFAULT_TASK_PRIORITY, TASK_PRIORITIES } from '$lib/taskPriority';
+import {
+	actionSource,
+	canAssign,
+	canDeleteTask,
+	canEditTask,
+	canFlagBlocked,
+	canLeave,
+	canProgress,
+	isOnTask,
+	isOwnerOrLeader
+} from '$lib/taskRules';
 
 const URGENT_PRIORITY = TASK_PRIORITIES[TASK_PRIORITIES.length - 1].value;
 
@@ -73,20 +84,13 @@ function validateTaskInput(formData: FormData): { ok: true; input: TaskInput } |
 	return { ok: true, input: { title, description: description || null, dueDate: dueDate || null, priority } };
 }
 
-const isOnTask = (task: Task, sub: string) => task.members.some((m) => m.sub === sub);
-
-// The task's owner (its author) and its leader manage it alongside admins: they can assign
-// members and block/unblock it.
-const isOwnerOrLeader = (task: Task, sub: string) =>
-	task.authorSub === sub || task.members.some((m) => m.sub === sub && m.isLeader);
-const canAssign = (task: Task, user: AppUser) => isAdmin(user) || isOwnerOrLeader(task, user.sub);
-// Deleting: admins, the owner, or the leader — except the leader of a task an admin created.
-const isLeader = (task: Task, sub: string) => task.members.some((m) => m.sub === sub && m.isLeader);
-const canDeleteTask = (task: Task, user: AppUser) =>
-	isAdmin(user) || task.authorSub === user.sub || (isLeader(task, user.sub) && !task.createdByAdmin);
-
-// Blocking/unblocking: the task's owner or leader, or an admin.
-const canFlagBlocked = (task: Task, user: AppUser) => isAdmin(user) || isOwnerOrLeader(task, user.sub);
+// The rules themselves live in $lib/taskRules, shared with the page and covered by
+// tests/taskRules.test.ts. These wrappers only bind them to an AppUser, so each action reads the
+// same way as before.
+const canAssignTo = (task: Task, user: AppUser) => canAssign(task, user.sub, isAdmin(user));
+const canDelete = (task: Task, user: AppUser) => canDeleteTask(task, user.sub, isAdmin(user));
+const canBlock = (task: Task, user: AppUser) => canFlagBlocked(task, user.sub, isAdmin(user));
+const canProgressOn = (task: Task, user: AppUser) => canProgress(task, user.sub, isAdmin(user));
 
 // Every task action is recorded twice: in the audit log, with the member concerned as its target
 // (so it shows in /admin/audit and in that member's own "Historique" on /profile), and in the
@@ -104,9 +108,7 @@ async function record(
 	if (action !== 'task.delete') await addTaskEvent(taskId, usernameLabel(user), action, details);
 }
 
-function sourceFor(task: Task, user: AppUser): 'user' | 'admin' {
-	return task.authorSub === user.sub || isOnTask(task, user.sub) ? 'user' : 'admin';
-}
+const sourceFor = (task: Task, user: AppUser) => actionSource(task, user.sub);
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const user = requireUser(locals);
@@ -164,7 +166,7 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const task = await taskFrom(formData);
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
-		if (!isAdmin(user) && task.authorSub !== user.sub) return fail(403, { error: 'Action non autorisée.' });
+		if (!canEditTask(task, user.sub, isAdmin(user))) return fail(403, { error: 'Action non autorisée.' });
 		const result = validateTaskInput(formData);
 		if (!result.ok) return fail(400, { error: result.error });
 
@@ -199,9 +201,12 @@ export const actions: Actions = {
 		const user = requireUser(locals);
 		const task = await taskFrom(await request.formData());
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
-		const me = task.members.find((m) => m.sub === user.sub);
-		if (!me) return fail(400, { error: "Tu n'es pas sur cette tâche." });
-		if (me.imposed) return fail(403, { error: 'Une tâche assignée par un admin ne peut pas être refusée.' });
+		const allowed = canLeave(task, user.sub);
+		if (!allowed.ok) {
+			return allowed.reason === 'not_on_task'
+				? fail(400, { error: "Tu n'es pas sur cette tâche." })
+				: fail(403, { error: 'Une tâche assignée par un admin ne peut pas être refusée.' });
+		}
 
 		await removeTaskMember(task.id, user.sub);
 		await record(user, 'user', 'task.leave', targetFromSub(user.sub), task.id, {
@@ -217,7 +222,7 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const task = await taskFrom(formData);
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
-		if (!canAssign(task, user)) return fail(403, { error: 'Action non autorisée.' });
+		if (!canAssignTo(task, user)) return fail(403, { error: 'Action non autorisée.' });
 		const pks = new Set(formData.getAll('assigneePk').map(Number));
 		if (pks.size === 0) return fail(400, { error: 'Choisis au moins un membre.' });
 
@@ -251,7 +256,7 @@ export const actions: Actions = {
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
 		// Same people as for assigning: an admin delegates the task's management to its owner and
 		// leader, who can remove anyone, including members an admin put on it.
-		if (!canAssign(task, user)) return fail(403, { error: 'Action non autorisée.' });
+		if (!canAssignTo(task, user)) return fail(403, { error: 'Action non autorisée.' });
 		if (!isOnTask(task, memberSub)) return fail(400, { error: "Ce membre n'est pas sur cette tâche." });
 
 		await removeTaskMember(task.id, memberSub);
@@ -285,7 +290,7 @@ export const actions: Actions = {
 		const user = requireUser(locals);
 		const task = await taskFrom(await request.formData());
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
-		if (!isAdmin(user) && !isOnTask(task, user.sub)) {
+		if (!canProgressOn(task, user)) {
 			return fail(403, { error: 'Seules les personnes sur la tâche peuvent la marquer comme faite.' });
 		}
 
@@ -300,7 +305,7 @@ export const actions: Actions = {
 		const user = requireUser(locals);
 		const task = await taskFrom(await request.formData());
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
-		if (!isAdmin(user) && !isOnTask(task, user.sub)) return fail(403, { error: 'Action non autorisée.' });
+		if (!canProgressOn(task, user)) return fail(403, { error: 'Action non autorisée.' });
 
 		await setTaskDone(task.id, false);
 		await record(user, sourceFor(task, user), 'task.reopen', targetFromSub(user.sub), task.id, {
@@ -314,7 +319,7 @@ export const actions: Actions = {
 		const user = requireUser(locals);
 		const task = await taskFrom(await request.formData());
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
-		if (!isAdmin(user) && !isOnTask(task, user.sub)) {
+		if (!canProgressOn(task, user)) {
 			return fail(403, { error: 'Seules les personnes sur la tâche peuvent la démarrer.' });
 		}
 		if (task.status === 'done') return fail(409, { error: 'Cette tâche est déjà faite.' });
@@ -329,7 +334,7 @@ export const actions: Actions = {
 		const user = requireUser(locals);
 		const task = await taskFrom(await request.formData());
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
-		if (!isAdmin(user) && !isOnTask(task, user.sub)) return fail(403, { error: 'Action non autorisée.' });
+		if (!canProgressOn(task, user)) return fail(403, { error: 'Action non autorisée.' });
 
 		await setTaskStarted(task.id, false);
 		await record(user, sourceFor(task, user), 'task.unstart', targetFromSub(user.sub), task.id, { title: task.title });
@@ -357,7 +362,7 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const task = await taskFrom(formData);
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
-		if (!canFlagBlocked(task, user)) return fail(403, { error: 'Action non autorisée.' });
+		if (!canBlock(task, user)) return fail(403, { error: 'Action non autorisée.' });
 		const kind = String(formData.get('blockedKind') ?? '');
 		const note = String(formData.get('blockedNote') ?? '').trim();
 		if (kind !== 'internal' && kind !== 'external') return fail(400, { error: 'Type de blocage invalide.' });
@@ -381,7 +386,7 @@ export const actions: Actions = {
 		const user = requireUser(locals);
 		const task = await taskFrom(await request.formData());
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
-		if (!canFlagBlocked(task, user)) return fail(403, { error: 'Action non autorisée.' });
+		if (!canBlock(task, user)) return fail(403, { error: 'Action non autorisée.' });
 
 		await setTaskBlocked(task.id, null);
 		await record(user, sourceFor(task, user), 'task.unblock', targetFromSub(task.authorSub), task.id, {
@@ -396,7 +401,7 @@ export const actions: Actions = {
 		const user = requireUser(locals);
 		const task = await taskFrom(await request.formData());
 		if (!task) return fail(404, { error: 'Tâche introuvable.' });
-		if (!canDeleteTask(task, user)) {
+		if (!canDelete(task, user)) {
 			return fail(403, { error: 'Tu ne peux pas supprimer cette tâche.' });
 		}
 
