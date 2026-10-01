@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
-// Liveness only — deliberately does not check Authentik/Dolibarr like the footer's system
+// Liveness only — deliberately does not check Authentik/Mattermost/the database like the footer's system
 // status does. An external dependency outage doesn't mean this process is unhealthy, and
 // shouldn't make an orchestrator treat this container as failed over something a restart can't
 // fix. (Plain Docker/Compose doesn't actually restart a container just for being reported
