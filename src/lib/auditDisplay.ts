@@ -17,6 +17,7 @@ export const ACTION_LABELS: Record<string, string> = {
 	'bankInfo.update': 'Coordonnées bancaires modifiées',
 	'badge.regenerate': 'Badge RFID régénéré',
 	'incident.create': 'Incident déclaré',
+	'incident.delete': 'Déclaration d’incident supprimée',
 	'wishlist.create': 'Proposition wishlist créée',
 	'wishlist.edit': 'Proposition wishlist modifiée',
 	'wishlist.delete': 'Proposition wishlist supprimée',

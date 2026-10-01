@@ -102,3 +102,14 @@ export async function listIncidents(): Promise<Incident[]> {
 		fireDeviceDetails: row.fire_device_details
 	}));
 }
+
+// Removes a declaration for good (an admin correcting a mistaken or duplicate one). Returns what
+// the audit entry needs, or null if there was no such declaration. Its photos are removed
+// separately, by deleteIncidentPhotos().
+export async function deleteIncident(id: number): Promise<{ authorSub: string; kind: IncidentKind } | null> {
+	const sql = await getDb();
+	const [row] = await sql<{ author_sub: string; kind: string }[]>`
+		DELETE FROM incidents WHERE id = ${id} RETURNING author_sub, kind
+	`;
+	return row ? { authorSub: row.author_sub, kind: row.kind as IncidentKind } : null;
+}

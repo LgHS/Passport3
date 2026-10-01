@@ -1,8 +1,15 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import { kindMeta } from '$lib/incidentDisplay';
-	import type { PageData } from './$types';
+	import type { ActionData, PageData } from './$types';
 
-	let { data }: { data: PageData } = $props();
+	let { data, form }: { data: PageData; form: ActionData } = $props();
+
+	$effect(() => {
+		if (form?.deleted) showToast('success', 'Déclaration supprimée.');
+		else if (form?.error) showToast('error', form.error);
+	});
 
 	// Pinned to Brussels so the server-rendered page (UTC) and the browser show the same time.
 	const dateTimeFormat = new Intl.DateTimeFormat('fr-BE', {
@@ -107,9 +114,23 @@
 					</div>
 				{/if}
 
-				<p class="mt-3 text-xs text-gray-500">
-					Déclaré par {incident.authorLabel} le {formatDateTime(incident.createdAt)}
-				</p>
+				<div class="mt-3 flex flex-wrap items-baseline justify-between gap-2">
+					<p class="text-xs text-gray-500">
+						Déclaré par {incident.authorLabel} le {formatDateTime(incident.createdAt)}
+					</p>
+					<form
+						method="POST"
+						action="?/delete"
+						use:enhance={({ cancel }) => {
+							if (!confirm('Supprimer définitivement cette déclaration et ses photos ?')) cancel();
+						}}
+					>
+						<input type="hidden" name="incidentId" value={incident.id} />
+						<button type="submit" class="text-xs font-bold uppercase text-red-700 underline">
+							Supprimer
+						</button>
+					</form>
+				</div>
 			</article>
 		{/each}
 	</div>
