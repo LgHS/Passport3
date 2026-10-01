@@ -193,40 +193,105 @@
 				</p>
 				<button type="button" onclick={next} class="btn-primary px-5 py-2.5 text-sm">C’est parti →</button>
 			{:else if step.id === 'preambule'}
-				<h2 class="mb-1 text-lg font-bold">📖 Préambule</h2>
-				<p class="mb-4 text-sm text-gray-600">Bienvenue au hackerspace ! Avant d’aller plus loin, l’essentiel en trois points.</p>
-				<div class="mb-5 space-y-4 text-sm text-gray-700">
-					<div class="border-l-4 border-lghs-yellow pl-3">
-						<p class="mb-1 font-bold text-black">1. Tu es sur Passport</p>
-						<p>
-							Passport, c’est le système central du hackerspace, et il permet beaucoup de choses. Ton
-							compte te donne accès au chat, au wiki et aux autres outils des membres. Ici, tu tiens ton profil à jour, tu retrouves les
-							autres membres dans le trombinoscope, tu proposes des achats dans la wishlist, tu prends
-							des tâches dans la todolist et tu signales un souci à l’atelier. Si tu cherches quelque
-							chose au hackerspace, commence par ici.
-						</p>
-					</div>
-					<div class="border-l-4 border-lghs-yellow pl-3">
-						<p class="mb-1 font-bold text-black">2. Soyez excellents les uns envers les autres</p>
-						<p>
-							Respect, bienveillance et patience. On vient tous d’horizons différents, avec des niveaux
-							différents, et tout le monde a été débutant·e un jour. Une question n’est jamais bête, et
-							une explication donnée avec le sourire vaut mieux qu’une remarque sèche.
-						</p>
-					</div>
-					<div class="border-l-4 border-lghs-yellow pl-3">
-						<p class="mb-1 font-bold text-black">3. Appliquez la règle des 110 %</p>
-						<p>
-							Fais ta part, et un peu plus. Il n’y a aucun employé au hackerspace : tout est géré par
-							les membres, pour les membres. Une poubelle pleine, un outil qui traîne, une machine à
-							nettoyer, quelqu’un qui cherche son chemin ? Pas besoin d’attendre que quelqu’un d’autre
-							s’en occupe : c’est à toi de jouer.
-						</p>
-					</div>
-					<p>
-						Le hackerspace, c’est ce qu’on en fait ensemble : propose tes idées, partage ce que tu sais,
-						demande quand tu ne sais pas, et laisse l’atelier un peu mieux que tu ne l’as trouvé.
+				<h2 class="mb-2 text-xl font-bold">📖 Bienvenue au Liège Hackerspace !</h2>
+				<div class="mb-5 space-y-2 text-sm text-gray-700">
+					<p class="text-base font-bold text-black">
+						Le hackerspace n’est pas un service que tu consommes. C’est une communauté dont tu fais
+						maintenant partie.
 					</p>
+					<p>Ici, chacun·e apprend, expérimente, construit, partage et contribue à faire vivre le lieu.</p>
+					<p>Avant d’aller plus loin, voici <strong class="text-black">trois principes essentiels</strong>.</p>
+				</div>
+
+				<div class="mb-5 space-y-4 text-sm text-gray-700">
+					<!-- 1 -->
+					<article class="border-2 border-black">
+						<h3 class="flex items-center gap-3 bg-black px-4 py-2 font-bold text-white">
+							<span class="flex h-7 w-7 shrink-0 items-center justify-center bg-lghs-yellow text-black">1</span>
+							🛂 Passport est ton point de départ
+						</h3>
+						<div class="space-y-2 p-4">
+							<p>Tu es actuellement sur <strong class="text-black">Passport</strong>, l’espace membre du hackerspace.</p>
+							<p>
+								Tu y gères ton profil et retrouves les différents services des membres : chat, wiki,
+								trombinoscope, wishlist, todolist, signalement de problèmes et autres outils internes.
+							</p>
+							<p class="bg-lghs-yellow px-3 py-2 font-bold text-black">Si tu cherches quelque chose, commence par Passport.</p>
+							<!-- The lookup order, as a little path: Passport → wiki → ask → write it down. -->
+							<ol class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold uppercase">
+								<li class="border border-black px-2 py-1">Passport</li>
+								<li aria-hidden="true">→</li>
+								<li class="border border-black px-2 py-1">Wiki</li>
+								<li aria-hidden="true">→</li>
+								<li class="border border-black px-2 py-1">Demande</li>
+								<li aria-hidden="true">→</li>
+								<li class="border border-black bg-black px-2 py-1 text-white">Documente</li>
+							</ol>
+							<p>
+								Si l’information n’y est pas, regarde le wiki. Si elle n’y est toujours pas, demande. Et
+								si tu trouves la réponse, pense à la documenter pour le prochain.
+							</p>
+						</div>
+					</article>
+
+					<!-- 2 -->
+					<article class="border-2 border-black">
+						<h3 class="flex items-center gap-3 bg-black px-4 py-2 font-bold text-white">
+							<span class="flex h-7 w-7 shrink-0 items-center justify-center bg-lghs-yellow text-black">2</span>
+							❤️ Sois excellent·e avec les autres
+						</h3>
+						<div class="space-y-2 p-4">
+							<p>Le hackerspace rassemble des personnes avec des parcours et des niveaux très différents.</p>
+							<p>
+								Tu peux être expert·e dans un domaine et débutant·e dans un autre. Pose des questions,
+								partage ce que tu sais et respecte les personnes, leur matériel et leurs projets.
+							</p>
+							<p class="bg-lghs-yellow px-3 py-2 font-bold text-black">
+								Il n’y a pas de question idiote et aucune raison de prendre quelqu’un de haut.
+							</p>
+							<p>Le partage des connaissances fait partie de l’ADN du hackerspace.</p>
+						</div>
+					</article>
+
+					<!-- 3 -->
+					<article class="border-2 border-black">
+						<h3 class="flex items-center gap-3 bg-black px-4 py-2 font-bold text-white">
+							<span class="flex h-7 w-7 shrink-0 items-center justify-center bg-lghs-yellow text-black">3</span>
+							🧹 Applique la règle des 110 %
+						</h3>
+						<div class="space-y-2 p-4">
+							<p>Le hackerspace fonctionne grâce à ses membres et repose largement sur la confiance.</p>
+							<p>
+								Cela vaut pour le paiement de tes consommations, ta cotisation, l’utilisation raisonnable
+								des machines et du matériel, ainsi que pour le soin apporté au lieu.
+							</p>
+							<p class="bg-lghs-yellow px-3 py-2 font-bold text-black">Fais ta part, puis un peu plus.</p>
+							<ul class="grid gap-2 sm:grid-cols-2">
+								{#each [
+									['🗑️', 'Une poubelle pleine ?', 'Vide-la.'],
+									['🔧', 'Un outil qui traîne ?', 'Range-le.'],
+									['⚠️', 'Quelque chose est cassé ?', 'Signale-le.'],
+									['🧭', 'Quelqu’un semble perdu ?', 'Aide-le.'],
+									['🦺', 'Tu ne sais pas utiliser une machine en sécurité ?', 'Demande avant d’essayer.']
+								] as [icon, situation, action] (situation)}
+									<li class="flex items-start gap-2 border border-gray-300 px-3 py-2 last:sm:col-span-2">
+										<span aria-hidden="true">{icon}</span>
+										<span>{situation} <strong class="text-black">{action}</strong></span>
+									</li>
+								{/each}
+							</ul>
+						</div>
+					</article>
+				</div>
+
+				<!-- The closing motto. -->
+				<div class="mb-5 bg-black px-5 py-4 text-center text-white">
+					<p class="mb-2 text-sm text-gray-300">Le hackerspace sera ce que ses membres en feront.</p>
+					<p class="mb-2 text-lg font-bold tracking-wide text-lghs-yellow uppercase">Apprends. Fabrique. Partage.</p>
+					<p class="text-sm">
+						Respecte la confiance qui t’est accordée et laisse le lieu un peu mieux que tu ne l’as trouvé.
+					</p>
+					<p class="mt-3 text-base font-bold">Bienvenue à bord. 🖖</p>
 				</div>
 				{@render tickBox(preambuleRead, (v) => (preambuleRead = v), 'J’ai lu et compris')}
 				<button
