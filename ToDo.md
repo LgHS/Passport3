@@ -30,6 +30,7 @@ Pour proposer un sujet ou en discuter, ouvre une issue ou une PR.
 - [ ] **Historique des paiements** — lié à la refonte compta et au retrait de Dolibarr
 - [ ] **Notification Mattermost des actions auditées** — selon les préférences de notification
 - [ ] **Agenda et ouverture du space** — remplace le Google Calendar et pilote la SpaceAPI
+  - Contrainte : les adresses publiques `lghs.be/calendar.php` et `spaceapi.lghs.be` ne changent pas ; seuls leurs scripts PHP vont lire Passport
   - [ ] Créneaux et page Agenda : ouvertures membres (groupe 24/7), ouvertures publiques et événements (groupe dédié), créneaux des assos, fermetures exceptionnelles, répétitions
   - [ ] Flux public `/agenda.ics`, repris par `lghs.be/calendar.php`
   - [ ] État `/api/space/state` lu par la SpaceAPI (avec repli sur ses horaires), boutons « J'ouvre / Je ferme »
