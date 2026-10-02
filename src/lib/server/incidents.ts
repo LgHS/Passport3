@@ -33,7 +33,7 @@ export interface Incident extends Omit<IncidentInput, 'occurredAt'> {
 	createdAt: string;
 	occurredAt: string;
 	authorLabel: string;
-	// Set once an admin removed it from the list. The row stays, see migration 20.
+	// Set once an admin removed it from the list. The row stays, see migration 28.
 	deletedAt: string | null;
 	deletedByLabel: string | null;
 }
@@ -115,7 +115,7 @@ export async function listIncidents(): Promise<Incident[]> {
 }
 
 // Hides a declaration (an admin removing a mistaken or duplicate one). Nothing is destroyed: the
-// row and its photos stay, see migration 20. Returns what the audit entry needs, or null when
+// row and its photos stay, see migration 28. Returns what the audit entry needs, or null when
 // there is no such declaration **or it was already removed** — so removing one twice is reported
 // as not found rather than silently rewriting who removed it and when.
 export async function softDeleteIncident(

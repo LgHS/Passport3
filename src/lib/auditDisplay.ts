@@ -17,7 +17,7 @@ export const ACTION_LABELS: Record<string, string> = {
 	'bankInfo.update': 'Coordonnées bancaires modifiées',
 	'badge.regenerate': 'Badge RFID régénéré',
 	'incident.create': 'Incident déclaré',
-	// Retirée, pas supprimée : la déclaration reste en base et consultable (migration 20).
+	// Retirée, pas supprimée : la déclaration reste en base et consultable (migration 28).
 	'incident.delete': 'Déclaration d’incident retirée de la liste',
 	'wishlist.create': 'Proposition wishlist créée',
 	'wishlist.edit': 'Proposition wishlist modifiée',

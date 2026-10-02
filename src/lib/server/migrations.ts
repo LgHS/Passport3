@@ -374,7 +374,12 @@ const migrations: Migration[] = [
 		}
 	},
 	{
-		version: 20,
+		// 28, not 20: feat/compta already took 20 through 27 and a developer's database has them
+		// applied, so a migration numbered 20 here is seen as already done and silently skipped —
+		// which is exactly what happened, and showed up as `column "deleted_at" does not exist`.
+		// The gap is harmless: runMigrations applies whatever isn't recorded yet, in version order,
+		// so 20-27 still apply on a database that only has 28.
+		version: 28,
 		name: 'soft-delete incidents',
 		up: async (sql) => {
 			// A declaration an admin removes is hidden, not destroyed. The form tells members these
