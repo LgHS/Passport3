@@ -253,7 +253,7 @@
 					<article class="border-2 border-black">
 						<h3 class="flex items-center gap-3 bg-black px-4 py-2 font-bold text-white">
 							<span class="flex h-7 w-7 shrink-0 items-center justify-center bg-lghs-yellow text-black">3</span>
-							🧹 Appliquez la règle des 110 %
+							🧹 Applique la règle des 110 %
 						</h3>
 						<div class="space-y-2 p-4">
 							<p>Le hackerspace fonctionne grâce à ses membres et repose largement sur la confiance.</p>
