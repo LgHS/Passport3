@@ -1,5 +1,8 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit';
-import { dev } from '$app/environment';
+import { building, dev } from '$app/environment';
+import { env } from '$env/dynamic/private';
+import { env as publicEnv } from '$env/dynamic/public';
+import { checkEnv, formatEnvReport } from '$lib/server/envCheck';
 import { OidcUnavailableError, verifyIdToken } from '$lib/server/authentik';
 import { clearSessionCookie, SESSION_COOKIE } from '$lib/server/session';
 import { startBirthdayScheduler } from '$lib/server/birthdayScheduler';
@@ -9,6 +12,25 @@ import { requireAdmin } from '$lib/server/auth';
 
 // Module scope, not inside `handle` below — runs exactly once per server process, unlike `handle`
 // which runs on every request.
+//
+// The environment first: a missing POSTGRES_PASSWORD or AUTHENTIK_ISSUER used to show up as a 500
+// on whichever page needed it first, so it is checked here and the process refuses to start. Build
+// time is exempt — `vite build` evaluates this module with no environment at all, and so does CI.
+if (!building) {
+	// PUBLIC_* variables live in a separate namespace, hence the two objects merged into one view.
+	const report = checkEnv({ ...env, ...publicEnv });
+	for (const line of formatEnvReport(report)) {
+		if (report.missing.length > 0 && line.startsWith('[env] variables obligatoires')) {
+			console.error(line);
+		} else {
+			console.warn(line);
+		}
+	}
+	if (report.missing.length > 0) {
+		throw new Error(`Variables d'environnement manquantes : ${report.missing.join(', ')}`);
+	}
+}
+
 startBirthdayScheduler();
 startTaskReminderScheduler();
 
