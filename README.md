@@ -171,11 +171,7 @@ full-screen view / API for the workshop's TV.
 
 ## Planned Features
 
-- Payment history
-- Invoice and document downloads
-- Physical access management
-- Notification preferences
-- API for other hackerspace services
+The full, up-to-date list (in French) is in [ToDo.md](ToDo.md).
 
 ## Privacy
 

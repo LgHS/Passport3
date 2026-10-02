@@ -133,11 +133,7 @@ Prévu ensuite : tâches récurrentes avec tour de rôle entre membres, relectur
 
 ## Fonctionnalités prévues
 
-- Historique des paiements
-- Téléchargement de factures et documents
-- Gestion de l'accès physique
-- Préférences de notification
-- API pour les autres services du hackerspace
+La liste complète et à jour est dans [ToDo.md](ToDo.md).
 
 ## Vie privée
 
