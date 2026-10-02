@@ -27,13 +27,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 			])
 		: [null, null, null];
 
+	// Journey already done: nothing to do here, back to the home page.
+	if (onboarding?.completedAt) redirect(303, '/');
+
 	return {
 		firstName: (profile?.name ?? locals.user.name ?? '').trim().split(/\s+/)[0] || 'toi',
 		profile,
 		hasLocalAvatar: profile ? hasUploadedAvatar(profile.email) : false,
 		emergencyContacts: contacts ?? [],
-		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
-		onboardingCompletedAt: onboarding?.completedAt ?? null
+		maxEmergencyContacts: MAX_EMERGENCY_CONTACTS
 	};
 };
 

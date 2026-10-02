@@ -85,11 +85,13 @@
 	let completing = $state(false);
 
 	// A successful save moves the journey on; an error stays on the step, with its message.
-	function afterSave(savingFlag: (v: boolean) => void, okKey: string, errorKey: string) {
+	// `reload: false` skips re-running the page's load: once the journey is done, that load sends the
+	// member home, and the arrival screen must show first.
+	function afterSave(savingFlag: (v: boolean) => void, okKey: string, errorKey: string, reload = true) {
 		return () => {
 			savingFlag(true);
-			return async ({ result, update }: { result: { type: string; data?: Record<string, unknown> }; update: (o?: { reset?: boolean }) => Promise<void> }) => {
-				await update({ reset: false });
+			return async ({ result, update }: { result: { type: string; data?: Record<string, unknown> }; update: (o?: { reset?: boolean; invalidateAll?: boolean }) => Promise<void> }) => {
+				await update({ reset: false, invalidateAll: reload });
 				savingFlag(false);
 				if (result.type === 'success' && result.data?.[okKey]) next();
 				else if (result.type === 'failure') showToast('error', String(result.data?.[errorKey] ?? 'La sauvegarde a échoué.'));
@@ -120,12 +122,6 @@
 
 <section class="mx-auto max-w-4xl">
 	<p class="mb-3 inline-block bg-lghs-yellow px-2 py-0.5 text-xs font-bold uppercase">Prototype · rien ne redirige encore ici</p>
-	{#if data.onboardingCompletedAt}
-		<p class="mb-3 text-xs text-gray-500">
-			Tu as déjà terminé ce parcours le
-			{new Date(data.onboardingCompletedAt).toLocaleDateString('fr-BE', { timeZone: 'Europe/Brussels', day: 'numeric', month: 'long', year: 'numeric' })}.
-		</p>
-	{/if}
 
 	<!-- The route: every stop of the journey, the marker on the current one. -->
 	<div class="relative mb-6 px-8 pt-8 pb-2" aria-label="Progression du parcours">
@@ -238,7 +234,7 @@
 					<article class="border-2 border-black">
 						<h3 class="flex items-center gap-3 bg-black px-4 py-2 font-bold text-white">
 							<span class="flex h-7 w-7 shrink-0 items-center justify-center bg-lghs-yellow text-black">2</span>
-							❤️ Sois excellent·e avec les autres
+							❤️ Soyez excellents avec les autres
 						</h3>
 						<div class="space-y-2 p-4">
 							<p>Le hackerspace rassemble des personnes avec des parcours et des niveaux très différents.</p>
@@ -257,7 +253,7 @@
 					<article class="border-2 border-black">
 						<h3 class="flex items-center gap-3 bg-black px-4 py-2 font-bold text-white">
 							<span class="flex h-7 w-7 shrink-0 items-center justify-center bg-lghs-yellow text-black">3</span>
-							🧹 Applique la règle des 110 %
+							🧹 Appliquez la règle des 110 %
 						</h3>
 						<div class="space-y-2 p-4">
 							<p>Le hackerspace fonctionne grâce à ses membres et repose largement sur la confiance.</p>
@@ -412,7 +408,7 @@
 				</div>
 				{@render tickBox(roiAccepted, (v) => (roiAccepted = v), 'J’ai lu et j’accepte le règlement d’ordre intérieur')}
 				<!-- Finishing sets the `onboarding` flag in Authentik; the arrival only shows once it's saved. -->
-				<form method="POST" action="?/complete" use:enhance={afterSave((v) => (completing = v), 'onboardingCompleted', 'onboardingError')}>
+				<form method="POST" action="?/complete" use:enhance={afterSave((v) => (completing = v), 'onboardingCompleted', 'onboardingError', false)}>
 					<input type="hidden" name="roiAccepted" value={roiAccepted ? 'on' : ''} />
 					<button
 						type="submit"
