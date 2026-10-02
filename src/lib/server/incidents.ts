@@ -33,6 +33,9 @@ export interface Incident extends Omit<IncidentInput, 'occurredAt'> {
 	createdAt: string;
 	occurredAt: string;
 	authorLabel: string;
+	// Set once an admin removed it from the list. The row stays, see migration 20.
+	deletedAt: string | null;
+	deletedByLabel: string | null;
 }
 
 interface IncidentRow {
@@ -51,6 +54,8 @@ interface IncidentRow {
 	first_aid_details: string | null;
 	fire_device_used: boolean;
 	fire_device_details: string | null;
+	deleted_at: Date | null;
+	deleted_by_label: string | null;
 }
 
 export async function createIncident(author: IncidentAuthor, input: IncidentInput): Promise<number> {
@@ -74,12 +79,16 @@ export async function createIncident(author: IncidentAuthor, input: IncidentInpu
 
 // author_sub is deliberately not selected: nothing displays it, and the label is already stored
 // alongside it for that purpose.
+//
+// Removed declarations come back too, carrying `deletedAt`, so the page can offer to show them
+// without a second round trip — the table gains a handful of rows a year, so there is nothing to
+// save by filtering them out in SQL. They are hidden by default on the page, not here.
 export async function listIncidents(): Promise<Incident[]> {
 	const sql = await getDb();
 	const rows = await sql<IncidentRow[]>`
 		SELECT id, created_at, author_label, kind, occurred_at, people, visitor_involved, witnesses,
 		       equipment, description, emergency_services_called, first_aid_used, first_aid_details,
-		       fire_device_used, fire_device_details
+		       fire_device_used, fire_device_details, deleted_at, deleted_by_label
 		FROM incidents
 		ORDER BY occurred_at DESC, id DESC
 	`;
@@ -99,17 +108,26 @@ export async function listIncidents(): Promise<Incident[]> {
 		firstAidUsed: row.first_aid_used,
 		firstAidDetails: row.first_aid_details,
 		fireDeviceUsed: row.fire_device_used,
-		fireDeviceDetails: row.fire_device_details
+		fireDeviceDetails: row.fire_device_details,
+		deletedAt: row.deleted_at ? row.deleted_at.toISOString() : null,
+		deletedByLabel: row.deleted_by_label
 	}));
 }
 
-// Removes a declaration for good (an admin correcting a mistaken or duplicate one). Returns what
-// the audit entry needs, or null if there was no such declaration. Its photos are removed
-// separately, by deleteIncidentPhotos().
-export async function deleteIncident(id: number): Promise<{ authorSub: string; kind: IncidentKind } | null> {
+// Hides a declaration (an admin removing a mistaken or duplicate one). Nothing is destroyed: the
+// row and its photos stay, see migration 20. Returns what the audit entry needs, or null when
+// there is no such declaration **or it was already removed** — so removing one twice is reported
+// as not found rather than silently rewriting who removed it and when.
+export async function softDeleteIncident(
+	id: number,
+	by: IncidentAuthor
+): Promise<{ authorSub: string; kind: IncidentKind } | null> {
 	const sql = await getDb();
 	const [row] = await sql<{ author_sub: string; kind: string }[]>`
-		DELETE FROM incidents WHERE id = ${id} RETURNING author_sub, kind
+		UPDATE incidents
+		SET deleted_at = now(), deleted_by_sub = ${by.sub}, deleted_by_label = ${by.label}
+		WHERE id = ${id} AND deleted_at IS NULL
+		RETURNING author_sub, kind
 	`;
 	return row ? { authorSub: row.author_sub, kind: row.kind as IncidentKind } : null;
 }

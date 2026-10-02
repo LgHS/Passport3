@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DATA_DIR } from '$lib/server/db';
 import { jpegDimensions } from '$lib/server/avatars';
@@ -69,9 +69,4 @@ export function readIncidentPhoto(incidentId: number, n: number): Buffer | null 
 	} catch {
 		return null;
 	}
-}
-
-// All of a declaration's photos, with their folder. Nothing to do if it had none.
-export function deleteIncidentPhotos(incidentId: number): void {
-	rmSync(join(INCIDENTS_DIR, String(incidentId)), { recursive: true, force: true });
 }

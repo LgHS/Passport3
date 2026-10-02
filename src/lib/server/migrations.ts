@@ -372,6 +372,22 @@ const migrations: Migration[] = [
 				)
 			`;
 		}
+	},
+	{
+		version: 20,
+		name: 'soft-delete incidents',
+		up: async (sql) => {
+			// A declaration an admin removes is hidden, not destroyed. The form tells members these
+			// declarations are required "pour des raisons de législation et d'assurance", and the
+			// audit entry deliberately keeps only the id and the kind — so a hard DELETE would leave
+			// no trace at all of an accident an insurer may later ask about. Removing a mistaken or
+			// duplicate declaration from the list is the real need, and that only takes hiding it.
+			// `deleted_by_label` sits next to it the way `author_label` sits next to `author_sub`:
+			// the list shows who did it without a lookup.
+			await sql`ALTER TABLE incidents ADD COLUMN deleted_at TIMESTAMPTZ`;
+			await sql`ALTER TABLE incidents ADD COLUMN deleted_by_sub TEXT`;
+			await sql`ALTER TABLE incidents ADD COLUMN deleted_by_label TEXT`;
+		}
 	}
 ];
 
