@@ -102,7 +102,7 @@
 
 <!-- A big, friendly tick box: the step's button only wakes up once it's ticked. -->
 {#snippet tickBox(checked: boolean, onchange: (v: boolean) => void, label: string)}
-	<label class="group mb-5 flex w-fit cursor-pointer items-center gap-3 text-sm font-bold select-none">
+	<label class="group relative mb-5 flex w-fit cursor-pointer items-center gap-3 text-sm font-bold select-none">
 		<input type="checkbox" {checked} onchange={(e) => onchange(e.currentTarget.checked)} class="peer sr-only" />
 		<span
 			class="flex h-7 w-7 shrink-0 items-center justify-center border-2 border-black text-lg leading-none transition-all duration-200 peer-focus-visible:ring-2 peer-focus-visible:ring-black peer-focus-visible:ring-offset-2 {checked
