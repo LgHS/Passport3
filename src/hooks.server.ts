@@ -14,9 +14,15 @@ import { requireAdmin } from '$lib/server/auth';
 // which runs on every request.
 //
 // The environment first: a missing POSTGRES_PASSWORD or AUTHENTIK_ISSUER used to show up as a 500
-// on whichever page needed it first, so it is checked here and the process refuses to start. Build
-// time is exempt — `vite build` evaluates this module with no environment at all, and so does CI.
-if (!building) {
+// on whichever page needed it first, so it is checked here and the process refuses to start.
+//
+// Two exemptions, both about processes that are not a running Passport:
+//   - `building`: `vite build` evaluates this module with no environment at all.
+//   - Vitest: tests/adminAccess.test.ts imports this module to exercise `handle`, and it mocks
+//     $env/dynamic/public but not the private one, so under test the environment is whatever the
+//     machine happens to have — populated locally from .env, empty in CI. A unit test importing
+//     this file is not a deployment, so it must not be held to a deployment's requirements.
+if (!building && !process.env.VITEST) {
 	// PUBLIC_* variables live in a separate namespace, hence the two objects merged into one view.
 	const report = checkEnv({ ...env, ...publicEnv });
 	for (const line of formatEnvReport(report)) {
