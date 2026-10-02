@@ -290,11 +290,25 @@
 				</div>
 			{/each}
 			{#if photos.length < INCIDENT_MAX_PHOTOS}
+				<!-- The input covers the label instead of being `sr-only`. An `sr-only` input is
+				     positioned absolutely with no positioned ancestor, so its containing block is the
+				     initial one, not the scrolling column of +layout.svelte (`h-dvh overflow-hidden`
+				     around an `overflow-y-auto` content column). Clicking it made the browser scroll
+				     that column to bring it into view, which shifted the whole page and pushed the
+				     footer out of sight. Laid over its own label, there is nothing left to scroll to,
+				     and it stays focusable for the keyboard — which `hidden` would not. -->
 				<label
-					class="flex h-24 w-24 cursor-pointer items-center justify-center border border-dashed border-black text-center text-xs hover:bg-gray-100"
+					class="relative flex h-24 w-24 cursor-pointer items-center justify-center border border-dashed border-black text-center text-xs hover:bg-gray-100 focus-within:bg-gray-100"
 				>
 					{processingPhotos ? 'Préparation…' : '+ Ajouter'}
-					<input type="file" accept="image/*" multiple class="sr-only" onchange={addPhotos} disabled={processingPhotos} />
+					<input
+						type="file"
+						accept="image/*"
+						multiple
+						class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+						onchange={addPhotos}
+						disabled={processingPhotos}
+					/>
 				</label>
 			{/if}
 		</div>
