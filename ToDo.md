@@ -29,7 +29,12 @@ Pour proposer un sujet ou en discuter, ouvre une issue ou une PR.
 - [ ] **Incidents : notification Mattermost** dans un canal admin, pour réagir vite
 - [ ] **Historique des paiements** — lié à la refonte compta et au retrait de Dolibarr
 - [ ] **Notification Mattermost des actions auditées** — selon les préférences de notification
-- [ ] **Pilotage de la SpaceAPI**
+- [ ] **Agenda et ouverture du space** — remplace le Google Calendar et pilote la SpaceAPI
+  - [ ] Créneaux et page Agenda : ouvertures membres (groupe 24/7), ouvertures publiques et événements (groupe dédié), créneaux des assos, fermetures exceptionnelles, répétitions
+  - [ ] Flux public `/agenda.ics`, repris par `lghs.be/calendar.php`
+  - [ ] État `/api/space/state` lu par la SpaceAPI (avec repli sur ses horaires), boutons « J'ouvre / Je ferme »
+  - [ ] Annonces Mattermost des ouvertures et événements
+  - [ ] Import unique des événements du Google Calendar
 - [ ] **Liste des courses**
 - [ ] **Gestion de team via Authentik** — mécanisme à trouver
 - [ ] **Numérisation progressive de l'ardoise**
@@ -44,7 +49,6 @@ Pour proposer un sujet ou en discuter, ouvre une issue ou une PR.
 - [ ] **Récap hebdo : section « sans participant »** — comportement à déterminer
 - [ ] **API pour d'autres services du hackerspace** — liée à l'API des lecteurs RFID
 - [ ] **Changelog** — un lien vers les releases GitHub suffira
-- [ ] **Agenda et réservation du HS** par les membres
 - [ ] **Vote sur une date** (mini Doodle) — à croiser avec l'agenda
 
 ## ⚪ Très basse
