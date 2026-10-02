@@ -16,7 +16,16 @@ vi.mock('$lib/server/auditLog', () => ({ logAuditEvent: audit }));
 const softDeleteIncident = vi.fn(async (id: number, _by: { sub: string; label: string }) =>
 	id === 4 ? { authorSub: '12', kind: 'accident' } : null
 );
-vi.mock('$lib/server/incidents', () => ({ softDeleteIncident, listIncidents: async () => [] }));
+// Declaration 5 is the removed one, so restoring it works and restoring anything else (unknown, or
+// already in the list) comes back null — the `deleted_at IS NOT NULL` clause reports both that way.
+const restoreIncident = vi.fn(async (id: number) =>
+	id === 5 ? { authorSub: '12', kind: 'incident' } : null
+);
+vi.mock('$lib/server/incidents', () => ({
+	softDeleteIncident,
+	restoreIncident,
+	listIncidents: async () => []
+}));
 
 const photos = await import('$lib/server/incidentPhotos');
 const { actions } = await import('../src/routes/admin/incidents/+page.server');
@@ -24,16 +33,20 @@ const { actions } = await import('../src/routes/admin/incidents/+page.server');
 const admin = { sub: '1', name: 'Admin', groups: ['Passport Admin'] };
 const member = { sub: '12', name: 'Membre', groups: ['Membres'] };
 
-function deleteRequest(incidentId: string, user: unknown) {
+function run(action: 'delete' | 'restore', incidentId: string, user: unknown) {
 	const data = new FormData();
 	data.append('incidentId', incidentId);
 	const request = new Request('http://localhost/', { method: 'POST', body: data });
-	return (actions.delete as (event: unknown) => Promise<unknown>)({ request, locals: { user } });
+	return (actions[action] as (event: unknown) => Promise<unknown>)({ request, locals: { user } });
 }
+
+const deleteRequest = (incidentId: string, user: unknown) => run('delete', incidentId, user);
+const restoreRequest = (incidentId: string, user: unknown) => run('restore', incidentId, user);
 
 beforeEach(() => {
 	audit.mockClear();
 	softDeleteIncident.mockClear();
+	restoreIncident.mockClear();
 });
 
 describe('retrait d’une déclaration par un admin', () => {
@@ -97,5 +110,37 @@ describe('retrait d’une déclaration par un admin', () => {
 		await expect(deleteRequest('4', member)).rejects.toMatchObject({ status: 403 });
 		expect(softDeleteIncident).not.toHaveBeenCalled();
 		expect(photos.listIncidentPhotos(4)).toEqual(before);
+	});
+});
+
+describe('remise dans la liste par un admin', () => {
+	it('restaure la déclaration et journalise le numéro et le type, rien d’autre', async () => {
+		expect(await restoreRequest('5', admin)).toEqual({ restored: true });
+		expect(restoreIncident).toHaveBeenCalledWith(5);
+		expect(audit).toHaveBeenCalledOnce();
+		const [, source, action, target, details] = audit.mock.calls[0];
+		expect([source, action, target, details]).toEqual([
+			'admin',
+			'incident.restore',
+			{ pk: 12 },
+			{ incidentId: 5, kind: 'incident' }
+		]);
+	});
+
+	it('répond 404 pour une déclaration déjà dans la liste, sans rien journaliser', async () => {
+		// Le mock ne restaure que la 5 : la 4 n'a jamais été retirée, donc il n'y a rien à remettre.
+		expect(await restoreRequest('4', admin)).toMatchObject({ status: 404 });
+		expect(audit).not.toHaveBeenCalled();
+	});
+
+	it('refuse un identifiant invalide sans toucher à la base', async () => {
+		expect(await restoreRequest('abc', admin)).toMatchObject({ status: 400 });
+		expect(await restoreRequest('0', admin)).toMatchObject({ status: 400 });
+		expect(restoreIncident).not.toHaveBeenCalled();
+	});
+
+	it('refuse un membre qui n’est pas admin', async () => {
+		await expect(restoreRequest('5', member)).rejects.toMatchObject({ status: 403 });
+		expect(restoreIncident).not.toHaveBeenCalled();
 	});
 });

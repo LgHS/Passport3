@@ -374,11 +374,15 @@ const migrations: Migration[] = [
 		}
 	},
 	{
-		// 28, not 20: feat/compta already took 20 through 27 and a developer's database has them
-		// applied, so a migration numbered 20 here is seen as already done and silently skipped —
-		// which is exactly what happened, and showed up as `column "deleted_at" does not exist`.
+		// 28, not 20: feat/compta (#98) already took 20 through 27 and a developer's database has
+		// them applied, so a migration numbered 20 here is seen as already done and silently skipped
+		// — which is exactly what happened, and showed up as `column "deleted_at" does not exist`.
 		// The gap is harmless: runMigrations applies whatever isn't recorded yet, in version order,
 		// so 20-27 still apply on a database that only has 28.
+		//
+		// **The next migration is 29**, even while #98 is unmerged and `main` shows 19 as the last
+		// version here. Numbering from what this file shows says nothing about what another branch
+		// has already written into a real database.
 		version: 28,
 		name: 'soft-delete incidents',
 		up: async (sql) => {

@@ -8,6 +8,7 @@
 
 	$effect(() => {
 		if (form?.deleted) showToast('success', 'Déclaration retirée de la liste.');
+		else if (form?.restored) showToast('success', 'Déclaration remise dans la liste.');
 		else if (form?.error) showToast('error', form.error);
 	});
 
@@ -55,9 +56,18 @@
 					: ''}"
 			>
 				{#if incident.deletedAt}
-					<p class="mb-2 border border-black bg-gray-100 px-2 py-1 text-xs font-bold uppercase">
-						Retirée de la liste par {incident.deletedByLabel} le {formatDateTime(incident.deletedAt)}
-					</p>
+					<div
+						class="mb-2 flex flex-wrap items-center justify-between gap-2 border border-black bg-gray-100 px-2 py-1 text-xs"
+					>
+						<span class="font-bold uppercase">
+							Retirée de la liste par {incident.deletedByLabel} le {formatDateTime(incident.deletedAt)}
+						</span>
+						<!-- No confirmation: putting a declaration back takes nothing away. -->
+						<form method="POST" action="?/restore" use:enhance>
+							<input type="hidden" name="incidentId" value={incident.id} />
+							<button type="submit" class="font-bold uppercase underline">Remettre dans la liste</button>
+						</form>
+					</div>
 				{/if}
 				<div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
 					<p class="font-bold">{meta.icon} {meta.label}</p>
@@ -162,6 +172,16 @@
 	</div>
 {:else}
 	<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-		Aucune déclaration pour le moment.
+		<!-- Without this distinction the page claimed "aucune déclaration" right under a checkbox
+		     offering to show the ones that exist. -->
+		{#if deletedCount > 0}
+			Aucune déclaration dans la liste. {deletedCount > 1
+				? `${deletedCount} ont été retirées`
+				: 'Une a été retirée'} : coche la case ci-dessus pour {deletedCount > 1
+				? 'les'
+				: 'la'} voir.
+		{:else}
+			Aucune déclaration pour le moment.
+		{/if}
 	</p>
 {/if}

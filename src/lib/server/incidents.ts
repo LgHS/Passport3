@@ -131,3 +131,21 @@ export async function softDeleteIncident(
 	`;
 	return row ? { authorSub: row.author_sub, kind: row.kind as IncidentKind } : null;
 }
+
+// Puts a removed declaration back in the list, for a removal made by mistake. The symmetric
+// `deleted_at IS NOT NULL` means restoring one that was never removed reports not found instead of
+// clearing columns that were already empty. Who removed it is cleared along with the date: the
+// declaration is in the list again, so there is nothing left to explain. The audit log keeps both
+// the removal and the restoration either way.
+export async function restoreIncident(
+	id: number
+): Promise<{ authorSub: string; kind: IncidentKind } | null> {
+	const sql = await getDb();
+	const [row] = await sql<{ author_sub: string; kind: string }[]>`
+		UPDATE incidents
+		SET deleted_at = NULL, deleted_by_sub = NULL, deleted_by_label = NULL
+		WHERE id = ${id} AND deleted_at IS NOT NULL
+		RETURNING author_sub, kind
+	`;
+	return row ? { authorSub: row.author_sub, kind: row.kind as IncidentKind } : null;
+}
