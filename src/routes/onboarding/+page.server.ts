@@ -8,6 +8,7 @@ import {
 	MAX_EMERGENCY_CONTACTS
 } from '$lib/server/authentikAdmin';
 import { logAuditEvent } from '$lib/server/auditLog';
+import { rememberOnboardingCompleted } from '$lib/server/onboardingGate';
 import { hasUploadedAvatar } from '$lib/server/avatars';
 import { authentikPk, displayName } from '$lib/types';
 import { actions as profileActions } from '../profile/+page.server';
@@ -53,6 +54,7 @@ const complete: Action = async ({ locals, request }) => {
 
 	try {
 		const completedAt = await markOnboardingCompleted(pk);
+		rememberOnboardingCompleted(pk);
 		await logAuditEvent({ sub: user.sub, label: displayName(user) }, 'user', 'onboarding.complete', { pk }, { completedAt });
 		return { onboardingCompleted: true };
 	} catch {
