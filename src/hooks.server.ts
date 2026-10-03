@@ -6,6 +6,9 @@ import { startBirthdayScheduler } from '$lib/server/birthdayScheduler';
 import { startTaskReminderScheduler } from '$lib/server/taskReminders';
 import { DATABASE_UNAVAILABLE_MESSAGE, isDatabaseUnavailable } from '$lib/server/db';
 import { requireAdmin } from '$lib/server/auth';
+import { isOpenDuringOnboarding, needsOnboarding } from '$lib/server/onboardingGate';
+import { authentikPk } from '$lib/types';
+import { redirect } from '@sveltejs/kit';
 
 // Module scope, not inside `handle` below — runs exactly once per server process, unlike `handle`
 // which runs on every request.
@@ -38,6 +41,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// alone isn't enough: SvelteKit only re-runs the loads a client says are invalidated, so a
 	// request asking for the page's data alone skips the layout's check entirely.
 	if (isAdminPath(event.url.pathname)) requireAdmin(event.locals);
+
+	// The first-login journey comes first: until it's finished, every other page sends the member
+	// to /onboarding. Checked here for the same reason as /admin above — every request, data
+	// requests and form actions included.
+	if (event.locals.user && !isOpenDuringOnboarding(event.url.pathname)) {
+		const pk = authentikPk(event.locals.user);
+		if (pk && (await needsOnboarding(pk))) redirect(303, '/onboarding');
+	}
 
 	const response = await resolve(event);
 	setSecurityHeaders(response.headers);
