@@ -436,13 +436,16 @@
 
 				<!-- What to type in the banking app, as one centred transfer slip. `select-all` lets a tap
 				     select a whole value, ready to copy. -->
-				<div class="mx-auto mb-5 max-w-md border-4 border-black bg-lghs-yellow px-5 py-5 text-center text-black">
-					<p class="mb-3 text-xs font-bold tracking-wider uppercase">Virement / ordre permanent</p>
-					<p class="text-xs font-bold text-black/60 uppercase">Bénéficiaire</p>
+				<div class="mx-auto mb-5 max-w-md border-2 border-black px-5 py-5 text-center">
+					<p class="mb-4 text-xs font-bold tracking-wider text-gray-500 uppercase">Virement / ordre permanent</p>
+					<p class="text-xs font-bold text-gray-500 uppercase">Bénéficiaire</p>
 					<p class="mb-3 font-bold select-all">{BANK_HOLDER}</p>
-					<p class="text-xs font-bold text-black/60 uppercase">IBAN</p>
-					<p class="mb-3 font-mono text-xl font-bold break-words select-all sm:text-2xl">{BANK_IBAN}</p>
-					<p class="text-xs font-bold text-black/60 uppercase">Communication</p>
+					<p class="text-xs font-bold text-gray-500 uppercase">IBAN</p>
+					<!-- The one thing to get right: a thin yellow marker under it, the site's link underline. -->
+					<p class="mb-3 font-mono text-xl font-bold break-words select-all sm:text-2xl">
+						<span class="bg-[linear-gradient(transparent_70%,var(--color-lghs-yellow)_70%)]">{BANK_IBAN}</span>
+					</p>
+					<p class="text-xs font-bold text-gray-500 uppercase">Communication</p>
 					<p class="font-mono font-bold break-words select-all">{paymentReference}</p>
 				</div>
 				<button type="button" onclick={next} class="btn-primary px-5 py-2.5 text-sm">Continuer →</button>
@@ -456,7 +459,7 @@
 					<p class="mb-2">Art. 3 — Range et nettoie ton poste avant de partir.</p>
 					<p>Art. 4 — Signale tout incident ou accident via Passport.</p>
 				</div>
-				{@render tickBox(roiAccepted, (v) => (roiAccepted = v), 'J’ai lu et j’accepte le règlement d’ordre intérieur')}
+				{@render tickBox(roiAccepted, (v) => (roiAccepted = v), 'J’ai lu et j’accepte sans réserve le règlement d’ordre intérieur')}
 				<!-- Finishing sets the `onboarding` flag in Authentik; the arrival only shows once it's saved. -->
 				<form method="POST" action="?/complete" use:enhance={afterSave((v) => (completing = v), 'onboardingCompleted', 'onboardingError', false)}>
 					<input type="hidden" name="roiAccepted" value={roiAccepted ? 'on' : ''} />
