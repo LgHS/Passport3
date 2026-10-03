@@ -420,17 +420,17 @@
 				<h2 class="mb-1 text-lg font-bold">💶 La cotisation</h2>
 				<div class="mb-5 space-y-3 text-sm text-gray-700">
 					<p>
-						Le hackerspace ne vit que des cotisations de ses membres : loyer, électricité, internet,
-						assurance, entretien des machines et matériel. Pas de subside, pas d’employé : sans
-						cotisations, pas de lieu.
+						Le hackerspace vit en majeure partie des cotisations de ses membres : loyer, électricité,
+						internet, assurance, entretien des machines et matériel. Sans cotisations régulières, pas
+						de lieu.
 					</p>
 					<p class="bg-lghs-yellow px-3 py-2 font-bold text-black">
 						C’est un prix libre éclairé : minimum conseillé 20 € par mois.
 					</p>
 					<p>
-						« Éclairé » veut dire que tu choisis ton montant en connaissant ce que coûte le lieu : donne
-						ce qui est juste pour toi, et un peu plus si tu peux. Le plus simple pour toi comme pour
-						nous, c’est un <strong class="text-black">ordre permanent</strong> mensuel.
+						« Éclairé » veut dire que tu choisis ton montant en connaissance de cause : donne ce qui est
+						juste et surtout possible pour toi, et un peu plus si tu peux. Le plus simple pour toi comme
+						pour nous, c’est un <strong class="text-black">ordre permanent</strong> mensuel.
 					</p>
 				</div>
 
