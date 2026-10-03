@@ -17,6 +17,7 @@
 		{ id: 'photo', label: 'Photo', icon: '📷', eta: 2 },
 		{ id: 'urgence', label: 'Urgence', icon: '🆘', eta: 2 },
 		{ id: 'competences', label: 'Compétences', icon: '🛠️', eta: 1 },
+		{ id: 'cotisation', label: 'Cotisation', icon: '💶', eta: 2 },
 		{ id: 'roi', label: 'ROI', icon: '📜', eta: 1 },
 		{ id: 'arrivee', label: 'Arrivée', icon: '🏠', eta: 0 }
 	] as const;
@@ -29,6 +30,7 @@
 		photo: 'Au rond-point, prends la sortie « photo de profil »',
 		urgence: 'Reste sur la file de droite : contacts d’urgence',
 		competences: 'Prochain arrêt : ce que tu sais faire',
+		cotisation: 'Petit arrêt au péage : la cotisation',
 		roi: 'Dernier virage : le règlement d’ordre intérieur',
 		arrivee: 'Destination atteinte'
 	};
@@ -83,6 +85,24 @@
 	);
 	let savingProfile = $state(false);
 	let completing = $state(false);
+
+	// --- Cotisation: where and how to pay, with the member's own payment reference.
+	const BANK_HOLDER = 'Liège Hackerspace ASBL';
+	const BANK_IBAN = 'BE58 0689 1071 9979';
+	// From the name as edited on the "Mon profil" step, or the username when there's none.
+	const paymentReference = $derived(
+		`Cotisation ${`${firstName} ${lastName}`.trim() || data.profile?.username || ''}`.trim()
+	);
+	let copied = $state<string | null>(null);
+	async function copy(label: string, value: string) {
+		try {
+			await navigator.clipboard.writeText(value);
+			copied = label;
+			setTimeout(() => (copied === label ? (copied = null) : null), 2000);
+		} catch {
+			showToast('error', 'Copie impossible : sélectionne le texte à la main.');
+		}
+	}
 
 	// A successful save moves the journey on; an error stays on the step, with its message.
 	// `reload: false` skips re-running the page's load: once the journey is done, that load sends the
@@ -184,8 +204,8 @@
 				<p class="mb-1 text-4xl" aria-hidden="true">🏁</p>
 				<h1 class="mb-2 text-xl font-bold">Bienvenue au Liège Hackerspace, {data.firstName} !</h1>
 				<p class="mb-5 text-sm text-gray-600">
-					On t’emmène faire le tour de ton compte : un mot sur le hackerspace, tes infos, ta photo, tes contacts d’urgence et
-					le règlement. Ça prend environ 4 minutes, et tu peux passer ce qui ne te concerne pas.
+					On t’emmène faire le tour de ton compte : un mot sur le hackerspace, tes infos, ta photo, tes contacts d’urgence, la
+					cotisation et le règlement. Ça prend environ 4 minutes, et tu peux passer ce qui ne te concerne pas.
 				</p>
 				<button type="button" onclick={next} class="btn-primary px-5 py-2.5 text-sm">C’est parti →</button>
 			{:else if step.id === 'preambule'}
@@ -395,6 +415,41 @@
 						<span class="border border-black px-2 py-1 text-xs font-bold">{tag}</span>
 					{/each}
 				</div>
+				<button type="button" onclick={next} class="btn-primary px-5 py-2.5 text-sm">Continuer →</button>
+			{:else if step.id === 'cotisation'}
+				<h2 class="mb-1 text-lg font-bold">💶 La cotisation</h2>
+				<div class="mb-5 space-y-3 text-sm text-gray-700">
+					<p>
+						Le hackerspace ne vit que des cotisations de ses membres : loyer, électricité, internet,
+						assurance, entretien des machines et matériel. Pas de subside, pas d’employé : sans
+						cotisations, pas de lieu.
+					</p>
+					<p class="bg-lghs-yellow px-3 py-2 font-bold text-black">
+						C’est un prix libre éclairé : minimum conseillé 20 € par mois.
+					</p>
+					<p>
+						« Éclairé » veut dire que tu choisis ton montant en connaissant ce que coûte le lieu : donne
+						ce qui est juste pour toi, et un peu plus si tu peux. Le plus simple pour toi comme pour
+						nous, c’est un <strong class="text-black">ordre permanent</strong> mensuel.
+					</p>
+				</div>
+
+				<!-- What to type in the banking app, each value with its own copy button. -->
+				<dl class="mb-5 divide-y divide-black border-2 border-black text-sm">
+					{#each [['Bénéficiaire', BANK_HOLDER], ['IBAN', BANK_IBAN], ['Communication', paymentReference]] as [label, value] (label)}
+						<div class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
+							<dt class="w-full shrink-0 text-xs font-bold text-gray-500 uppercase sm:w-32">{label}</dt>
+							<dd class="min-w-0 flex-1 font-mono font-bold break-words text-black">{value}</dd>
+							<button
+								type="button"
+								onclick={() => copy(label, value)}
+								class="border border-black px-2 py-1 text-xs font-bold uppercase hover:bg-black hover:text-white"
+							>
+								{copied === label ? 'Copié ✓' : 'Copier'}
+							</button>
+						</div>
+					{/each}
+				</dl>
 				<button type="button" onclick={next} class="btn-primary px-5 py-2.5 text-sm">Continuer →</button>
 			{:else if step.id === 'roi'}
 				<h2 class="mb-1 text-lg font-bold">📜 Règlement d’ordre intérieur</h2>
