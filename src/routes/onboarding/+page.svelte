@@ -4,6 +4,8 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
 	import EmergencyContactsForm from '$lib/components/EmergencyContactsForm.svelte';
+	import { parseRoi, type Block, type Inline } from '$lib/roi/parse';
+	import roiMarkdown from '$lib/roi/roi.md?raw';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -85,6 +87,7 @@
 	);
 	let savingProfile = $state(false);
 	let completing = $state(false);
+	const ROI = parseRoi(roiMarkdown);
 
 	// --- Cotisation: where and how to pay, with the member's own payment reference.
 	const BANK_HOLDER = 'Liège Hackerspace ASBL';
@@ -109,6 +112,27 @@
 		};
 	}
 </script>
+
+{#snippet roiText(text: Inline)}{#each text as part, i (i)}{#if part.bold}<strong class="text-black">{part.text}</strong>{:else}{part.text}{/if}{/each}{/snippet}
+
+{#snippet roiBlock(block: Block)}
+	{#if block.kind === 'p'}
+		<p class="mb-2">{@render roiText(block.text)}</p>
+	{:else}
+		<svelte:element this={block.kind} class="mb-2 space-y-1 pl-5 {block.kind === 'ol' ? 'list-decimal' : 'list-disc'}">
+			{#each block.items as item, i (i)}
+				<li>
+					{@render roiText(item.text)}
+					{#if item.sub.length > 0}
+						<ul class="mt-1 list-[circle] space-y-1 pl-5">
+							{#each item.sub as sub, j (j)}<li>{@render roiText(sub)}</li>{/each}
+						</ul>
+					{/if}
+				</li>
+			{/each}
+		</svelte:element>
+	{/if}
+{/snippet}
 
 <!-- A big, friendly tick box: the step's button only wakes up once it's ticked. -->
 {#snippet tickBox(checked: boolean, onchange: (v: boolean) => void, label: string)}
@@ -451,13 +475,21 @@
 				<button type="button" onclick={next} class="btn-primary px-5 py-2.5 text-sm">Continuer →</button>
 			{:else if step.id === 'roi'}
 				<h2 class="mb-1 text-lg font-bold">📜 Règlement d’ordre intérieur</h2>
-				<p class="mb-3 text-sm text-gray-600">Quelques règles pour que le hackerspace reste un lieu sûr et agréable.</p>
-				<div class="mb-4 max-h-48 overflow-y-auto border border-black bg-gray-50 p-3 text-sm">
-					<p class="mb-2 font-bold">Texte du ROI à venir.</p>
-					<p class="mb-2">Art. 1 — Respecte les autres membres, le matériel et les lieux.</p>
-					<p class="mb-2">Art. 2 — N’utilise une machine que si tu y as été formé·e.</p>
-					<p class="mb-2">Art. 3 — Range et nettoie ton poste avant de partir.</p>
-					<p>Art. 4 — Signale tout incident ou accident via Passport.</p>
+				<p class="mb-3 text-sm text-gray-600">
+					La vie pratique au hackerspace, en complément des statuts. Prends le temps de le lire jusqu’au bout.
+				</p>
+				<!-- The ROI scrolls inside its own frame, so the tick box stays right under it. -->
+				<div class="mb-4 max-h-[60vh] overflow-y-auto border border-black px-4 py-3 text-sm leading-relaxed text-gray-800">
+					{#each ROI as chapter (chapter.title)}
+						<h3 class="mt-5 mb-2 border-b-2 border-lghs-yellow pb-1 text-xs font-bold tracking-wider text-black uppercase first:mt-0">
+							{chapter.title}
+						</h3>
+						{#each chapter.intro as block, i (i)}{@render roiBlock(block)}{/each}
+						{#each chapter.articles as article (article.title)}
+							<h4 class="mt-3 mb-1 font-bold text-black">{article.title}</h4>
+							{#each article.blocks as block, i (i)}{@render roiBlock(block)}{/each}
+						{/each}
+					{/each}
 				</div>
 				{@render tickBox(roiAccepted, (v) => (roiAccepted = v), 'J’ai lu et j’accepte sans réserve le règlement d’ordre intérieur')}
 				<!-- Finishing sets the `onboarding` flag in Authentik; the arrival only shows once it's saved. -->
