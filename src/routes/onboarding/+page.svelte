@@ -88,7 +88,7 @@
 
 	// --- Cotisation: where and how to pay, with the member's own payment reference.
 	const BANK_HOLDER = 'Liège Hackerspace ASBL';
-	const BANK_IBAN = 'BE58 0689 1071 9979';
+	const BANK_IBAN = 'BE58 0689 1071 8879';
 	// From the name as edited on the "Mon profil" step, or the username when there's none.
 	const paymentReference = $derived(
 		`Cotisation ${`${firstName} ${lastName}`.trim() || data.profile?.username || ''}`.trim()
