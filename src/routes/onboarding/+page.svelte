@@ -93,16 +93,6 @@
 	const paymentReference = $derived(
 		`Cotisation ${`${firstName} ${lastName}`.trim() || data.profile?.username || ''}`.trim()
 	);
-	let copied = $state<string | null>(null);
-	async function copy(label: string, value: string) {
-		try {
-			await navigator.clipboard.writeText(value);
-			copied = label;
-			setTimeout(() => (copied === label ? (copied = null) : null), 2000);
-		} catch {
-			showToast('error', 'Copie impossible : sélectionne le texte à la main.');
-		}
-	}
 
 	// A successful save moves the journey on; an error stays on the step, with its message.
 	// `reload: false` skips re-running the page's load: once the journey is done, that load sends the
@@ -432,24 +422,29 @@
 						juste et surtout possible pour toi, et un peu plus si tu peux. Le plus simple pour toi comme
 						pour nous, c’est un <strong class="text-black">ordre permanent</strong> mensuel.
 					</p>
+					<div>
+						<p class="mb-1 font-bold text-black">Ta cotisation comprend :</p>
+						<ul class="list-disc space-y-1 pl-5">
+							<li>
+								l’accès au lieu à chaque ouverture, et en permanence dès que tu obtiens ce
+								privilège&nbsp;;
+							</li>
+							<li>l’accès aux machines et aux consommables, en fair-use (expliqué dans le ROI).</li>
+						</ul>
+					</div>
 				</div>
 
-				<!-- What to type in the banking app, each value with its own copy button. -->
-				<dl class="mb-5 divide-y divide-black border-2 border-black text-sm">
-					{#each [['Bénéficiaire', BANK_HOLDER], ['IBAN', BANK_IBAN], ['Communication', paymentReference]] as [label, value] (label)}
-						<div class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
-							<dt class="w-full shrink-0 text-xs font-bold text-gray-500 uppercase sm:w-32">{label}</dt>
-							<dd class="min-w-0 flex-1 font-mono font-bold break-words text-black">{value}</dd>
-							<button
-								type="button"
-								onclick={() => copy(label, value)}
-								class="border border-black px-2 py-1 text-xs font-bold uppercase hover:bg-black hover:text-white"
-							>
-								{copied === label ? 'Copié ✓' : 'Copier'}
-							</button>
-						</div>
-					{/each}
-				</dl>
+				<!-- What to type in the banking app, as one centred transfer slip. `select-all` lets a tap
+				     select a whole value, ready to copy. -->
+				<div class="mx-auto mb-5 max-w-md border-4 border-black bg-lghs-yellow px-5 py-5 text-center text-black">
+					<p class="mb-3 text-xs font-bold tracking-wider uppercase">Virement / ordre permanent</p>
+					<p class="text-xs font-bold text-black/60 uppercase">Bénéficiaire</p>
+					<p class="mb-3 font-bold select-all">{BANK_HOLDER}</p>
+					<p class="text-xs font-bold text-black/60 uppercase">IBAN</p>
+					<p class="mb-3 font-mono text-xl font-bold break-words select-all sm:text-2xl">{BANK_IBAN}</p>
+					<p class="text-xs font-bold text-black/60 uppercase">Communication</p>
+					<p class="font-mono font-bold break-words select-all">{paymentReference}</p>
+				</div>
 				<button type="button" onclick={next} class="btn-primary px-5 py-2.5 text-sm">Continuer →</button>
 			{:else if step.id === 'roi'}
 				<h2 class="mb-1 text-lg font-bold">📜 Règlement d’ordre intérieur</h2>
