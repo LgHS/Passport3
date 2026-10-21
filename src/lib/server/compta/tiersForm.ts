@@ -15,7 +15,7 @@ export function tiersInputFromForm(formData: FormData): { ok: true; input: Tiers
 	const nom = String(formData.get('nom') ?? '').trim();
 	if (!nom) return { ok: false, error: nature === 'personne_physique' ? 'Le nom est obligatoire.' : 'La dénomination est obligatoire.' };
 	const iban = normalizeIban(String(formData.get('iban') ?? ''));
-	if (iban && !isValidIban(iban)) return { ok: false, error: 'IBAN invalide (vérifiez le numéro).' };
+	if (iban && !isValidIban(iban)) return { ok: false, error: 'IBAN invalide (vérifie le numéro).' };
 	const str = (key: string) => String(formData.get(key) ?? '');
 	return {
 		ok: true,

@@ -177,7 +177,7 @@
 			{/if}
 			{#if f.statut === 'payee'}
 				<form method="POST" action="?/annulerPaiement" use:enhance>
-					<button type="submit" disabled={f.lettre > 0} title={f.lettre > 0 ? 'Payée par un mouvement bancaire : retirez le lettrage sur le mouvement' : ''} class="{btn} w-full">
+					<button type="submit" disabled={f.lettre > 0} title={f.lettre > 0 ? 'Payée par un mouvement bancaire : retire le lettrage sur le mouvement' : ''} class="{btn} w-full">
 						Annuler le paiement
 					</button>
 				</form>

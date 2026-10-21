@@ -25,7 +25,7 @@ export const actions: Actions = {
 	soumettre: async ({ request, locals }) => {
 		if (!locals.user) redirect(302, '/login');
 		const tiers = await resolveTiersForUser(locals.user);
-		if (!tiers) error(404, 'Aucun tiers trouvé pour votre compte.');
+		if (!tiers) error(404, 'Aucun tiers trouvé pour ton compte.');
 
 		const formData = await request.formData();
 		const date = parseFormDate(formData.get('date')) ?? (formData.get('date') ? null : brusselsToday());
@@ -35,7 +35,7 @@ export const actions: Actions = {
 		const echo = { values: { date: String(formData.get('date') ?? ''), libelle, montant: String(formData.get('montant') ?? '') } };
 		if (!date) return fail(400, { ...echo, error: 'Date invalide.' });
 		if (date.getTime() > brusselsToday().getTime()) return fail(400, { ...echo, error: 'La date ne peut pas être dans le futur.' });
-		if (!libelle) return fail(400, { ...echo, error: 'Décrivez la dépense.' });
+		if (!libelle) return fail(400, { ...echo, error: 'Décris la dépense.' });
 		if (montant === null || montant <= 0) return fail(400, { ...echo, error: 'Montant invalide.' });
 
 		let justificatif = null;
@@ -64,7 +64,7 @@ export const actions: Actions = {
 	retirer: async ({ request, locals }) => {
 		if (!locals.user) redirect(302, '/login');
 		const tiers = await resolveTiersForUser(locals.user);
-		if (!tiers) error(404, 'Aucun tiers trouvé pour votre compte.');
+		if (!tiers) error(404, 'Aucun tiers trouvé pour ton compte.');
 		const formData = await request.formData();
 		const id = Number(formData.get('noteId'));
 		try {

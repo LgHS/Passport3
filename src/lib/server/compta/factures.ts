@@ -477,7 +477,7 @@ export async function annulerPaiement(id: number): Promise<Facture> {
 		if (!current) throw new FactureError('Facture introuvable.');
 		if (current.statut !== 'payee') throw new FactureError('Cette facture n’est pas marquée payée.');
 		const [lettre] = await tx`SELECT 1 FROM lettrages WHERE cible_type = 'facture' AND cible_id = ${id} LIMIT 1`;
-		if (lettre) throw new FactureError('Cette facture est payée par un mouvement bancaire : retirez le lettrage sur le mouvement.');
+		if (lettre) throw new FactureError('Cette facture est payée par un mouvement bancaire : retire le lettrage sur le mouvement.');
 		await tx`UPDATE factures SET statut = 'validee', payee_le = NULL, updated_at = now() WHERE id = ${id}`;
 		await tx`UPDATE cotisations SET statut = 'attendue', paye_le = NULL WHERE facture_id = ${id} AND statut = 'active'`;
 	});
@@ -529,7 +529,7 @@ export async function supprimerFactureRecue(id: number): Promise<void> {
 		const [current] = await tx<{ sens: FactureSens }[]>`SELECT sens FROM factures WHERE id = ${id} FOR UPDATE`;
 		if (!current || current.sens !== 'recue') throw new FactureError('Facture reçue introuvable.');
 		const [lettre] = await tx`SELECT 1 FROM lettrages WHERE cible_type = 'facture' AND cible_id = ${id} LIMIT 1`;
-		if (lettre) throw new FactureError('Un paiement est lettré sur cette facture : retirez d’abord le lettrage.');
+		if (lettre) throw new FactureError('Un paiement est lettré sur cette facture : retire d’abord le lettrage.');
 		await tx`UPDATE documents_recus SET statut = 'a_traiter', traite_le = NULL, traite_par = NULL WHERE facture_id = ${id}`;
 		await tx`DELETE FROM factures WHERE id = ${id}`;
 	});

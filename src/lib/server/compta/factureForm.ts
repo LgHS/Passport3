@@ -27,7 +27,7 @@ export function factureInputFromForm(formData: FormData): { ok: true; input: Fac
 	const sens = parseSens(formData.get('sens'));
 	if (!sens) return { ok: false, error: 'Sens invalide.' };
 	const tiersId = Number(formData.get('tiersId'));
-	if (!Number.isInteger(tiersId) || tiersId <= 0) return { ok: false, error: 'Choisissez un tiers.' };
+	if (!Number.isInteger(tiersId) || tiersId <= 0) return { ok: false, error: 'Choisis un tiers.' };
 
 	const str = (key: string) => String(formData.get(key) ?? '').trim() || null;
 	const dateEmissionRaw = formData.get('dateEmission');
@@ -52,7 +52,7 @@ export function factureInputFromForm(formData: FormData): { ok: true; input: Fac
 		if (prixUnitaire === null) return { ok: false, error: `Ligne ${i + 1} : prix unitaire invalide.` };
 		lignes.push({ libelle, quantite, prixUnitaire });
 	}
-	if (lignes.length === 0) return { ok: false, error: 'Ajoutez au moins une ligne.' };
+	if (lignes.length === 0) return { ok: false, error: 'Ajoute au moins une ligne.' };
 
 	let cotisation: FactureInput['cotisation'] = null;
 	const cotisationType = formData.get('cotisationType');

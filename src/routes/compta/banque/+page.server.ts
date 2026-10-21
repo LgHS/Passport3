@@ -41,7 +41,7 @@ export const actions: Actions = {
 		const dateValeur = formData.get('dateValeur') ? parseFormDate(formData.get('dateValeur')) : brusselsToday();
 		const libelle = String(formData.get('libelle') ?? '');
 		const echo = { section: 'virement', values: Object.fromEntries(formData) as Record<string, string> };
-		if (!Number.isInteger(deId) || !Number.isInteger(versId)) return fail(400, { ...echo, error: 'Choisissez les deux comptes.' });
+		if (!Number.isInteger(deId) || !Number.isInteger(versId)) return fail(400, { ...echo, error: 'Choisis les deux comptes.' });
 		if (montant === null || montant <= 0) return fail(400, { ...echo, error: 'Montant invalide.' });
 		if (!dateValeur) return fail(400, { ...echo, error: 'Date invalide.' });
 		try {

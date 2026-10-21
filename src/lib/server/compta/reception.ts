@@ -356,7 +356,7 @@ export async function importerDocument(id: number, options: ImportOptions): Prom
 			}
 			facture = await enregistrerFactureUbl(lu, tiersId, { ubl, pdf });
 		} else {
-			if (!options.saisie) throw new ReceptionError('Ce document n’a pas d’UBL : renseignez la facture.');
+			if (!options.saisie) throw new ReceptionError('Ce document n’a pas d’UBL : renseigne la facture.');
 			if (!options.doublonAccepte && options.saisie.numero && (await factureRecueExistante(options.saisie.tiersId, options.saisie.numero))) {
 				throw new ReceptionError(`La facture ${options.saisie.numero} de ce fournisseur est déjà enregistrée.`);
 			}

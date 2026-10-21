@@ -69,8 +69,8 @@ export const actions: Actions = {
 		const montant = parseFormMoney(formData.get('montant') || String(mouvement.reste));
 		const libelle = String(formData.get('libelle') ?? '').trim() || null;
 		if (!type) return fail(400, { error: 'Cible invalide.' });
-		if (type !== 'autre' && (!cibleId || !Number.isInteger(cibleId))) return fail(400, { error: 'Choisissez une cible.' });
-		if (type === 'autre' && !libelle) return fail(400, { error: 'Indiquez à quoi correspond ce mouvement.' });
+		if (type !== 'autre' && (!cibleId || !Number.isInteger(cibleId))) return fail(400, { error: 'Choisis une cible.' });
+		if (type === 'autre' && !libelle) return fail(400, { error: 'Indique à quoi correspond ce mouvement.' });
 		if (montant === null) return fail(400, { error: 'Montant invalide.' });
 		try {
 			const l = await lettrer(mouvement.id, { type, id: type === 'autre' ? null : cibleId, libelle }, montant);
@@ -200,7 +200,7 @@ export const actions: Actions = {
 		const debut = parseFormDate(formData.get('debut'));
 		const duree = formData.get('duree') === 'annee' ? 12 : 1;
 		const note = String(formData.get('note') ?? '').trim() || null;
-		if (!Number.isInteger(tiersId) || tiersId <= 0) return fail(400, { error: 'Choisissez la personne.' });
+		if (!Number.isInteger(tiersId) || tiersId <= 0) return fail(400, { error: 'Choisis la personne.' });
 		if (!debut) return fail(400, { error: 'Date de début invalide.' });
 		try {
 			await creerCotisationLibre(mouvement.id, { tiersId, debut, fin: addUTCMonths(debut, duree), note });

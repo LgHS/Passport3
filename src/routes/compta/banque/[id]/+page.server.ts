@@ -29,7 +29,7 @@ export const actions: Actions = {
 		const compte = await loadCompte(params);
 		const formData = await request.formData();
 		const file = formData.get('fichier');
-		if (!(file instanceof File) || file.size === 0) return fail(400, { section: 'import', error: 'Choisissez un fichier CSV.' });
+		if (!(file instanceof File) || file.size === 0) return fail(400, { section: 'import', error: 'Choisis un fichier CSV.' });
 		if (file.size > MAX_CSV_BYTES) return fail(400, { section: 'import', error: 'Fichier trop volumineux (5 Mo max).' });
 
 		let parsed;

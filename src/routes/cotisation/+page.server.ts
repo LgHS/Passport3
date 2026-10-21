@@ -114,7 +114,7 @@ export const actions: Actions = {
 	updateBankInfo: async ({ request, locals }) => {
 		const tiers = await resolveOwnTiers(locals);
 		if (!tiers) {
-			error(404, 'Aucun tiers trouvé pour votre compte.');
+			error(404, 'Aucun tiers trouvé pour ton compte.');
 		}
 		const user = locals.user!;
 		const pk = authentikPk(user);
@@ -124,7 +124,7 @@ export const actions: Actions = {
 		// Empty is a valid submission — it means "clear this IBAN" — but anything non-empty has to
 		// be a real, checksum-valid IBAN before it's written into the books.
 		if (ibanPerso && !isValidIban(ibanPerso)) {
-			return fail(400, { error: 'IBAN personnel invalide (vérifiez le numéro).', ibanPerso });
+			return fail(400, { error: 'IBAN personnel invalide (vérifie le numéro).', ibanPerso });
 		}
 		if (ibanPerso === normalizeIban(tiers.iban ?? '')) {
 			return { success: true, ibanPerso };

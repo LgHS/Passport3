@@ -84,7 +84,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Délai de paiement invalide (0 à 365 jours).', values });
 		}
 		if (!values.emetteurNom) return fail(400, { error: 'Le nom de l’émetteur est obligatoire.', values });
-		if (emetteurIban && !isValidIban(emetteurIban)) return fail(400, { error: 'IBAN invalide (vérifiez le numéro).', values });
+		if (emetteurIban && !isValidIban(emetteurIban)) return fail(400, { error: 'IBAN invalide (vérifie le numéro).', values });
 		if (!values.mentionTva) return fail(400, { error: 'La mention TVA est obligatoire sur les factures.', values });
 
 		const domaines = normalizeDomaines(values.receptionDomaines);

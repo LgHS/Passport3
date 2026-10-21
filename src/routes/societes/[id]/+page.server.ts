@@ -91,7 +91,7 @@ export const actions: Actions = {
 		const user = locals.user!;
 		const formData = await request.formData();
 		const iban = normalizeIban(String(formData.get('iban') ?? ''));
-		if (iban && !isValidIban(iban)) return fail(400, { error: 'IBAN invalide (vérifiez le numéro).', iban });
+		if (iban && !isValidIban(iban)) return fail(400, { error: 'IBAN invalide (vérifie le numéro).', iban });
 		if (iban === normalizeIban(organisation.iban ?? '')) return fail(400, { error: 'Aucun changement.', iban });
 		// The administrator's own person and the organisation share legitimately (indépendant);
 		// anyone else's IBAN is refused, as on /cotisation.

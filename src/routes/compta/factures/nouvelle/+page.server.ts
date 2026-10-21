@@ -38,7 +38,7 @@ export const actions: Actions = {
 		const tresorier = requireTresorierUser(locals);
 		const formData = await request.formData();
 		const file = formData.get('ubl');
-		if (!(file instanceof File) || file.size === 0) return fail(400, { error: 'Choisissez un fichier UBL (.xml).' });
+		if (!(file instanceof File) || file.size === 0) return fail(400, { error: 'Choisis un fichier UBL (.xml).' });
 		if (file.size > MAX_PDF_BYTES) return fail(400, { error: 'Fichier trop volumineux (10 Mo max).' });
 		const bytes = Buffer.from(await file.arrayBuffer());
 

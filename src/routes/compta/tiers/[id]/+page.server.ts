@@ -227,7 +227,7 @@ export const actions: Actions = {
 			const autreId = Number(formData.get('autreId'));
 			const autre = Number.isInteger(autreId) ? await getTiers(autreId) : null;
 			if (!autre || autre.nature === tiers.nature) {
-				return fail(400, { section: 'lien', error: 'Choisissez un tiers de l’autre nature.' });
+				return fail(400, { section: 'lien', error: 'Choisis un tiers de l’autre nature.' });
 			}
 			[organisationId, personneId] = tiers.nature === 'personne_morale' ? [tiers.id, autre.id] : [autre.id, tiers.id];
 		}
@@ -280,7 +280,7 @@ export const actions: Actions = {
 			if (err instanceof SiegesEpuisesError) return fail(400, { section: 'lien', error: err.message });
 			// UNIQUE (organisation_id, personne_id): the pair already exists — edit that one instead.
 			if ((err as { code?: string }).code === '23505') {
-				return fail(400, { section: 'lien', error: 'Ce lien existe déjà : corrigez-le plutôt.' });
+				return fail(400, { section: 'lien', error: 'Ce lien existe déjà : corrige-le plutôt.' });
 			}
 			throw err;
 		}

@@ -37,7 +37,7 @@
 
 		{#if data.tiers === null}
 			<p class="border border-black bg-gray-100 px-4 py-3 text-sm text-gray-600">
-				Nous n'avons pas trouvé votre fiche dans la comptabilité. Contactez la trésorerie via
+				Nous n'avons pas trouvé ta fiche dans la comptabilité. Contacte la trésorerie via
 				<a href="mailto:compta@lghs.be">compta@lghs.be</a>.
 			</p>
 		{:else if data.notes.length > 0}
@@ -81,9 +81,9 @@
 			<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Nouvelle note</h2>
 			<p class="mb-4 text-sm leading-relaxed text-gray-600">
 				Une dépense avancée pour le hackerspace, avec son ticket ou sa facture. La trésorerie la valide, puis
-				rembourse sur votre IBAN{data.tiers.iban ? ` (${data.tiers.iban})` : ''}.
+				rembourse sur ton IBAN{data.tiers.iban ? ` (${data.tiers.iban})` : ''}.
 				{#if !data.tiers.iban}
-					<a href="/cotisation">Renseignez votre IBAN</a> pour être remboursé·e.
+					<a href="/cotisation">Renseigne ton IBAN</a> pour être remboursé·e.
 				{/if}
 			</p>
 			<form

@@ -183,12 +183,12 @@
 				/>
 				{#if data.sources.length > 1}
 					<p class="mt-2 text-sm text-gray-600">
-						Vous êtes couvert·e à la fois par
-						{data.sources.map((s) => (s === null ? 'votre cotisation personnelle' : s)).join(' et par ')}.
+						Tu es couvert·e à la fois par
+						{data.sources.map((s) => (s === null ? 'ta cotisation personnelle' : s)).join(' et par ')}.
 					</p>
 				{:else if data.via}
 					<p class="mt-2 text-sm text-gray-600">
-						Votre cotisation est prise en charge par <span class="font-bold">{data.via}</span>.
+						Ta cotisation est prise en charge par <span class="font-bold">{data.via}</span>.
 					</p>
 				{/if}
 			</div>
@@ -399,7 +399,7 @@
 
 				<p class="mt-3 text-sm text-gray-600">
 					Si le bouton de téléchargement est inactif, la facture est annulée ou son document n'est
-					pas disponible. Pour toute question, contactez
+					pas disponible. Pour toute question, contacte
 					<a href="mailto:compta@lghs.be">compta@lghs.be</a>.
 				</p>
 			{/if}
@@ -477,7 +477,7 @@
 			{#if isPro}
 				<h2 class="mt-8 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">Mes sociétés</h2>
 				<p class="mb-3 text-sm text-gray-600">
-					Vous administrez ces sociétés : leur IBAN, leurs factures et leurs personnes liées se gèrent sur leur page.
+					Tu administres ces sociétés : leur IBAN, leurs factures et leurs personnes liées se gèrent sur leur page.
 				</p>
 				<ul class="space-y-2">
 					{#each data.bankInfo.organisations as org (org.id)}

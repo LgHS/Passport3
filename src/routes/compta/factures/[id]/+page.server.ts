@@ -230,7 +230,7 @@ export const actions: Actions = {
 		if (facture.sens !== 'recue') return fail(400, { error: 'Le PDF d’une facture émise est généré à la validation.' });
 		const formData = await request.formData();
 		const pdf = formData.get('pdf');
-		if (!(pdf instanceof File) || pdf.size === 0) return fail(400, { error: 'Choisissez un fichier PDF.' });
+		if (!(pdf instanceof File) || pdf.size === 0) return fail(400, { error: 'Choisis un fichier PDF.' });
 		if (pdf.type !== 'application/pdf') return fail(400, { error: 'Le fichier doit être un PDF.' });
 		if (pdf.size > MAX_PDF_BYTES) return fail(400, { error: 'PDF trop volumineux (10 Mo max).' });
 		await attachPdf(facture.id, Buffer.from(await pdf.arrayBuffer()));

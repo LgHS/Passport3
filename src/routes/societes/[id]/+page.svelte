@@ -53,7 +53,7 @@
 			<dd>{data.sieges.utilises} / {data.sieges.total} utilisé(s)</dd>
 		</dl>
 		<p class="mb-6 text-sm text-gray-600">
-			Pour modifier la fiche de la société (adresse, contacts, personnes liées), contactez
+			Pour modifier la fiche de la société (adresse, contacts, personnes liées), contacte
 			<a href="mailto:compta@lghs.be">compta@lghs.be</a>.
 		</p>
 

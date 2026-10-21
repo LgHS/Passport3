@@ -144,7 +144,7 @@ export async function reouvrirNoteDeFrais(id: number): Promise<void> {
 		if (note.statut === 'soumise') throw new NoteDeFraisError('Cette note attend déjà une décision.');
 		const [lettre] = await tx`SELECT 1 FROM lettrages WHERE cible_type = 'note_de_frais' AND cible_id = ${id} LIMIT 1`;
 		if (note.statut === 'remboursee' || lettre) {
-			throw new NoteDeFraisError('Cette note est remboursée : retirez d’abord le lettrage sur le mouvement bancaire.');
+			throw new NoteDeFraisError('Cette note est remboursée : retire d’abord le lettrage sur le mouvement bancaire.');
 		}
 		await tx`UPDATE notes_de_frais SET statut = 'soumise', decision_le = NULL, decision_par = NULL, motif = NULL WHERE id = ${id}`;
 	});

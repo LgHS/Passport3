@@ -160,7 +160,7 @@
 		</p>
 		{#if !data.gmail.clientConfigured}
 			<p class="border border-black bg-gray-100 px-4 py-3">
-				Le client OAuth n'est pas configuré : renseignez <code>GMAIL_CLIENT_ID</code> et
+				Le client OAuth n'est pas configuré : renseigne <code>GMAIL_CLIENT_ID</code> et
 				<code>GMAIL_CLIENT_SECRET</code> dans l'environnement (voir <code>.env.example</code>), avec pour URI de
 				redirection autorisée <code class="break-all">{data.gmail.redirectUri}</code>.
 			</p>

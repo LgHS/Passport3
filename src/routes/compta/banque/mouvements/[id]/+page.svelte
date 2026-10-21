@@ -232,7 +232,7 @@
 			<form method="POST" action="?/cotisationLibre" class="grid gap-3 border border-black p-4 sm:grid-cols-4" use:enhance>
 				<p class="text-sm text-gray-600 sm:col-span-4">
 					Crée une cotisation « libre » de {amountFormat.format(m.reste)} pour la personne, payée par ce mouvement — la
-					durée est votre décision d'après la communication, le montant ou ce que le membre a dit.
+					durée est ta décision d'après la communication, le montant ou ce que le membre a dit.
 				</p>
 				<div class="sm:col-span-2">
 					<label class={labelClass} for="tiersId">Personne</label>

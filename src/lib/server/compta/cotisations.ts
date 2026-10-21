@@ -522,11 +522,11 @@ export async function deleteCotisation(id: number): Promise<void> {
 		const [c] = await tx<{ facture_id: number | null }[]>`SELECT facture_id FROM cotisations WHERE id = ${id} FOR UPDATE`;
 		if (!c) throw new SuppressionRefuseeError('Cotisation introuvable.');
 		if (c.facture_id !== null) {
-			throw new SuppressionRefuseeError('Cette cotisation vient d’une facture : annulez-la, ou passez par une note de crédit.');
+			throw new SuppressionRefuseeError('Cette cotisation vient d’une facture : annule-la, ou passe par une note de crédit.');
 		}
 		const [lettre] = await tx`SELECT 1 FROM lettrages WHERE cible_type = 'cotisation' AND cible_id = ${id} LIMIT 1`;
 		if (lettre) {
-			throw new SuppressionRefuseeError('Un paiement est lettré sur cette cotisation : délettrez-le d’abord, ou annulez la cotisation.');
+			throw new SuppressionRefuseeError('Un paiement est lettré sur cette cotisation : délettre-le d’abord, ou annule la cotisation.');
 		}
 		await tx`DELETE FROM cotisations WHERE id = ${id}`;
 	});
