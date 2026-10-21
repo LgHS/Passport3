@@ -121,10 +121,12 @@ function findHeader(lines: string[]): { index: number; columns: RawColumns } | n
 	return null;
 }
 
+// A dot is only ever a thousands separator, so it must be followed by groups of exactly three
+// digits: "12.50" is refused rather than read as 1250, which would be a hundred times too much.
 export function parseBelgianAmount(raw: string): number | null {
-	const s = raw.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
-	if (!/^-?\d+(\.\d{1,2})?$/.test(s)) return null;
-	return Number.parseFloat(s);
+	const s = raw.replace(/\s/g, '');
+	if (!/^-?(\d{1,3}(\.\d{3})+|\d+)(,\d{1,2})?$/.test(s)) return null;
+	return Number.parseFloat(s.replace(/\./g, '').replace(',', '.'));
 }
 
 export function parseBelgianDate(raw: string): Date | null {
