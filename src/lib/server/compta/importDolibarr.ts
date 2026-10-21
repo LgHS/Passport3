@@ -1,6 +1,6 @@
 import type postgres from 'postgres';
 import { getDb } from '$lib/server/db';
-import { dolibarrApiFetch, downloadDolibarrDocument, getMemberTypes, parseDolibarrDate } from '$lib/server/dolibarr';
+import { dolibarrApiFetch, downloadDolibarrDocument, getMemberTypes, parseDolibarrDate, type DolibarrMemberType } from '$lib/server/dolibarr';
 import { attachPdf } from './factures';
 import { listUsers } from '$lib/server/authentikAdmin';
 import { normalizeIban } from '$lib/server/bankValidation';
@@ -40,7 +40,7 @@ export interface ImportReport {
 class DryRunRollback extends Error {}
 
 // Raw Dolibarr shapes, only the fields this import reads. Dolibarr returns numbers as strings.
-interface RawMember {
+export interface RawMember {
 	id: string | number;
 	statut: string | number;
 	morphy?: 'phy' | 'mor' | string;
@@ -63,7 +63,7 @@ interface RawMember {
 	array_options?: { options_iban_perso?: string | null } | null;
 }
 
-interface RawThirdParty {
+export interface RawThirdParty {
 	id: string | number;
 	name: string;
 	status?: string | number;
@@ -81,7 +81,7 @@ interface RawThirdParty {
 	array_options?: { options_iban_pro?: string | null } | null;
 }
 
-interface RawSubscription {
+export interface RawSubscription {
 	rowid?: string | number;
 	id?: string | number;
 	dateh?: string | number | null;
@@ -91,7 +91,7 @@ interface RawSubscription {
 	note?: string | null;
 }
 
-function num(value: string | number | null | undefined): number | null {
+export function num(value: string | number | null | undefined): number | null {
 	if (value === null || value === undefined || value === '') return null;
 	const n = Number(value);
 	return Number.isFinite(n) ? n : null;
@@ -104,7 +104,7 @@ function text(value: string | null | undefined): string | null {
 
 // Dolibarr dates are instants (epoch, Brussels midnight); the compta tables want the calendar day
 // the treasury meant. brusselsToday() applied to that instant gives exactly that day.
-function calendarDay(raw: string | number | null | undefined): Date | null {
+export function calendarDay(raw: string | number | null | undefined): Date | null {
 	const instant = parseDolibarrDate(raw);
 	return instant ? brusselsToday(instant) : null;
 }
@@ -153,21 +153,21 @@ async function fetchJson<T>(path: string): Promise<T> {
 	return (await res.json()) as T;
 }
 
-export async function importDolibarr(dryRun: boolean): Promise<ImportReport> {
-	const report: ImportReport = {
-		dryRun,
-		tiers: { created: 0, updated: 0 },
-		liens: { created: 0, updated: 0 },
-		cotisations: { created: 0, updated: 0 },
-		factures: { created: 0, updated: 0 },
-		comptes: { created: 0, updated: 0 },
-		mouvements: { created: 0, updated: 0 },
-		pdfs: 0,
-		authentikLinked: 0,
-		warnings: []
-	};
+// Everything the import (and the control report, controleDolibarr.ts) reads from Dolibarr and
+// Authentik, fetched up front — no HTTP inside the import's transaction.
+export interface DonneesDolibarr {
+	types: DolibarrMemberType[];
+	members: RawMember[];
+	thirdParties: RawThirdParty[];
+	invoices: RawInvoice[];
+	supplierInvoices: RawSupplierInvoice[];
+	bankAccounts: RawBankAccount[];
+	bankLinesByAccount: Map<number, RawBankLine[]>;
+	subscriptionsByMember: Map<number, RawSubscription[]>;
+	authentikUsers: { pk: number; email: string | null }[];
+}
 
-	// Everything read up front, before the transaction opens — no HTTP inside the transaction.
+export async function chargerDolibarr(): Promise<DonneesDolibarr> {
 	const [types, members, thirdParties, invoices, supplierInvoices, bankAccounts, authentikUsers] = await Promise.all([
 		getMemberTypes(),
 		fetchJson<RawMember[]>('members?limit=0'),
@@ -181,13 +181,32 @@ export async function importDolibarr(dryRun: boolean): Promise<ImportReport> {
 	for (const b of bankAccounts) {
 		bankLinesByAccount.set(Number(b.id), await fetchJson<RawBankLine[]>(`bankaccounts/${Number(b.id)}/lines?limit=0`));
 	}
-	const exemptTypeIds = new Set(types.filter((t) => !t.subscriptionRequired).map((t) => t.id));
-	const thirdPartyById = new Map(thirdParties.map((tp) => [Number(tp.id), tp]));
 	const subscriptionsByMember = new Map<number, RawSubscription[]>();
 	for (const m of members) {
 		const id = Number(m.id);
 		subscriptionsByMember.set(id, await fetchJson<RawSubscription[]>(`members/${id}/subscriptions`));
 	}
+	return { types, members, thirdParties, invoices, supplierInvoices, bankAccounts, bankLinesByAccount, subscriptionsByMember, authentikUsers };
+}
+
+export async function importDolibarr(dryRun: boolean, donnees?: DonneesDolibarr): Promise<ImportReport> {
+	donnees ??= await chargerDolibarr();
+	const report: ImportReport = {
+		dryRun,
+		tiers: { created: 0, updated: 0 },
+		liens: { created: 0, updated: 0 },
+		cotisations: { created: 0, updated: 0 },
+		factures: { created: 0, updated: 0 },
+		comptes: { created: 0, updated: 0 },
+		mouvements: { created: 0, updated: 0 },
+		pdfs: 0,
+		authentikLinked: 0,
+		warnings: []
+	};
+
+	const { types, members, thirdParties, invoices, supplierInvoices, bankAccounts, bankLinesByAccount, subscriptionsByMember, authentikUsers } = donnees;
+	const exemptTypeIds = new Set(types.filter((t) => !t.subscriptionRequired).map((t) => t.id));
+	const thirdPartyById = new Map(thirdParties.map((tp) => [Number(tp.id), tp]));
 	const authentikPkByEmail = new Map<string, number>();
 	for (const u of authentikUsers) {
 		if (u.email) authentikPkByEmail.set(u.email.toLowerCase(), u.pk);
@@ -233,7 +252,7 @@ export async function importDolibarr(dryRun: boolean): Promise<ImportReport> {
 // ---------------------------------------------------------------------------------------------
 // Invoices
 
-interface RawInvoiceLine {
+export interface RawInvoiceLine {
 	desc?: string | null;
 	description?: string | null;
 	product_label?: string | null;
@@ -242,7 +261,7 @@ interface RawInvoiceLine {
 	total_ttc?: string | number;
 }
 
-interface RawInvoice {
+export interface RawInvoice {
 	id: string | number;
 	ref: string;
 	socid?: string | number;
@@ -258,7 +277,7 @@ interface RawInvoice {
 	lines?: RawInvoiceLine[];
 }
 
-interface RawSupplierInvoice {
+export interface RawSupplierInvoice {
 	id: string | number;
 	ref: string;
 	ref_supplier?: string | null;
@@ -275,7 +294,7 @@ interface RawSupplierInvoice {
 }
 
 // Dolibarr FactureStatique: 0 draft, 1 validated, 2 paid (classée payée), 3 abandoned.
-function invoiceStatut(raw: string | number | undefined, paye: string | number | undefined): 'validee' | 'payee' | 'annulee' | null {
+export function invoiceStatut(raw: string | number | undefined, paye: string | number | undefined): 'validee' | 'payee' | 'annulee' | null {
 	const statut = num(raw);
 	if (statut === 0 || statut === null) return null;
 	if (statut === 3) return 'annulee';
@@ -736,7 +755,7 @@ async function linkAuthentikAccounts(tx: postgres.TransactionSql, pkByEmail: Map
 // ---------------------------------------------------------------------------------------------
 // Bank accounts and their lines
 
-interface RawBankAccount {
+export interface RawBankAccount {
 	id: string | number;
 	label: string;
 	// Dolibarr: 0 current, 1 savings, 2 cash.
@@ -745,7 +764,7 @@ interface RawBankAccount {
 	status?: string | number;
 }
 
-interface RawBankLine {
+export interface RawBankLine {
 	id?: string | number;
 	rowid?: string | number;
 	datev?: string | number | null;

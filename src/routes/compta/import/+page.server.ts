@@ -2,6 +2,7 @@ import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireTresorierUser } from '$lib/server/auth';
 import { importDolibarr } from '$lib/server/compta/importDolibarr';
+import { controlerImport } from '$lib/server/compta/controleDolibarr';
 import { DolibarrUnavailableError } from '$lib/server/dolibarr';
 import { AuthentikUnavailableError } from '$lib/server/authentikAdmin';
 import { logAuditEvent } from '$lib/server/auditLog';
@@ -46,6 +47,22 @@ export const actions: Actions = {
 			}
 			if (err instanceof AuthentikUnavailableError) {
 				return fail(503, { error: 'Authentik est injoignable — rien n’a été importé.' });
+			}
+			throw err;
+		}
+	},
+
+	// Read-only: compares Dolibarr with what Passport now holds. Run it right after applying.
+	controle: async ({ locals }) => {
+		requireTresorierUser(locals);
+		try {
+			return { controle: await controlerImport() };
+		} catch (err) {
+			if (err instanceof DolibarrUnavailableError) {
+				return fail(503, { error: 'Dolibarr est injoignable — contrôle impossible.' });
+			}
+			if (err instanceof AuthentikUnavailableError) {
+				return fail(503, { error: 'Authentik est injoignable — contrôle impossible.' });
 			}
 			throw err;
 		}

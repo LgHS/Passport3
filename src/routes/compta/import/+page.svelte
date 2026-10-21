@@ -5,7 +5,7 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	let running = $state<'dry' | 'apply' | null>(null);
+	let running = $state<'dry' | 'apply' | 'controle' | null>(null);
 
 	$effect(() => {
 		if (form?.error) showToast('error', form.error);
@@ -64,6 +64,64 @@
 			{running === 'apply' ? 'Import…' : 'Appliquer'}
 		</button>
 	</form>
+
+	<form
+		method="POST"
+		action="?/controle"
+		class="mb-6 border border-black p-4 text-sm"
+		use:enhance={() => {
+			running = 'controle';
+			return async ({ update }) => {
+				await update({ reset: false });
+				running = null;
+			};
+		}}
+	>
+		<p class="mb-3 text-gray-600">
+			Une fois l’import appliqué, et avant de saisir quoi que ce soit dans Passport : compare Dolibarr et Passport chiffre par
+			chiffre (tiers, factures, cotisations, soldes bancaires, adhérents en ordre aujourd’hui). Rien n’est écrit.
+		</p>
+		<button type="submit" disabled={running !== null} class="btn-primary px-4 py-2 disabled:opacity-50">
+			{running === 'controle' ? 'Contrôle…' : 'Contrôler la reprise'}
+		</button>
+	</form>
+
+	{#if form?.controle}
+		{@const c = form.controle}
+		<h2 class="mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">
+			Contrôle — {c.ecarts.length === 0 ? 'aucun écart' : `${c.ecarts.length} écart${c.ecarts.length > 1 ? 's' : ''}`}
+		</h2>
+		<table class="table-cards mb-4 w-full border-collapse text-sm">
+			<thead>
+				<tr class="bg-gray-100">
+					<th class="border border-black px-3 py-2 text-left">Contrôle</th>
+					<th class="border border-black px-3 py-2 text-right">Dolibarr</th>
+					<th class="border border-black px-3 py-2 text-right">Passport</th>
+					<th class="border border-black px-3 py-2 text-center">Résultat</th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each c.lignes as l (l.domaine)}
+					<tr>
+						<td class="border border-black px-3 py-2 font-bold">{l.domaine}</td>
+						<td class="border border-black px-3 py-2 text-right" data-label="Dolibarr">{l.dolibarr}</td>
+						<td class="border border-black px-3 py-2 text-right" data-label="Passport">{l.passport}</td>
+						<td class="border border-black px-3 py-2 text-center font-bold {l.ok ? '' : 'text-red-700'}" data-label="Résultat">
+							{l.ok ? 'OK' : 'Écart'}
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+		{#if c.ecarts.length > 0}
+			<h3 class="mb-2 text-sm font-bold uppercase">À vérifier</h3>
+			<ul class="list-inside list-disc border border-black bg-gray-100 p-4 text-sm text-gray-700">
+				{#each c.ecarts as e, i (i)}
+					<li><span class="font-bold">{e.domaine}</span> — {e.detail}</li>
+				{/each}
+			</ul>
+		{/if}
+	{/if}
 
 	{#if form?.report}
 		{@const r = form.report}

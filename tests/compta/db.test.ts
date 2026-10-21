@@ -39,8 +39,71 @@ const { createTiers } = await import('$lib/server/compta/tiers');
 const { createFacture, creerNoteDeCredit, getFacture, validerFacture, FactureError } = await import('$lib/server/compta/factures');
 const { autoLettrer, createCompte, createMouvement, delettrer, getMouvement, lettrer, BanqueError } = await import('$lib/server/compta/banque');
 const { listCotisations } = await import('$lib/server/compta/cotisations');
+const { importDolibarr } = await import('$lib/server/compta/importDolibarr');
+const { chargerPassport, comparer } = await import('$lib/server/compta/controleDolibarr');
+const { brusselsToday, addUTCDays } = await import('$lib/server/compta/dates');
+type DonneesDolibarr = import('$lib/server/compta/importDolibarr').DonneesDolibarr;
 
 const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
+
+// Dolibarr dates are epoch seconds; noon UTC is the same calendar day in Brussels all year round.
+const epoch = (d: Date) => Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12) / 1000);
+
+// A small but complete Dolibarr: members in order, in grace and expired, a company member with its
+// contact, an honorary member, a plain client, an issued and a received invoice, a bank account with
+// its opening balance. Relative to today, so the "in order" check has something to compare.
+function dolibarrDeTest(): DonneesDolibarr {
+	const today = brusselsToday();
+	const rel = (days: number) => epoch(addUTCDays(today, days));
+	return {
+		types: [
+			{ id: 1, label: 'Membre', subscriptionRequired: true },
+			{ id: 2, label: 'Membre d’honneur', subscriptionRequired: false }
+		],
+		members: [
+			{ id: 101, statut: 1, morphy: 'phy', typeid: 1, firstname: 'Alice', lastname: 'Martin', email: 'alice@exemple.test', array_options: { options_iban_perso: 'BE71 0961 2345 6769' } },
+			{ id: 102, statut: 1, morphy: 'phy', typeid: 1, firstname: 'Bruno', lastname: 'Leroy', email: 'bruno@exemple.test' },
+			{ id: 103, statut: 1, morphy: 'phy', typeid: 1, firstname: 'Chloé', lastname: 'Dubois', email: null },
+			{ id: 104, statut: 1, morphy: 'mor', typeid: 1, fk_soc: 201, firstname: 'Denis', lastname: 'Petit', email: 'denis@atelier.test' },
+			{ id: 105, statut: 1, morphy: 'phy', typeid: 2, firstname: 'Eva', lastname: 'Honneur', email: null }
+		],
+		thirdParties: [
+			{ id: 201, name: 'Atelier SRL', typent_code: 'TE_SMALL', idprof1: '0123456789', client: 1 },
+			{ id: 202, name: 'Fournil SRL', typent_code: 'TE_SMALL', fournisseur: 1 }
+		],
+		subscriptionsByMember: new Map([
+			[101, [{ rowid: 1001, dateh: rel(-200), datef: rel(165), amount: '120.00' }]],
+			[102, [{ rowid: 1002, dateh: rel(-395), datef: rel(-30), amount: '120.00' }]],
+			[103, [{ rowid: 1003, dateh: rel(-800), datef: rel(-400), amount: '60.00' }]],
+			[104, [{ rowid: 1004, dateh: rel(-100), datef: rel(265), amount: '300.00' }]],
+			[105, []]
+		]),
+		invoices: [
+			{ id: 301, ref: 'FA2026-0001', socid: 201, statut: 2, paye: 1, date: rel(-90), total_ttc: '300.00', lines: [{ desc: 'Cotisation société', qty: 1, total_ttc: '300.00' }] },
+			{ id: 302, ref: 'FA2026-0002', socid: 201, statut: 1, paye: 0, date: rel(-10), total_ttc: '45.50', lines: [{ desc: 'Atelier', qty: 2, total_ttc: '45.50' }] },
+			{ id: 303, ref: '(PROV303)', socid: 201, statut: 0, total_ttc: '10.00' }
+		],
+		supplierInvoices: [{ id: 401, ref: 'SI2026-0001', ref_supplier: 'F-77', socid: 202, statut: 2, paye: 1, date: rel(-60), total_ttc: '82.15', lines: [{ desc: 'Pain', qty: 1, total_ttc: '82.15' }] }],
+		bankAccounts: [{ id: 501, label: 'Belfius', type: 0, iban: 'BE68 5390 0754 7034', status: 0 }],
+		bankLinesByAccount: new Map([
+			[
+				501,
+				[
+					{ id: 9001, datev: rel(-400), amount: '1500.00', label: '(Solde initial)' },
+					{ id: 9002, datev: rel(-90), amount: '300.00', label: 'Atelier SRL' },
+					{ id: 9003, datev: rel(-60), amount: '-82.15', label: 'Fournil' }
+				]
+			]
+		]),
+		authentikUsers: [{ pk: 77, email: 'alice@exemple.test' }]
+	};
+}
+
+async function nombre(table: string): Promise<number> {
+	const sql = await getDb();
+	const [{ count }] = await sql<{ count: number }[]>`SELECT count(*) AS count FROM ${sql(table)}`;
+	return count;
+}
 
 async function unTiers(nom = 'Client SRL') {
 	return createTiers({
@@ -217,6 +280,73 @@ describe.skipIf(!enabled)('compta sur une base réelle', () => {
 			const m = await entree(10, '+++000/0000/00097+++');
 			expect(await autoLettrer([m.id])).toBe(0);
 			expect((await getMouvement(m.id))?.reste).toBe(10);
+		});
+	});
+
+	// Last in the file on purpose: the counts below include what the tests above created.
+	describe('reprise Dolibarr', () => {
+		it('a dry run writes nothing', async () => {
+			const avant = await Promise.all(['tiers', 'cotisations', 'factures', 'mouvements'].map(nombre));
+			const report = await importDolibarr(true, dolibarrDeTest());
+			expect(report.tiers.created).toBeGreaterThan(0);
+			expect(await Promise.all(['tiers', 'cotisations', 'factures', 'mouvements'].map(nombre))).toEqual(avant);
+		});
+
+		it('imports members, companies, cotisations, invoices and the bank account', async () => {
+			const report = await importDolibarr(false, dolibarrDeTest());
+			// Five members, the company's contact person, two third parties (one is member 104's).
+			expect(report.tiers.created).toBe(7);
+			expect(report.liens.created).toBe(1);
+			expect(report.cotisations.created).toBe(4);
+			// The draft is skipped: never issued.
+			expect(report.factures.created).toBe(3);
+			expect(report.comptes.created).toBe(1);
+			expect(report.mouvements.created).toBe(2);
+			expect(report.authentikLinked).toBe(1);
+
+			const sql = await getDb();
+			const [compte] = await sql<{ solde_ouverture: string }[]>`SELECT solde_ouverture FROM comptes WHERE dolibarr_bank_id = 501`;
+			expect(Number(compte.solde_ouverture)).toBe(1500);
+			const [alice] = await sql<{ authentik_pk: number; iban: string }[]>`SELECT authentik_pk, iban FROM tiers WHERE dolibarr_member_id = 101`;
+			expect(alice).toEqual({ authentik_pk: 77, iban: 'BE71096123456769' });
+		});
+
+		it('can be run again without duplicating anything', async () => {
+			const avant = await Promise.all(['tiers', 'tiers_liens', 'cotisations', 'factures', 'mouvements', 'comptes'].map(nombre));
+			const report = await importDolibarr(false, dolibarrDeTest());
+			expect([report.tiers.created, report.liens.created, report.cotisations.created, report.factures.created, report.comptes.created, report.mouvements.created]).toEqual([0, 0, 0, 0, 0, 0]);
+			expect(await Promise.all(['tiers', 'tiers_liens', 'cotisations', 'factures', 'mouvements', 'comptes'].map(nombre))).toEqual(avant);
+		});
+
+		it('passes its own control report: same tiers, invoices, cotisations, balance and members in order', async () => {
+			const today = brusselsToday();
+			const rapport = comparer(dolibarrDeTest(), await chargerPassport(today), today);
+			expect(rapport.ecarts).toEqual([]);
+			expect(rapport.lignes.every((l) => l.ok)).toBe(true);
+			expect(rapport.lignes.find((l) => l.domaine === 'Solde Belfius')?.passport.replace(/\s/g, ' ')).toBe('1 717,85 €');
+			// Alice (paid), the company member Atelier SRL (paid) and Eva (honorary). Bruno is in
+			// Passport's grace period — not in order on either side — and Chloé expired.
+			expect(rapport.lignes.find((l) => l.domaine === 'En ordre aujourd’hui')).toMatchObject({ dolibarr: '3', passport: '3' });
+		});
+
+		it('names each difference once Passport no longer matches Dolibarr', async () => {
+			const sql = await getDb();
+			await sql`UPDATE factures SET total = 45.00 WHERE dolibarr_invoice_id = 302`;
+			await sql`DELETE FROM cotisations WHERE dolibarr_subscription_id = 1001`;
+			await sql`DELETE FROM mouvements WHERE external_id = 'dolibarr-9003'`;
+			const today = brusselsToday();
+			const rapport = comparer(dolibarrDeTest(), await chargerPassport(today), today);
+			// Intl puts a non-breaking space before the € sign.
+			const details = rapport.ecarts.map((e) => `${e.domaine} — ${e.detail}`.replace(/\s/g, ' '));
+			expect(details).toEqual(
+				expect.arrayContaining([
+					expect.stringMatching(/^Factures émises — FA2026-0002 : 45,50 € dans Dolibarr, 45,00 € dans Passport\.$/),
+					expect.stringMatching(/^Cotisations — Alice Martin : souscription 1001 du \d{4}-\d{2}-\d{2} absente de Passport\.$/),
+					expect.stringMatching(/^Solde Belfius — Écart de 82,15 €\.$/),
+					'En ordre aujourd’hui — Alice Martin : en ordre dans Dolibarr, en attente dans Passport.'
+				])
+			);
+			expect(rapport.lignes.filter((l) => !l.ok).map((l) => l.domaine)).toEqual(['Factures émises', 'Cotisations', 'Solde Belfius', 'En ordre aujourd’hui']);
 		});
 	});
 

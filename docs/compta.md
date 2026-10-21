@@ -306,6 +306,24 @@ application ; il est idempotent (clefs `dolibarr_*_id`) et peut être rejoué. C
 Le rapprochement adhérent ↔ compte Authentik se fait par email à l'import (c'est tout ce que
 Dolibarr a), puis `authentik_pk` fait foi.
 
+### Bascule
+
+1. **Répétition sur une copie** : restaurer une sauvegarde de la base de prod sur la préprod,
+   pointer `DOLIBARR_URL` vers le Dolibarr de prod (lecture seule suffit), simuler puis appliquer
+   l'import depuis `/compta/import`, et lire les avertissements.
+2. **Contrôle de la reprise** (même page, « Contrôler la reprise ») juste après l'application :
+   chaque adhérent et chaque tiers retrouvé, nombre et somme des factures émises et reçues (et
+   statut et montant de chacune), cotisations, solde de chaque compte, et — ce qui décide qui
+   entre au hackerspace — les adhérents en ordre aujourd'hui des deux côtés. La période de grâce
+   de Passport n'existe pas dans Dolibarr : un membre en grâce compte comme « pas en ordre » des
+   deux côtés. Chaque écart est listé pour être vérifié à la main.
+3. **Même chose en prod**, puis quelques semaines **en parallèle** : les paiements continuent
+   d'être saisis dans Dolibarr et importés (l'import est rejouable), la trésorerie compare les
+   deux outils à chaque fin de mois.
+4. **Coupure** : on cesse d'écrire dans Dolibarr, dernier import et dernier contrôle. Une fois la
+   reprise validée par le CA, `dolibarr.ts`, `importDolibarr.ts`, `controleDolibarr.ts` et les
+   colonnes `dolibarr_*` peuvent être retirés.
+
 ## Phases
 
 1. **Tiers, liens, cotisations, abonnements, rôle Trésorier, import Dolibarr** ; le statut de
