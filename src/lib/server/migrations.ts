@@ -904,7 +904,14 @@ export async function runMigrations(sql: postgres.Sql): Promise<void> {
 		)
 	`;
 
+	// Two migrations sharing a number is always a bug (two branches each taking "the next one"): the
+	// second would be seen as already applied and silently skipped. Refusing to start is better.
 	const sorted = [...migrations].sort((a, b) => a.version - b.version);
+	for (let i = 1; i < sorted.length; i++) {
+		if (sorted[i].version === sorted[i - 1].version) {
+			throw new Error(`La migration ${sorted[i].version} est définie deux fois : « ${sorted[i - 1].name} » et « ${sorted[i].name} ».`);
+		}
+	}
 	for (const migration of sorted) {
 		await sql.begin(async (tx) => {
 			// Held only for this transaction, released automatically on commit/rollback. Guards
@@ -915,10 +922,20 @@ export async function runMigrations(sql: postgres.Sql): Promise<void> {
 
 			// Re-read after acquiring the lock, not before: another process may have applied this
 			// exact migration while this one was waiting for the lock.
-			const [already] = await tx<{ version: number }[]>`
-				SELECT version FROM schema_migrations WHERE version = ${migration.version}
+			const [already] = await tx<{ version: number; name: string }[]>`
+				SELECT version, name FROM schema_migrations WHERE version = ${migration.version}
 			`;
-			if (already) return;
+			if (already) {
+				// Same number, different migration: this one is being skipped although it never ran.
+				// Only logged — the very first versions were renamed before any real deploy, and a
+				// database from that time must still start.
+				if (already.name !== migration.name) {
+					console.error(
+						`[migrations] la version ${migration.version} est enregistrée sous « ${already.name} » mais le code attend « ${migration.name} » — elle ne sera pas appliquée.`
+					);
+				}
+				return;
+			}
 
 			await migration.up(tx);
 			await tx`INSERT INTO schema_migrations (version, name) VALUES (${migration.version}, ${migration.name})`;
