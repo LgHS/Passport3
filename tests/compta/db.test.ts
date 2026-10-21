@@ -41,6 +41,7 @@ const { autoLettrer, createCompte, createMouvement, delettrer, getMouvement, let
 const { listCotisations } = await import('$lib/server/compta/cotisations');
 const { importDolibarr } = await import('$lib/server/compta/importDolibarr');
 const { chargerPassport, comparer } = await import('$lib/server/compta/controleDolibarr');
+const { getHistoriquePaiements } = await import('$lib/server/compta/paiements');
 const { brusselsToday, addUTCDays } = await import('$lib/server/compta/dates');
 type DonneesDolibarr = import('$lib/server/compta/importDolibarr').DonneesDolibarr;
 
@@ -280,6 +281,51 @@ describe.skipIf(!enabled)('compta sur une base réelle', () => {
 			const m = await entree(10, '+++000/0000/00097+++');
 			expect(await autoLettrer([m.id])).toBe(0);
 			expect((await getMouvement(m.id))?.reste).toBe(10);
+		});
+	});
+
+	describe('historique des paiements', () => {
+		it('shows a member what they paid, how, and what is still owed — and nothing of anyone else', async () => {
+			const sql = await getDb();
+			const moi = await unTiers('Moi');
+			const societe = await unTiers('Ma Société SRL');
+			const autre = await unTiers('Quelqu’un d’autre');
+
+			// An invoice paid in two transfers.
+			const f = await factureValidee(moi.id, 100, 2060);
+			await lettrer((await entree(60)).id, { type: 'facture', id: f.id }, 60);
+			await lettrer((await entree(40)).id, { type: 'facture', id: f.id }, 40);
+			// A cotisation the treasury recorded by hand.
+			await sql`
+				INSERT INTO cotisations (tiers_id, type, debut, fin, montant, statut, paye_le)
+				VALUES (${moi.id}, 'libre', '2026-01-01', '2027-01-01', 20, 'active', '2026-01-03')
+			`;
+			// An expense claim paid back from the cash box.
+			const caisse = await createCompte({ type: 'caisse', nom: 'Caisse', iban: null, soldeOuverture: 0, dateOuverture: day('2020-01-01'), actif: true });
+			const [note] = await sql<{ id: number }[]>`
+				INSERT INTO notes_de_frais (tiers_id, date, libelle, montant, statut) VALUES (${moi.id}, '2026-03-01', 'Filament', 18.40, 'acceptee') RETURNING id
+			`;
+			const sortie = await createMouvement({ compteId: caisse.id, dateValeur: day('2026-03-05'), montant: -18.4, libelle: 'Remboursement', contrepartieNom: null, contrepartieIban: null, communication: null });
+			await lettrer(sortie.id, { type: 'note_de_frais', id: note.id }, 18.4);
+			// The company's invoice, not paid yet; and someone else's, paid.
+			const due = await factureValidee(societe.id, 300, 2061);
+			const ailleurs = await factureValidee(autre.id, 999, 2062);
+			await lettrer((await entree(999)).id, { type: 'facture', id: ailleurs.id }, 999);
+
+			const h = await getHistoriquePaiements(moi.id, [{ id: societe.id, nom: 'Ma Société SRL' }]);
+			expect(h.paiements.map((p) => [p.montant, p.mode, p.objet.split(' du ')[0], p.pour])).toEqual(
+				expect.arrayContaining([
+					[60, 'banque', `Facture ${f.numero}`, null],
+					[40, 'banque', `Facture ${f.numero}`, null],
+					[20, 'manuel', 'Cotisation', null],
+					[-18.4, 'caisse', 'Note de frais — Filament', null]
+				])
+			);
+			expect(h.paiements).toHaveLength(4);
+			expect(h.paiements.some((p) => p.montant === 999)).toBe(false);
+			expect(h.resteDu).toEqual([
+				expect.objectContaining({ factureId: due.id, reste: 300, pour: 'Ma Société SRL', communication: due.communicationStructuree })
+			]);
 		});
 	});
 

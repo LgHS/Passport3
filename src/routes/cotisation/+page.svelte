@@ -289,6 +289,9 @@
 				<h2 class="mt-8 mb-4 bg-black px-4 py-3 text-base font-bold text-white uppercase">
 					Factures
 				</h2>
+				<p class="mb-3 text-sm text-gray-600">
+					Ce que tu as versé, quand, et ce qu’il reste à payer : <a href="/paiements">mes paiements</a>.
+				</p>
 
 				{#if invoiceYears.length > 1}
 					<div class="mb-3 flex items-center justify-between border border-black">

@@ -66,7 +66,7 @@
 	// them: Incidents must always be one glance away.
 	const SECTIONS_STORAGE_KEY = 'sidebar-closed-sections';
 	const SECTION_PATHS: Record<string, string[]> = {
-		account: ['/profile', '/cotisation', '/notes-de-frais', '/societes', '/badge', '/permissions', '/github'],
+		account: ['/profile', '/cotisation', '/paiements', '/notes-de-frais', '/societes', '/badge', '/permissions', '/github'],
 		hackerspace: ['/trombinoscope', '/tasks', '/wishlist'],
 		admin: ['/admin'],
 		compta: ['/compta']
@@ -239,6 +239,14 @@
 							<path d="M2.5 8.5 H17.5" />
 						</svg>
 						Cotisation
+					</a>
+					<a href="/paiements" onclick={closeOverlay} class="{itemClass} {itemStateClass('/paiements')}">
+						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path d="M4 4.5 H16 V15.5 H4 Z" stroke-linejoin="round" />
+							<path d="M7 8 H13 M7 11 H11" stroke-linecap="round" />
+							<path d="M12.5 13.5 L14 12 L15.5 13.5" stroke-linecap="round" stroke-linejoin="round" />
+						</svg>
+						Mes paiements
 					</a>
 					<a href="/notes-de-frais" onclick={closeOverlay} class="{itemClass} {itemStateClass('/notes-de-frais')}">
 						<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5">

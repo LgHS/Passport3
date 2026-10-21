@@ -208,6 +208,22 @@ ne marque, ne déplace ni ne supprime aucun mail, et retient de son côté ce qu
 
 Rien n'entre dans les livres sans cette validation.
 
+## Historique des paiements
+
+`/paiements` (menu « Mon compte ») montre à un membre l'argent qui a réellement circulé entre lui
+— ou une société qu'il administre — et l'ASBL, année par année, et ce qu'il reste à payer avec la
+communication structurée de chaque facture. Tout vient des livres :
+
+- un **lettrage** d'un mouvement bancaire ou de caisse sur une de ses factures, cotisations ou
+  notes de frais : daté du mouvement, positif s'il a versé, négatif si l'ASBL l'a remboursé ;
+- une facture ou une cotisation **marquée payée à la main**, sans mouvement derrière ;
+- ce qui vient de **Dolibarr**, sans mouvement non plus : daté de la facture ou du début de la
+  cotisation, Dolibarr ne gardant pas le jour du virement. Les souscriptions d'une société n'y
+  figurent pas : Dolibarr les facturait, et ce sont ces factures qui sont listées.
+
+Le membre ne voit que la date, le montant, ce qui a été payé et le moyen (virement, caisse,
+trésorerie, historique) — jamais le libellé ni la contrepartie du mouvement bancaire.
+
 ## Rappels de paiement
 
 `/compta/rappels` liste les factures émises échues et non soldées (le reste dû tient compte des
@@ -341,3 +357,5 @@ Dolibarr a), puis `authentik_pk` fait foi.
 7. **Rappels de paiement**, envoyés après validation. *(livré)*
 8. **Comptes annuels au modèle officiel**, rubriques de l'annexe 8, solde d'ouverture. *(livré)*
 9. **Corrections** partout, notifications Mattermost, tables en cartes sur mobile. *(livré)*
+10. **Historique des paiements** côté membre, **contrôle de la reprise** Dolibarr, tests sur une
+    vraie Postgres (numérotation, lettrage, import). *(livré)*
