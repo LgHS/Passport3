@@ -281,12 +281,21 @@ export function parseUbl(xml: string): UblLu {
 		return { libelle: text(get(l, 'Item', 'Name')) ?? text(get(l, 'Item', 'Description')) ?? '—', quantite, net: lineTotal };
 	});
 	const net = lignes.reduce((a, l) => a + l.net, 0);
-	const factor = net > 0 ? total / net : 1;
-	const lignesTtc = lignes.map((l) => ({
-		libelle: l.libelle,
-		quantite: l.quantite,
-		prixUnitaire: (credit ? -1 : 1) * Math.abs(Math.round(((l.net * factor) / l.quantite) * 100) / 100)
-	}));
+	const factor = net > 0 ? Math.abs(total) / net : 1;
+	const sign = credit ? -1 : 1;
+	// The recorded invoice's total is the sum of its lines, so they must add up to the payable
+	// amount to the cent — or the supplier's actual payment no longer fits what we think we owe.
+	// Line totals are worked out in cents, the rounding remainder goes on the last line, and a
+	// line whose unit price doesn't come out to the cent is kept as one unit, its quantity named
+	// in the label. A discount line (negative net) stays negative.
+	const cents = lignes.map((l) => Math.round(sign * l.net * factor * 100));
+	if (cents.length > 0) cents[cents.length - 1] += Math.round(sign * Math.abs(total) * 100) - cents.reduce((a, c) => a + c, 0);
+	const lignesTtc = lignes.map((l, i) => {
+		const prixUnitaire = Math.round(cents[i] / l.quantite) / 100;
+		return Math.round(prixUnitaire * l.quantite * 100) === cents[i]
+			? { libelle: l.libelle, quantite: l.quantite, prixUnitaire }
+			: { libelle: `${l.quantite} × ${l.libelle}`, quantite: 1, prixUnitaire: cents[i] / 100 };
+	});
 
 	let pdf: Buffer | null = null;
 	for (const ref of arr(root.AdditionalDocumentReference)) {
