@@ -233,8 +233,9 @@ export async function listFactures(filter: FactureFilter = {}): Promise<Facture[
 	return rows.map((r) => rowToFacture(r, lignes));
 }
 
-export async function getFacture(id: number): Promise<Facture | null> {
-	const sql = await getDb();
+// `db`: the caller's transaction, see getTiers.
+export async function getFacture(id: number, db?: postgres.Sql | postgres.TransactionSql): Promise<Facture | null> {
+	const sql = db ?? (await getDb());
 	const [row] = await sql<FactureRow[]>`${sql.unsafe(FACTURE_SELECT)} WHERE f.id = ${id}`;
 	if (!row) return null;
 	return rowToFacture(row, await loadLignes(sql, [row.id]));
@@ -419,7 +420,7 @@ export async function validerFacture(id: number, today: Date = brusselsToday()):
 
 		const [row] = await tx<FactureRow[]>`${tx.unsafe(FACTURE_SELECT)} WHERE f.id = ${id}`;
 		const facture = rowToFacture(row, await loadLignes(tx, [id]));
-		const tiers = await getTiers(facture.tiersId);
+		const tiers = await getTiers(facture.tiersId, tx);
 		if (!tiers) throw new FactureError('Tiers introuvable.');
 
 		if (facture.cotisation) {
@@ -446,19 +447,23 @@ export async function validerFacture(id: number, today: Date = brusselsToday()):
 	return (await getFacture(id)) as Facture;
 }
 
-// Manual for now; phase 3's bank matching will call the same thing.
+// Settles the invoice and activates the dues it carried, inside the caller's transaction — the
+// bank allocation that completes a payment must commit or roll back together with it.
+export async function marquerPayeeDans(tx: postgres.TransactionSql, id: number, payeeLe: Date): Promise<void> {
+	const [current] = await tx<{ statut: FactureStatut }[]>`SELECT statut FROM factures WHERE id = ${id} FOR UPDATE`;
+	if (!current) throw new FactureError('Facture introuvable.');
+	if (current.statut !== 'validee') throw new FactureError('Seule une facture validée peut être marquée payée.');
+	await tx`UPDATE factures SET statut = 'payee', payee_le = ${toIsoDate(payeeLe)}, updated_at = now() WHERE id = ${id}`;
+	await tx`
+		UPDATE cotisations SET statut = 'active', paye_le = ${toIsoDate(payeeLe)}
+		WHERE facture_id = ${id} AND statut = 'attendue'
+	`;
+}
+
+// By hand, for a payment that never went through a bank account we import.
 export async function marquerPayee(id: number, payeeLe: Date = brusselsToday()): Promise<Facture> {
 	const sql = await getDb();
-	await sql.begin(async (tx) => {
-		const [current] = await tx<{ statut: FactureStatut }[]>`SELECT statut FROM factures WHERE id = ${id} FOR UPDATE`;
-		if (!current) throw new FactureError('Facture introuvable.');
-		if (current.statut !== 'validee') throw new FactureError('Seule une facture validée peut être marquée payée.');
-		await tx`UPDATE factures SET statut = 'payee', payee_le = ${toIsoDate(payeeLe)}, updated_at = now() WHERE id = ${id}`;
-		await tx`
-			UPDATE cotisations SET statut = 'active', paye_le = ${toIsoDate(payeeLe)}
-			WHERE facture_id = ${id} AND statut = 'attendue'
-		`;
-	});
+	await sql.begin((tx) => marquerPayeeDans(tx, id, payeeLe));
 	return (await getFacture(id)) as Facture;
 }
 

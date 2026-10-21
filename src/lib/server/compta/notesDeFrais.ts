@@ -1,3 +1,4 @@
+import type postgres from 'postgres';
 import { getDb } from '$lib/server/db';
 import { parseIsoDate, parseMoney, toIsoDate } from './dates';
 import { tiersDisplayName, type TiersNature } from './tiers';
@@ -87,8 +88,9 @@ export async function listNotesDeFrais(filter: { tiersId?: number; statut?: Note
 	return rows.map(rowToNote);
 }
 
-export async function getNoteDeFrais(id: number): Promise<NoteDeFrais | null> {
-	const sql = await getDb();
+// `db`: the caller's transaction, see getTiers.
+export async function getNoteDeFrais(id: number, db?: postgres.Sql | postgres.TransactionSql): Promise<NoteDeFrais | null> {
+	const sql = db ?? (await getDb());
 	const [row] = await sql<NoteRow[]>`${sql.unsafe(NOTE_SELECT)} WHERE n.id = ${id}`;
 	return row ? rowToNote(row) : null;
 }

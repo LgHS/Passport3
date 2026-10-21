@@ -1,3 +1,4 @@
+import type postgres from 'postgres';
 import { getDb } from '$lib/server/db';
 import type { AppUser, CotisationStatus } from '$lib/types';
 import { addUTCDays, brusselsToday, parseIsoDate, parseMoney, toIsoDate } from './dates';
@@ -98,8 +99,9 @@ export async function listCotisations(tiersId: number): Promise<Cotisation[]> {
 	return rows.map(rowToCotisation);
 }
 
-export async function getCotisation(id: number): Promise<Cotisation | null> {
-	const sql = await getDb();
+// `db`: the caller's transaction, see getTiers.
+export async function getCotisation(id: number, db?: postgres.Sql | postgres.TransactionSql): Promise<Cotisation | null> {
+	const sql = db ?? (await getDb());
 	const [row] = await sql<CotisationRow[]>`
 		SELECT ${sql.unsafe(COTISATION_COLUMNS)} FROM cotisations WHERE id = ${id}
 	`;

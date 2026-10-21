@@ -1,3 +1,4 @@
+import type postgres from 'postgres';
 import { getDb } from '$lib/server/db';
 import { authentikPk, type AppUser } from '$lib/types';
 import { normalizeIban } from '$lib/server/bankValidation';
@@ -132,8 +133,10 @@ export async function listTiers(filter: TiersFilter = {}): Promise<Tiers[]> {
 	return rows.map(rowToTiers);
 }
 
-export async function getTiers(id: number): Promise<Tiers | null> {
-	const sql = await getDb();
+// Pass `db` from inside a transaction: the pool's other connections may all be held by
+// transactions waiting on the same lock, and asking it for one more would then wait forever.
+export async function getTiers(id: number, db?: postgres.Sql | postgres.TransactionSql): Promise<Tiers | null> {
+	const sql = db ?? (await getDb());
 	const [row] = await sql<TiersRow[]>`SELECT * FROM tiers WHERE id = ${id}`;
 	return row ? rowToTiers(row) : null;
 }

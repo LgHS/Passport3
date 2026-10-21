@@ -3,7 +3,7 @@ import type postgres from 'postgres';
 import { getDb } from '$lib/server/db';
 import { normalizeIban } from '$lib/server/bankValidation';
 import { parseIsoDate, parseMoney, toIsoDate } from './dates';
-import { getFacture, listFactures, marquerPayee, type Facture } from './factures';
+import { getFacture, listFactures, marquerPayeeDans, type Facture } from './factures';
 import { createCotisation, getCotisation } from './cotisations';
 import { getTiers, tiersDisplayName, type Tiers } from './tiers';
 import { getNoteDeFrais, listNotesDeFrais, type NoteDeFrais } from './notesDeFrais';
@@ -211,8 +211,9 @@ export async function listMouvementsNonLettres(limit = 200): Promise<Mouvement[]
 	return rows.map(rowToMouvement);
 }
 
-export async function getMouvement(id: number): Promise<Mouvement | null> {
-	const sql = await getDb();
+// `db`: the caller's transaction, see getTiers.
+export async function getMouvement(id: number, db?: postgres.Sql | postgres.TransactionSql): Promise<Mouvement | null> {
+	const sql = db ?? (await getDb());
 	const [row] = await sql<MouvementRow[]>`${sql.unsafe(MOUVEMENT_SELECT)} WHERE m.id = ${id}`;
 	return row ? rowToMouvement(row) : null;
 }
@@ -472,17 +473,24 @@ export interface CibleInput {
 
 // Allocates `montant` (positive) of a movement to a target, then settles the target if that
 // completes it. Refuses to over-allocate either side.
+//
+// Everything is checked inside the transaction, on rows locked in a fixed order — the movement,
+// then the target: two allocations of the same movement or to the same document (the import's
+// automatic matching and a treasurer at the same moment, a double click) wait for each other,
+// instead of both passing the checks on what was there before either wrote.
 export async function lettrer(mouvementId: number, cible: CibleInput, montant: number): Promise<Lettrage> {
 	if (!(montant > 0)) throw new BanqueError('Le montant à lettrer doit être positif.');
-	const mouvement = await getMouvement(mouvementId);
-	if (!mouvement) throw new BanqueError('Mouvement introuvable.');
-	if (mouvement.transfertId !== null) throw new BanqueError('Un virement interne ne se lettre pas.');
-	if (montant > mouvement.reste + 0.005) throw new BanqueError(`Il ne reste que ${mouvement.reste.toFixed(2)} € à lettrer sur ce mouvement.`);
-
 	const sql = await getDb();
 	const id = await sql.begin(async (tx) => {
+		await tx`SELECT id FROM mouvements WHERE id = ${mouvementId} FOR UPDATE`;
+		const mouvement = await getMouvement(mouvementId, tx);
+		if (!mouvement) throw new BanqueError('Mouvement introuvable.');
+		if (mouvement.transfertId !== null) throw new BanqueError('Un virement interne ne se lettre pas.');
+		if (montant > mouvement.reste + 0.005) throw new BanqueError(`Il ne reste que ${mouvement.reste.toFixed(2)} € à lettrer sur ce mouvement.`);
+
 		if (cible.type === 'facture') {
-			const facture = cible.id ? await getFacture(cible.id) : null;
+			if (cible.id) await tx`SELECT id FROM factures WHERE id = ${cible.id} FOR UPDATE`;
+			const facture = cible.id ? await getFacture(cible.id, tx) : null;
 			if (!facture || facture.statut !== 'validee') throw new BanqueError('Seule une facture validée, non payée, peut être lettrée.');
 			// Money in settles an issued invoice, money out a received one (a credit note is the
 			// other way round: money out settles an issued credit note).
@@ -492,11 +500,13 @@ export async function lettrer(mouvementId: number, cible: CibleInput, montant: n
 			const reste = Math.round((Math.abs(facture.total) - deja) * 100) / 100;
 			if (montant > reste + 0.005) throw new BanqueError(`Il ne reste que ${reste.toFixed(2)} € à payer sur cette facture.`);
 		} else if (cible.type === 'cotisation') {
-			const cotisation = cible.id ? await getCotisation(cible.id) : null;
+			if (cible.id) await tx`SELECT id FROM cotisations WHERE id = ${cible.id} FOR UPDATE`;
+			const cotisation = cible.id ? await getCotisation(cible.id, tx) : null;
 			if (!cotisation || cotisation.statut !== 'attendue') throw new BanqueError('Seule une cotisation en attente de paiement peut être lettrée.');
 			if (mouvement.montant <= 0) throw new BanqueError('Une cotisation se lettre avec une entrée d’argent.');
 		} else if (cible.type === 'note_de_frais') {
-			const note = cible.id ? await getNoteDeFrais(cible.id) : null;
+			if (cible.id) await tx`SELECT id FROM notes_de_frais WHERE id = ${cible.id} FOR UPDATE`;
+			const note = cible.id ? await getNoteDeFrais(cible.id, tx) : null;
 			if (!note || note.statut !== 'acceptee') throw new BanqueError('Seule une note de frais acceptée, non remboursée, peut être lettrée.');
 			if (mouvement.montant >= 0) throw new BanqueError('Un remboursement de frais est une sortie d’argent.');
 			const deja = await totalLettre(tx, 'note_de_frais', note.id);
@@ -510,15 +520,15 @@ export async function lettrer(mouvementId: number, cible: CibleInput, montant: n
 		`;
 
 		if (cible.type === 'facture' && cible.id) {
-			const facture = (await getFacture(cible.id)) as Facture;
+			const facture = (await getFacture(cible.id, tx)) as Facture;
 			const total = await totalLettre(tx, 'facture', facture.id);
 			if (total + 0.005 >= Math.abs(facture.total)) {
-				await marquerPayee(facture.id, mouvement.dateValeur);
+				await marquerPayeeDans(tx, facture.id, mouvement.dateValeur);
 			}
 		} else if (cible.type === 'cotisation' && cible.id) {
 			await tx`UPDATE cotisations SET statut = 'active', paye_le = ${toIsoDate(mouvement.dateValeur)} WHERE id = ${cible.id} AND statut = 'attendue'`;
 		} else if (cible.type === 'note_de_frais' && cible.id) {
-			const note = (await getNoteDeFrais(cible.id)) as NoteDeFrais;
+			const note = (await getNoteDeFrais(cible.id, tx)) as NoteDeFrais;
 			if ((await totalLettre(tx, 'note_de_frais', note.id)) + 0.005 >= note.montant) {
 				await tx`UPDATE notes_de_frais SET statut = 'remboursee', remboursee_le = ${toIsoDate(mouvement.dateValeur)} WHERE id = ${note.id}`;
 			}
@@ -538,7 +548,7 @@ export async function delettrer(lettrageId: number): Promise<void> {
 		`;
 		if (!l || !l.cible_id) return;
 		if (l.cible_type === 'facture') {
-			const facture = await getFacture(l.cible_id);
+			const facture = await getFacture(l.cible_id, tx);
 			if (facture?.statut === 'payee' && (await totalLettre(tx, 'facture', facture.id)) + 0.005 < Math.abs(facture.total)) {
 				await tx`UPDATE factures SET statut = 'validee', payee_le = NULL, updated_at = now() WHERE id = ${facture.id}`;
 				await tx`UPDATE cotisations SET statut = 'attendue', paye_le = NULL WHERE facture_id = ${facture.id} AND statut = 'active'`;
@@ -548,7 +558,7 @@ export async function delettrer(lettrageId: number): Promise<void> {
 				await tx`UPDATE cotisations SET statut = 'attendue', paye_le = NULL WHERE id = ${l.cible_id} AND statut = 'active' AND facture_id IS NULL`;
 			}
 		} else if (l.cible_type === 'note_de_frais') {
-			const note = await getNoteDeFrais(l.cible_id);
+			const note = await getNoteDeFrais(l.cible_id, tx);
 			if (note?.statut === 'remboursee' && (await totalLettre(tx, 'note_de_frais', note.id)) + 0.005 < note.montant) {
 				await tx`UPDATE notes_de_frais SET statut = 'acceptee', remboursee_le = NULL WHERE id = ${note.id}`;
 			}

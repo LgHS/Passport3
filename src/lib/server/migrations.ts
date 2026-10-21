@@ -12,7 +12,7 @@ interface Migration {
 // corrects it, not editing the old entry. Add a feature's table here instead of a module-local
 // `CREATE TABLE IF NOT EXISTS` — see PR #46's review for why: one place to see what tables exist
 // and in what order they were introduced, instead of each module quietly rolling its own.
-const migrations: Migration[] = [
+export const migrations: Migration[] = [
 	{
 		version: 1,
 		name: 'create audit_events',
