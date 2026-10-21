@@ -26,7 +26,10 @@ export class DolibarrApiError extends Error {
 	}
 }
 
-async function dolibarrApiFetch(path: string, init?: RequestInit): Promise<Response> {
+// Since the compta module replaced Dolibarr (docs/compta.md), this file only serves the one-shot
+// import at /compta/import (compta/importDolibarr.ts): nothing at runtime reads Dolibarr anymore,
+// and DOLIBARR_URL / DOLIBARR_API_KEY are only needed while the import is still in use.
+export async function dolibarrApiFetch(path: string, init?: RequestInit): Promise<Response> {
 	// Deliberately outside the try below: a missing/invalid DOLIBARR_URL or DOLIBARR_API_KEY is a
 	// persistent configuration error, not an outage — letting it fall into the network catch would
 	// mislabel it as "temporarily unavailable" and hide the real, non-retriable cause.
@@ -586,8 +589,18 @@ function stripModuleFolder(documentPath: string): string {
 }
 
 async function downloadDocument(documentPath: string): Promise<DolibarrDocument> {
+	return downloadDolibarrDocument('facture', documentPath);
+}
+
+// Supplier invoices live under `fournisseur/facture/<ref>/…` and are served with
+// modulepart=facture_fournisseur — same "the modulepart already scopes the folder" rule as above.
+export type DolibarrModulePart = 'facture' | 'facture_fournisseur';
+
+export async function downloadDolibarrDocument(modulepart: DolibarrModulePart, documentPath: string): Promise<DolibarrDocument> {
+	const relative =
+		modulepart === 'facture' ? stripModuleFolder(documentPath) : documentPath.replace(/^fournisseur\/facture\//, '');
 	const res = await dolibarrApiFetch(
-		`documents/download?modulepart=facture&original_file=${encodeURIComponent(stripModuleFolder(documentPath))}`
+		`documents/download?modulepart=${modulepart}&original_file=${encodeURIComponent(relative)}`
 	);
 	const record = (await res.json()) as RawDocumentDownload;
 	return {

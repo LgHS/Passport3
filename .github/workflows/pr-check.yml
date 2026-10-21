@@ -21,6 +21,23 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Throwaway database for the compta tests that need a real Postgres (tests/compta/db.test.ts):
+    # numbering, allocations and their locks are SQL, a mock would only pretend to check them. Same
+    # major as docker-compose.yml.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: passport
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: passport_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U passport -d passport_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -42,10 +59,17 @@ jobs:
       - name: Type-check
         run: pnpm check
 
-      # Vitest suite under tests/ — pure logic and access rules, no database or external service
-      # needed, so it runs with the same empty environment as the build below.
+      # Vitest suite under tests/ — pure logic and access rules, plus the compta tests that run
+      # against the throwaway database above (skipped wherever TEST_POSTGRES_DB isn't set). No
+      # external service otherwise.
       - name: Unit tests
         run: pnpm test
+        env:
+          TEST_POSTGRES_HOST: localhost
+          TEST_POSTGRES_PORT: 5432
+          TEST_POSTGRES_DB: passport_test
+          TEST_POSTGRES_USER: passport
+          TEST_POSTGRES_PASSWORD: test
 
       # Catches what type-check alone can't: server-only code leaking into the client bundle,
       # build-time env vars ($env/static/*), or anything else that only breaks at actual

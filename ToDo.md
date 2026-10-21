@@ -27,7 +27,7 @@ Pour proposer un sujet ou en discuter, ouvre une issue ou une PR.
 - [ ] **Choix de licence** BSL 1.1 + CLA ([brouillon #78](https://github.com/LgHS/Passport3/pull/78))
 - [ ] **Compétences et machines** sur le trombinoscope — en réflexion
 - [ ] **Incidents : notification Mattermost** dans un canal admin, pour réagir vite
-- [ ] **Historique des paiements** — lié à la refonte compta et au retrait de Dolibarr
+- [x] **Historique des paiements** — `/paiements`, avec la refonte compta ([#98](https://github.com/LgHS/Passport3/pull/98))
 - [ ] **Notification Mattermost des actions auditées** — selon les préférences de notification
 - [ ] **Agenda et ouverture du space** — remplace le Google Calendar et pilote la SpaceAPI
   - Contrainte : les adresses publiques `lghs.be/calendar.php` et `spaceapi.lghs.be` ne changent pas ; seuls leurs scripts PHP vont lire Passport

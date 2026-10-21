@@ -6,17 +6,10 @@ import {
 	getRfidUid,
 	type UserApplication
 } from '$lib/server/authentikAdmin';
-import {
-	getMemberByEmail,
-	getMemberTypes,
-	getMemberSubscriptions,
-	getThirdPartyIbanPro,
-	deriveCotisationStatus,
-	detectCotisationGaps,
-	parseDolibarrDate,
-	DolibarrUnavailableError
-} from '$lib/server/dolibarr';
-import { authentikPk, type CotisationStatus } from '$lib/types';
+import { getSituationForTiers } from '$lib/server/compta/cotisations';
+import { listOrganisationsAdministrees, resolveTiersForUser } from '$lib/server/compta/tiers';
+import { isDatabaseUnavailable } from '$lib/server/db';
+import { authentikPk, type AppUser, type CotisationStatus } from '$lib/types';
 import { hasUploadedAvatar } from '$lib/server/avatars';
 import { listOpenTasksForMember } from '$lib/server/tasks';
 import { lookupMattermostUsername } from '$lib/server/mattermost';
@@ -30,6 +23,7 @@ export interface AppGroup {
 export interface CotisationSummary {
 	status: CotisationStatus | null;
 	datefin: Date | null;
+	finGrace: Date | null;
 	isInactive: boolean;
 }
 
@@ -45,13 +39,13 @@ export interface DashboardChecklist {
 	// An active Mattermost account under the member's email (the directory only keeps active
 	// ones). null when Mattermost couldn't be asked, same reasoning as above.
 	mattermostActivated: boolean | null;
-	// Also null when Dolibarr is unavailable, same reasoning as above — a Dolibarr outage must
-	// never be reported as "IBAN not filled in", which would be actively wrong for a member who
-	// already filled it in.
+	// Also null when the database is unavailable, same reasoning as above — an outage must never
+	// be reported as "IBAN not filled in", which would be actively wrong for a member who already
+	// filled it in.
 	ibanPersoConfigured: boolean | null;
-	// Only meaningful (and only ever rendered) when ibanProApplicable is true — a classic member
-	// has no separate pro IBAN to fill in, see /cotisation's own ibanPersoTooltip for the same
-	// perso/pro distinction.
+	// Only meaningful (and only ever rendered) when ibanProApplicable is true — a member who
+	// administers no organisation has no company IBAN to fill in, see /cotisation's own
+	// ibanPersoTooltip for the same perso/pro distinction.
 	ibanProApplicable: boolean;
 	ibanProConfigured: boolean | null;
 }
@@ -74,62 +68,63 @@ function groupApps(apps: UserApplication[]): AppGroup[] {
 interface MemberFinancialSummary {
 	cotisation: CotisationSummary;
 	ibanPerso: string | null;
+	// The member administers at least one organisation (see listOrganisationsAdministrees).
 	isPro: boolean;
-	ibanPro: string | null;
-	// Distinct from "no Dolibarr member found" (see feedback_distinguish-fetch-failure-from-empty)
-	// — a member with no Dolibarr record at all and a member Dolibarr couldn't be reached for both
-	// end up with `status: null` above, but only this flag means "we don't actually know, ask again
-	// later" as opposed to "confirmed: nothing to show here".
+	// Every administered organisation has an IBAN.
+	ibanProConfigured: boolean;
+	// Distinct from "no tiers found" (see feedback_distinguish-fetch-failure-from-empty) — a member
+	// with no tiers at all and a member whose tiers Postgres couldn't serve both end up with
+	// `status: null` above, but only this flag means "we don't actually know, ask again later" as
+	// opposed to "confirmed: nothing to show here".
 	unavailable: boolean;
 }
 
 const NO_FINANCIAL_SUMMARY: MemberFinancialSummary = {
-	cotisation: { status: null, datefin: null, isInactive: false },
+	cotisation: { status: null, datefin: null, finGrace: null, isInactive: false },
 	ibanPerso: null,
 	isPro: false,
-	ibanPro: null,
+	ibanProConfigured: false,
 	unavailable: false
 };
 
 const UNAVAILABLE_FINANCIAL_SUMMARY: MemberFinancialSummary = { ...NO_FINANCIAL_SUMMARY, unavailable: true };
 
 // Same shape/logic as /cotisation's own load — this is meant to be the exact same status block
-// and IBAN checks, just surfaced a click earlier on the homepage. One getMemberByEmail lookup
-// shared between the cotisation status and the IBAN fields, rather than fetching the member twice.
-async function loadMemberFinancialSummary(email: string | undefined): Promise<MemberFinancialSummary> {
-	if (!email) return NO_FINANCIAL_SUMMARY;
-
+// and IBAN checks, just surfaced a click earlier on the homepage. One tiers lookup shared between
+// the cotisation status and the IBAN fields, rather than resolving the member twice.
+async function loadMemberFinancialSummary(user: AppUser): Promise<MemberFinancialSummary> {
 	try {
-		const member = await getMemberByEmail(email);
-		if (!member) return NO_FINANCIAL_SUMMARY;
+		const tiers = await resolveTiersForUser(user);
+		if (!tiers) return NO_FINANCIAL_SUMMARY;
 
-		const [types, subscriptions, ibanPro] = await Promise.all([
-			getMemberTypes(),
-			getMemberSubscriptions(member.id),
-			member.fkSoc ? getThirdPartyIbanPro(member.fkSoc) : Promise.resolve(null)
+		const [situation, organisations] = await Promise.all([
+			getSituationForTiers(tiers),
+			listOrganisationsAdministrees(tiers.id)
 		]);
-		const { isInactive } = detectCotisationGaps(subscriptions);
 
 		return {
 			cotisation: {
-				status: deriveCotisationStatus(member, types),
-				datefin: parseDolibarrDate(member.datefin),
-				isInactive
+				status: situation.status,
+				datefin: situation.datefin,
+				finGrace: situation.finGrace,
+				isInactive: situation.isInactive
 			},
-			ibanPerso: member.ibanPerso,
-			isPro: member.fkSoc !== null,
-			ibanPro,
+			ibanPerso: tiers.iban,
+			isPro: organisations.length > 0,
+			ibanProConfigured: organisations.length > 0 && organisations.every((o) => o.iban !== null),
 			unavailable: false
 		};
 	} catch (err) {
-		if (err instanceof DolibarrUnavailableError) {
+		// Best-effort, like the other blocks on this page: a Postgres outage must not take the
+		// whole homepage down, /cotisation reports it properly through handleError.
+		if (isDatabaseUnavailable(err)) {
 			return UNAVAILABLE_FINANCIAL_SUMMARY;
 		}
 		throw err;
 	}
 }
 
-const NO_COTISATION: CotisationSummary = { status: null, datefin: null, isInactive: false };
+const NO_COTISATION: CotisationSummary = { status: null, datefin: null, finGrace: null, isInactive: false };
 const NO_CHECKLIST: DashboardChecklist = {
 	mfaConfigured: null,
 	emergencyContactConfigured: null,
@@ -151,7 +146,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const [apps, financial, mfaDevices, emergencyContacts, rfidUid, myTasks, mattermost] = await Promise.all([
 		// Best-effort: a transient Authentik API hiccup shouldn't take down the whole homepage.
 		pk ? listUserApplications(pk).catch((): UserApplication[] | null => null) : Promise.resolve(null),
-		loadMemberFinancialSummary(locals.user.email),
+		loadMemberFinancialSummary(locals.user),
 		pk ? listMfaDevices(pk).catch(() => null) : Promise.resolve(null),
 		pk ? getEmergencyContacts(pk).catch(() => null) : Promise.resolve(null),
 		// getRfidUid's own return already uses `null` to mean "no badge yet" — a legitimate,
@@ -172,7 +167,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		mattermostActivated: mattermost.unavailable ? null : mattermost.username !== null,
 		ibanPersoConfigured: financial.unavailable ? null : !!financial.ibanPerso,
 		ibanProApplicable: financial.isPro,
-		ibanProConfigured: financial.unavailable ? null : !!financial.ibanPro
+		ibanProConfigured: financial.unavailable ? null : financial.ibanProConfigured
 	};
 
 	return {

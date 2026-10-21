@@ -24,7 +24,15 @@ export const SETTING_KEYS = {
 	tasksRecapDay: 'mattermost.tasks_recap_day',
 	tasksRecapHour: 'mattermost.tasks_recap_hour',
 	// Brussels date (YYYY-MM-DD) the last recap went out, so it's sent once a week.
-	tasksRecapLastSent: 'mattermost.tasks_recap_last_sent'
+	tasksRecapLastSent: 'mattermost.tasks_recap_last_sent',
+	// Treasury (comptaNotifications.ts): its channel and one switch per announced event.
+	comptaChannel: 'mattermost.compta_channel_id',
+	comptaAnnounceReception: 'mattermost.compta_announce_reception_enabled',
+	comptaAnnounceNotesDeFrais: 'mattermost.compta_announce_notes_de_frais_enabled',
+	comptaAnnounceEchues: 'mattermost.compta_announce_echues_enabled',
+	comptaAnnounceAbonnements: 'mattermost.compta_announce_abonnements_enabled',
+	// Brussels date (YYYY-MM-DD) the last overdue-invoices digest went out, so it's sent once a week.
+	comptaEchuesLastSent: 'mattermost.compta_echues_last_sent'
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
